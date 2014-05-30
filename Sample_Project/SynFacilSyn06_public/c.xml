@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<Language name="bash" ext="c" CaseSensitive="true">
+   <Comment Start="//" ></Comment>
+   <Comment Start="/*" End="*/" Multiline="true" Folding="true"></Comment>
+   <Token Start="#" Attribute='DIRECTIVE'> </Token>
+  <Token CharsStart="0..9" Content = '0..9.' Attribute='NUMBER'> </Token>
+   
+   <String Start='"' End='"'></String>
+   <Keyword>if else switch case default break goto return for while do continue typedef sizeof NULL</Keyword>
+   <Keyword>void struct union enum char short int long double float signed unsigned const static extern auto register volatile</Keyword>
+   <Block Start="{" End= "}"> </Block>
+</Language>

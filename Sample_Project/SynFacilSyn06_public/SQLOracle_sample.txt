@@ -1,0 +1,25 @@
+set lines 132
+set trims on
+set serveroutput on size 1000000
+
+spool s_dbf_balance.log
+
+declare
+   cursor dbf_c is
+      select file_name, bytes/1024 kbytes, substr(file_name,instr(file_name,'/',-1)) jfile
+      from dba_data_files
+      ;
+   l_sum number := 0;
+begin
+   for dbf in dbf_c loop
+      dbms_output.put_line(rpad(dbf.file_name,45,' ')||rpad(dbf.jfile,20,' ')||lpad(dbf.kbytes,25,' ')||' KB');
+      l_sum := l_sum + dbf.kbytes;
+      if l_sum > &gb_per_fs*1024*1024 then
+         dbms_output.put_line(lpad(' new FS total: '||l_sum||' KB',73,'-'));
+         l_sum := 0;
+      end if;
+   end loop;
+end;
+/
+
+spool off
