@@ -6,7 +6,8 @@ interface
 
 uses
   Classes, SysUtils, Forms, Controls, Graphics, StdCtrls, Menus, Dialogs,
-  SynEdit, SynEditHighlighter, SynHighlighterFacil, Lazlogger;
+  SynEdit, SynEditHighlighter, Lazlogger,
+  SynHighlighterFacil in '..\SynHighlighterFacil.pas';
 
 type
 

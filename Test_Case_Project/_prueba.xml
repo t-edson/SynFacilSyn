@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<Language name="Pascal" ext="pas inc pp" ColorBlock="Level">
+  <Identifiers CharsStart= "A..Za..z_" Content = "A..Za..z0..9_"> </Identifiers>
+  <Token CharsStart="0..9" Content = '0..9.' Attribute='NUMBER'> </Token>
+  <Token Start="0x" Content = '0..9.' Attribute='STRING'> </Token>
+</Language>
