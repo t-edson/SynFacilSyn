@@ -7,7 +7,7 @@ interface
 uses
   Classes, SysUtils, Forms, Controls, Graphics, StdCtrls, SynEdit, SynEditHighlighter,
   SynHighlighterPHP, SynHighlighterPas, Lazlogger,
-  SynHighlighterFacil in '..\SynHighlighterFacil.pas';
+  SynHighlighterFacil;
 
 type
 

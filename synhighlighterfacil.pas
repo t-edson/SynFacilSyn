@@ -1117,6 +1117,7 @@ begin
   carValFin1 := '';
   carValFin2 := '';
   carValFin3 := '';
+  carValFin4 := '';
   for i := #0 to #255 do
     case i of
       //caracteres blancos, son fijos

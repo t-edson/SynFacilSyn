@@ -21,10 +21,11 @@
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="Unit1"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="0"/>
         <WindowIndex Value="0"/>
-        <TopLine Value="64"/>
-        <CursorPos X="1" Y="81"/>
+        <TopLine Value="1"/>
+        <CursorPos X="1" Y="13"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -79,11 +80,10 @@
       <Unit7>
         <Filename Value="..\synhighlighterfacil.pas"/>
         <UnitName Value="SynHighlighterFacil"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
         <WindowIndex Value="0"/>
-        <TopLine Value="2757"/>
-        <CursorPos X="6" Y="2767"/>
+        <TopLine Value="2730"/>
+        <CursorPos X="1" Y="2770"/>
         <FoldState Value=" T4T02 TMqB01041 T7iBE9 TCiNEH]PLiRR13 T8lc2^11]X3pZ0H024 T0pfL4917 T6qD05N THu24x4E"/>
         <UsageCount Value="13"/>
         <Bookmarks Count="2">
@@ -96,7 +96,7 @@
     <General>
       <ActiveWindowIndexAtStart Value="0"/>
     </General>
-    <JumpHistory Count="28" HistoryIndex="27">
+    <JumpHistory Count="29" HistoryIndex="28">
       <Position1>
         <Filename Value="..\synhighlighterfacil.pas"/>
         <Caret Line="679" Column="1" TopLine="548"/>
@@ -209,6 +209,10 @@
         <Filename Value="..\synhighlighterfacil.pas"/>
         <Caret Line="187" Column="20" TopLine="178"/>
       </Position28>
+      <Position29>
+        <Filename Value="unit1.pas"/>
+        <Caret Line="81" Column="1" TopLine="64"/>
+      </Position29>
     </JumpHistory>
   </ProjectSession>
   <Debugging>
