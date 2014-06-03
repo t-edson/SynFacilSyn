@@ -1,28 +1,6 @@
-{                               TSynFacilSyn 0.7
-Se incluyen las funciones SearchBeginBlock(), SearchEndBlock(), SearchBeginEndBlock()
-y otra forma de GetBlockInfoAtXY().
-Se agrega la función GetXY() para obtener la posición actual del punto de exploración.
-Se cambia los nombres de algunos tipos con el prefijo TFa, para evitar conflictos con otros
-tipos. Se cambia el nombre de algunos tipos a su versión en inglés.
-Se cambia el nombre de algunos métodos para hacerlos más descriptivos.
-Se agrega espacio para almacenar un token por contenido más.
-Se cambia el nombre de los parámetros de DefTokContent(), DefTokContent1(),  ...
-Se incluye la posibilidad de definir tokens por contenido, usando un token especial como
-delimitador de inicio (antes solo se podía usar list de caracteres).
-Se cambia la forma del parámetro dStart de DefTokContent(), para que acepte lista de caracteres
-indicando corchetes [], o tokens especiales.
-Se habilita el parámetro "Start" en la definición de tokens por contenido usando archivo XML.
-Se canbia de nombre a ValidarCaracteres() por ValidateInterval() y se mejora el
-reconocimiento de intervalos de caracteres.
-Se cambia el comportamiento de DefTokIdentif(), para hacerlo consistente con DefTokContent()
-de forma que ahora exige que se le indique un intervalo de caracteres como primer parámetro.
-
-Se han separado los mensajes de error como constantes para facilitar la traducción.
-Se ha verificado que las funciones SearchBeginBlock(), SearchEndBlock() no detectan
-correctamente, cuando dos bloques se abren a la vez.
-Se quita el estado "Negrita" para las palabras claves que se tenía por defecto.
-
-                                      Por Tito Hinostroza  30/05/2014 - Lima Perú
+{                               TSynFacilSyn 0.8b
+Sin modificaciones.
+                                      Por Tito Hinostroza  03/06/2014 - Lima Perú
 }
 unit SynHighlighterFacil;
 {$mode objfpc}{$H+}
