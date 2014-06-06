@@ -58,10 +58,12 @@ var
     hlt : TSynFacilSyn;
 
   ...
+  
   hlt := TSynFacilSyn.Create(self); //crea resaltador
   editor.Highlighter := hlt;
   hlt.LoadFromFile('SynPHP.xml');   //carga archivo de sintaxis
   ...
+  
   htl.Free;  //libera 
 
 
