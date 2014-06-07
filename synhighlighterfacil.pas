@@ -1,4 +1,4 @@
-{                               TSynFacilSyn 0.8b
+{                               TSynFacilSyn 0.8
 * Se elimina el tipo "TFaTokenKind", porque en el nuevo esquema a usar, ya no se debe
 limitar la cantidad de tipos de tokens.
 * Se cambia el esquema para que ahora se tengan 8 tipos de atributos fijos y la possibilidad
