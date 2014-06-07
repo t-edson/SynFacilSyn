@@ -78,7 +78,6 @@ begin
   lineas := TStringList.Create;
   //configure highlighters
   hlt1 := TSynFacilSyn.Create(self);  //my highlighter
-  hlt1.VariableAttri.Foreground:=clYellow;
   ed1.Highlighter := hlt1;
   LoadSyntaxFile_hl1;
 {
