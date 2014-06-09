@@ -2,12 +2,13 @@
 * Se configuran algunos mensaje adicionales en español como constantes, para facilitar la
   traducción a otros idiomas.
 * Se modifican AddIdentSpec() y AddSymbSpec().
-* Se agrega referencias a los tokens especiales en los objetos TFaSynBlock, para acelarar
-  la detección de los delimitadores de bloques.
 * Se crea la función CreaBuscSymEspec(), para que sea complemento de la función
   CreaBuscIdeEspec().
 * Se modifica ProcListOfChars() y cambia de nombre. Se simplifican DefTokContent1,
   DefTokContent2, ...
+
+* Se agrega referencias a los tokens especiales en los objetos TFaSynBlock, para acelarar
+  la detección de los delimitadores de bloques.
 * Se agrega dStartL a TFaSynBlock
 
                                       Por Tito Hinostroza  08/06/2014 - Lima Perú
