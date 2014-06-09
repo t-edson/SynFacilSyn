@@ -1,11 +1,13 @@
 {                               TSynFacilSyn 0.8.1
-* Se ´configuran algunos mensaje adicionales en español como constantes, para facilitar la
+* Se configuran algunos mensaje adicionales en español como constantes, para facilitar la
   traducción a otros idiomas.
 * Se modifican AddIdentSpec() y AddSymbSpec().
 * Se agrega referencias a los tokens especiales en los objetos TFaSynBlock, para acelarar
   la detección de los delimitadores de bloques.
 * Se crea la función CreaBuscSymEspec(), para que sea complemento de la función
   CreaBuscIdeEspec().
+* Se modifica ProcListOfChars() y cambia de nombre. Se simplifican DefTokContent1,
+  DefTokContent2, ...
 * Se agrega dStartL a TFaSynBlock
 
                                       Por Tito Hinostroza  08/06/2014 - Lima Perú
@@ -59,7 +61,7 @@ type
   //clase para manejar la definición de bloques de sintaxis
   TFaSynBlock = class
     name        : string;    //nombre del bloque
-    dStartL     : TArrayTokEspec;  //guarda lista de delimitadores que abren al bloque
+//    dStartL     : TArrayTokEspec;  //guarda lista de delimitadores que abren al bloque
     index       : integer;   //indica su posición dentro de TFaListBlocks
     showFold    : boolean;   //indica si se mostrará la marca de plegado
     parentBlk   : TFaSynBlock; //bloque padre (donde es válido el bloque)
@@ -115,7 +117,7 @@ type
     fRange     : ^TTokEspec;    //para trabajar con tokens multilínea
     BloqPorCerrar: TFaSynBlock;   //bandera-variable para posponer el cierre de un bloque
     posTok     : integer;       //para identificar el ordinal del token en una línea
-    function ProcListOfChars(expre: string; TypDelim: TFaTypeDelim): boolean;
+    procedure ProcTokContent(expre: string; TypDelim: TFaTypeDelim);
     function ValidateInterval(var cars: string): boolean;
     procedure ValidateParamStart(var Start: string);
   private   //Funciones de bajo nivel
@@ -684,7 +686,7 @@ begin
       end;
   end;
 end;
-function TSynFacilSyn.ProcListOfChars(expre: string; TypDelim: TFaTypeDelim): boolean;
+procedure TSynFacilSyn.ProcTokContent(expre: string; TypDelim: TFaTypeDelim);
 //Verifica si la expresión representa a una lista de caracteres. De ser así devuelve TRUE y
 //actualiza la tabla de métodos con el método indicado. No hace la validación completa de
 //la expresión. Esta debe haber sido ya previemente analizada.
@@ -692,19 +694,24 @@ var
   c: Char;
   tok: TPtrTokEspec;
 begin
-  Result := false;  //por defecto
-  //caso explícito
+  /////// Configura detección de inicio
   if expre[1] = '[' then begin  //es intervalo
     expre := copy(expre,2,length(expre)-2);  //quita corchetes
     //Agrega cada caracter como símbolo especial, aunque parezca ineficiente. Pero de esta
     //forma se podrán procesar tokens por contenido que empiecen con el mismo caracter.
     //Además la función Rebulid() optimizará luego, el procesamiento.
     for c in expre do begin
-        CreaBuscEspec(tok, c, 0); if Err<>'' then exit; //busca o crea
+        CreaBuscEspec(tok, c, 0);  //busca o crea
+        if Err<>'' then exit;
         //actualiza sus campos. Cambia, si ya existía
         tok^.tipDel:=TypDelim;  //solo es necesario marcarlo como que es por contenido
     end;
-    exit(true);  //sale con TRUE
+  end else begin
+    //Es un literal. Configura token especial
+    CreaBuscEspec(tok, expre, 0);  //busca o crea
+    if Err<>'' then exit;
+    //actualiza sus campos. Cambia, si ya existía
+    tok^.tipDel:=TypDelim;  //solo es necesario marcarlo como que es por contenido
   end;
 end;
 procedure TSynFacilSyn.DefTokContent1(dStart, charsCont: string;
@@ -712,16 +719,11 @@ procedure TSynFacilSyn.DefTokContent1(dStart, charsCont: string;
 {Define un token por contenido en el espacio 1.
 Se debe haber limpiado previamente con "ClearMethodTables"}
 var c: char;
-    tok: TPtrTokEspec;
 begin
   catTokCon1:= typToken;  //fija categoría de token
   /////// Configura detección de inicio
-  if Not ProcListOfChars(dStart, tdConten1) then begin //verifica si se procesa como lista []
-    //Es un literal. Configura token especial
-    CreaBuscEspec(tok, dStart, 0); if Err<>'' then exit; //busca o crea
-    //actualiza sus campos. Cambia, si ya existía
-    tok^.tipDel:=tdConten1;  //solo es necesario marcarlo como que es por contenido
-  end;
+  ProcTokContent(dStart, tdConten1);
+  if Err<>'' then exit;
   /////// Configura caracteres de contenido
   //limpia matriz y marca las posiciones apropiadas
   for c := #0 to #255 do CharsToken1[c] := False;
@@ -732,16 +734,11 @@ procedure TSynFacilSyn.DefTokContent2(dStart, charsCont: string;
 {Define un token por contenido en el espacio 2.
 Se debe haber limpiado previamente con "ClearMethodTables"}
 var c: char;
-  tok: TPtrTokEspec;
 begin
   catTokCon2:= typToken;  //fija categoría de token
   /////// Configura detección de inicio
-  if Not ProcListOfChars(dStart, tdConten2) then begin //verifica si se procesa como lista []
-    //Es un literal. Configura token especial
-    CreaBuscEspec(tok, dStart, 0); if Err<>'' then exit; //busca o crea
-    //actualiza sus campos. Cambia, si ya existía
-    tok^.tipDel:=tdConten2;  //solo es necesario marcarlo como que es por contenido
-  end;
+  ProcTokContent(dStart, tdConten2);
+  if Err<>'' then exit;
   /////// Configura caracteres de contenido
   //limpia matriz y marca las posiciones apropiadas
   for c := #0 to #255 do CharsToken2[c] := False;
@@ -752,16 +749,11 @@ procedure TSynFacilSyn.DefTokContent3(dStart, charsCont: string;
 {Define un token por contenido en el espacio 3.
 Se debe haber limpiado previamente con "ClearMethodTables"}
 var c: char;
-  tok: TPtrTokEspec;
 begin
   catTokCon3:= typToken;  //fija categoría de token
   /////// Configura detección de inicio
-  if Not ProcListOfChars(dStart, tdConten3) then begin //verifica si se procesa como lista []
-    //Es un literal. Configura token especial
-    CreaBuscEspec(tok, dStart, 0); if Err<>'' then exit; //busca o crea
-    //actualiza sus campos. Cambia, si ya existía
-    tok^.tipDel:=tdConten3;  //solo es necesario marcarlo como que es por contenido
-  end;
+  ProcTokContent(dStart, tdConten3);
+  if Err<>'' then exit;
   /////// Configura caracteres de contenido
   //limpia matriz y marca las posiciones apropiadas
   for c := #0 to #255 do CharsToken3[c] := False;
@@ -772,16 +764,11 @@ procedure TSynFacilSyn.DefTokContent4(dStart, charsCont: string;
 {Define un token por contenido en el espacio 4.
 Se debe haber limpiado previamente con "ClearMethodTables"}
 var c: char;
-  tok: TPtrTokEspec;
 begin
   catTokCon4:= typToken;  //fija categoría de token
   /////// Configura detección de inicio
-  if Not ProcListOfChars(dStart, tdConten4) then begin //verifica si se procesa como lista []
-    //Es un literal. Configura token especial
-    CreaBuscEspec(tok, dStart, 0); if Err<>'' then exit; //busca o crea
-    //actualiza sus campos. Cambia, si ya existía
-    tok^.tipDel:=tdConten4;  //solo es necesario marcarlo como que es por contenido
-  end;
+  ProcTokContent(dStart, tdConten4);
+  if Err<>'' then exit;
   /////// Configura caracteres de contenido
   //limpia matriz y marca las posiciones apropiadas
   for c := #0 to #255 do CharsToken4[c] := False;
@@ -1701,7 +1688,7 @@ DebugLn('  [' + r.txt[1] + '] -> @metSym1Car (símbolo simple de 1 car)');
   end;
   //termina el proceso
   RebuildSymbols;
-  //actualiza los bloques con información de sus delimitadores
+{  //actualiza los bloques con información de sus delimitadores
   for blk in lisBlocks do begin   //limpia listas en bloques
      setlength(blk.dStartL,0);
 //     setlength(blk.dEndL,0);
@@ -1720,7 +1707,7 @@ DebugLn('  [' + r.txt[1] + '] -> @metSym1Car (símbolo simple de 1 car)');
       end;
     end;}
   end;
-  //termina la reconstrucción
+  //termina la reconstrucción}
   if CurrentLines <> nil then  //Hay editor asignado
     ScanAllRanges;  {Necesario, porque se ha reconstruido los TTokEspec y
                        los valores de "fRange" de las líneas, están "perdidos"}
@@ -2246,7 +2233,7 @@ begin
   blk.BackCol  := clNone;     //inicialmente sin color
   blk.IsSection:= false;
   blk.UniqSec  := false;
-  setlength(blk.dStartL,0);  //inicia lista de delimitadores
+//  setlength(blk.dStartL,0);  //inicia lista de delimitadores
   lisBlocks.Add(blk);        //agrega a lista
   Result := blk;             //devuelve referencia
 end;
