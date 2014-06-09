@@ -79,11 +79,11 @@
       <Unit7>
         <Filename Value="..\synhighlighterfacil.pas"/>
         <UnitName Value="SynHighlighterFacil"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
         <WindowIndex Value="0"/>
-        <TopLine Value="2587"/>
-        <CursorPos X="17" Y="2607"/>
-        <FoldState Value=" T8lH2^ T3iya0E611X"/>
+        <TopLine Value="49"/>
+        <CursorPos X="1" Y="61"/>
         <UsageCount Value="14"/>
         <Bookmarks Count="2">
           <Item0 X="1" Y="373" ID="2"/>
@@ -94,11 +94,10 @@
       <Unit8>
         <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
         <UnitName Value="SynEditHighlighter"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="2"/>
         <WindowIndex Value="0"/>
         <TopLine Value="1233"/>
-        <CursorPos X="41" Y="1252"/>
+        <CursorPos X="31" Y="1247"/>
         <UsageCount Value="11"/>
         <Loaded Value="True"/>
       </Unit8>
@@ -109,123 +108,123 @@
     <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="1145" Column="1" TopLine="1110"/>
+        <Caret Line="3" Column="33" TopLine="1"/>
       </Position1>
       <Position2>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="1147" Column="1" TopLine="1110"/>
+        <Caret Line="2530" Column="18" TopLine="2275"/>
       </Position2>
       <Position3>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="1161" Column="5" TopLine="1132"/>
+        <Caret Line="149" Column="33" TopLine="132"/>
       </Position3>
       <Position4>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="17" Column="10" TopLine="1"/>
+        <Caret Line="150" Column="33" TopLine="133"/>
       </Position4>
       <Position5>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="3" Column="33" TopLine="1"/>
+        <Caret Line="151" Column="34" TopLine="134"/>
       </Position5>
       <Position6>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="2530" Column="18" TopLine="2275"/>
+        <Caret Line="169" Column="35" TopLine="153"/>
       </Position6>
       <Position7>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="149" Column="33" TopLine="132"/>
+        <Caret Line="9" Column="73" TopLine="1"/>
       </Position7>
       <Position8>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="150" Column="33" TopLine="133"/>
+        <Caret Line="12" Column="58" TopLine="1"/>
       </Position8>
       <Position9>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="151" Column="34" TopLine="134"/>
+        <Caret Line="17" Column="91" TopLine="1"/>
       </Position9>
       <Position10>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="169" Column="35" TopLine="153"/>
+        <Caret Line="149" Column="63" TopLine="132"/>
       </Position10>
       <Position11>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="9" Column="73" TopLine="1"/>
+        <Caret Line="150" Column="63" TopLine="133"/>
       </Position11>
       <Position12>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="12" Column="58" TopLine="1"/>
+        <Caret Line="151" Column="65" TopLine="134"/>
       </Position12>
       <Position13>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="17" Column="91" TopLine="1"/>
+        <Caret Line="187" Column="20" TopLine="178"/>
       </Position13>
       <Position14>
-        <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="149" Column="63" TopLine="132"/>
+        <Filename Value="unit1.pas"/>
+        <Caret Line="81" Column="1" TopLine="64"/>
       </Position14>
       <Position15>
-        <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="150" Column="63" TopLine="133"/>
+        <Filename Value="unit1.pas"/>
+        <Caret Line="13" Column="1" TopLine="1"/>
       </Position15>
       <Position16>
-        <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="151" Column="65" TopLine="134"/>
+        <Filename Value="unit1.pas"/>
+        <Caret Line="81" Column="1" TopLine="64"/>
       </Position16>
       <Position17>
         <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="187" Column="20" TopLine="178"/>
+        <Caret Line="903" Column="9" TopLine="883"/>
       </Position17>
       <Position18>
-        <Filename Value="unit1.pas"/>
-        <Caret Line="81" Column="1" TopLine="64"/>
-      </Position18>
-      <Position19>
-        <Filename Value="unit1.pas"/>
-        <Caret Line="13" Column="1" TopLine="1"/>
-      </Position19>
-      <Position20>
-        <Filename Value="unit1.pas"/>
-        <Caret Line="81" Column="1" TopLine="64"/>
-      </Position20>
-      <Position21>
-        <Filename Value="..\synhighlighterfacil.pas"/>
-        <Caret Line="903" Column="9" TopLine="883"/>
-      </Position21>
-      <Position22>
         <Filename Value="..\synhighlighterfacil.pas"/>
         <Caret Line="2610" Column="53" TopLine="2586"/>
-      </Position22>
-      <Position23>
+      </Position18>
+      <Position19>
         <Filename Value="..\synhighlighterfacil.pas"/>
         <Caret Line="320" Column="48" TopLine="301"/>
-      </Position23>
-      <Position24>
+      </Position19>
+      <Position20>
         <Filename Value="..\synhighlighterfacil.pas"/>
         <Caret Line="2607" Column="17" TopLine="2588"/>
+      </Position20>
+      <Position21>
+        <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
+        <Caret Line="157" Column="35" TopLine="136"/>
+      </Position21>
+      <Position22>
+        <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
+        <Caret Line="1942" Column="1" TopLine="1910"/>
+      </Position22>
+      <Position23>
+        <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
+        <Caret Line="1" Column="1" TopLine="1"/>
+      </Position23>
+      <Position24>
+        <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
+        <Caret Line="302" Column="16" TopLine="275"/>
       </Position24>
       <Position25>
         <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
-        <Caret Line="157" Column="35" TopLine="136"/>
+        <Caret Line="1258" Column="14" TopLine="1231"/>
       </Position25>
       <Position26>
         <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
-        <Caret Line="1942" Column="1" TopLine="1910"/>
+        <Caret Line="1" Column="1" TopLine="1"/>
       </Position26>
       <Position27>
-        <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
-        <Caret Line="1" Column="1" TopLine="1"/>
+        <Filename Value="..\synhighlighterfacil.pas"/>
+        <Caret Line="2607" Column="17" TopLine="2587"/>
       </Position27>
       <Position28>
-        <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
-        <Caret Line="302" Column="16" TopLine="275"/>
+        <Filename Value="..\synhighlighterfacil.pas"/>
+        <Caret Line="15" Column="5" TopLine="16"/>
       </Position28>
       <Position29>
-        <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
-        <Caret Line="1258" Column="14" TopLine="1231"/>
+        <Filename Value="..\synhighlighterfacil.pas"/>
+        <Caret Line="61" Column="3" TopLine="52"/>
       </Position29>
       <Position30>
-        <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
-        <Caret Line="1" Column="1" TopLine="1"/>
+        <Filename Value="..\synhighlighterfacil.pas"/>
+        <Caret Line="1722" Column="3" TopLine="1695"/>
       </Position30>
     </JumpHistory>
   </ProjectSession>
