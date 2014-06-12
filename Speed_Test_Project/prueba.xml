@@ -38,12 +38,12 @@
   <Section Name="interface" Start="interface"></Section>
   <Section Name="implementation" Start="implementation">
     <Block Name="Proc" Start="procedure" End="end" BackCol="#D0F5FF">
-      <Block Name="ProcParam" Start="(" End=")" Folding="false"></Block>
+      <Block Name="ProcParam" Start="(" End=")" Folding="false" BackCol="transparent"></Block>
       <Section Start="var" BackCol="#F3F781"> </Section>
       <Section Start="begin" BackCol="#F5DA81" Unique="true"> </Section>
     </Block>
     <Block Name="Func" Start="function" End="end" BackCol="#D0F5FF">
-      <Block Name="FuncParam" Start="(" End=")" Folding="false"></Block>
+      <Block Name="FuncParam" Start="(" End=")" Folding="false" BackCol="transparent"></Block>
       <Section Start="var" BackCol="#F3F781"> </Section>
       <Section Start="begin" BackCol="#F5DA81" Unique="true"> </Section>
     </Block>
@@ -64,12 +64,12 @@
   </Block>
   <Block Start="Case" End= "End" ></Block>
   <Block Name="Proc" Start="procedure" End="end" Parent="Main" BackCol="#D0F5FF">
-    <Block Name="ProcParam" Start="(" End=")" Folding="false"></Block>
+    <Block Name="ProcParam" Start="(" End=")" Folding="false" BackCol="transparent"></Block>
     <Section Start="var" BackCol="#F3F781"> </Section>
     <Section Start="begin" BackCol="#F5DA81" Unique="true"> </Section>
   </Block>
   <Block Name="Func" Start="function" End="end" Parent="Main" BackCol="#D0F5FF">
-    <Block Name="FuncParam" Start="(" End=")" Folding="false"></Block>
+    <Block Name="FuncParam" Start="(" End=")" Folding="false" BackCol="transparent"></Block>
     <Section Start="var" BackCol="#F3F781"> </Section>
     <Section Start="begin" BackCol="#F5DA81" Unique="true"> </Section>
   </Block>
