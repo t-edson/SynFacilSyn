@@ -80,6 +80,9 @@ begin
   hlt1 := TSynFacilSyn.Create(self);  //my highlighter
   ed1.Highlighter := hlt1;
   LoadSyntaxFile_hl1;
+//  hlt1.KeywordAttribute.Background:=clGreen;
+//  hlt1.KeywordAttribute.Foreground:=clYellow;
+//  hlt1.StringAttribute.Background:=clRed;
 {
   hlt1.ClearMethodTables;          //limpìa tabla de métodos
   //crea tokens por contenido
