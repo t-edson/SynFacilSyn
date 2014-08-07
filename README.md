@@ -37,6 +37,32 @@ Features
 
 •	It includes several predefined attributes, but it can be defined more dynamically.
 
+Using on a program.
+
+This highlighter, is contained on a single file that is the unit "SynHighLighterFile.pas". You should copy it to the folder where the project is working, or on your personal units path.
+
+Once copied, it must be included in the USES statement of the units who are going to work with the highlighter. Then it's necessary to create an object of the class TSynFacilSyn, and assign it to the SynEdit editor:
+
+```
+uses  ... , SynHighlighterFacil;
+
+var
+    hlt : TSynFacilSyn;
+
+  ...
+  
+  hlt := TSynFacilSyn.Create(self); 
+  editor.Highlighter := hlt;
+  hlt.LoadFromFile('SynPHP.xml');   //load the syntax file
+  ...
+  
+  htl.Free; 
+```
+
+For to use the highlighter, it's necessary first, to have the syntax configurated on the XML file or by code. 
+
+For more information, see the documentation.
+
 
 SynFacilSyn
 ===========
@@ -86,7 +112,7 @@ Una vez copiado, se debe incluir en la sentencia USES, de las unidades que requi
 
 Como con cualquier resaltador, se debe crear una instancia del resaltador (TSynFacilSyn) y asignarla al editor que vayamos a usar:
 
-´´´
+```
 uses  ... , SynHighlighterFacil;
 
 var
@@ -100,6 +126,8 @@ var
   ...
   
   htl.Free;  //libera 
-´´´
+```
 
 Para usar el resaltador, es necesario configurar primero la sintaxis. Esto se puede hacer usando un archivo externo (archivo de sintaxis) o por código.
+
+Para más información, revisar la documentación.
