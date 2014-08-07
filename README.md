@@ -5,15 +5,49 @@ Scriptable Highlighter for SynEdit Component of Lazarus
 
 This highlighter is similar to the SynAnySyn of Lazarus, but it's much more faster, efficient and more configurable.
 
+It can be used too, like a full lexical analyzer that can be configured to handle a variety of programming languages.
+
+The highlighter TSynFacilSyn can read a complete syntax from an external XML file.
+
+Features
+
+•	Configurable. Can highlight words of a SynEdit control, using an external XML file, or using code.
+
+•	It's fast and Light. It's optimized on speed for to be comparable to a hard coded highlighter.
+
+•	It's easy for to configure the more common elements of a language, like identifiers, strings, numbers, and comments.
+
+•	It's based on tokens and attributes.  Each kind of token contains a single attribute.
+
+•	It's possible to define the characters that are valid for identifiers. So it can be adapted to the specific definition of each language.
+
+•	It can manage subsets of identifiers (keywords, variables, ..) and subsets of symbols (operators, separators, etc).
+
+•	It can define multiline elements like strings and comments.
+
+•	It can define new tokens using pre-defined tokens, like <<HEREDOC elements.
+
+•	Includes the property “CaseSensitive”, for to compare the Case of chars.
+
+•	It can define blocks of code folding. Includes several options to suit most programming languages.
+
+•	It can define syntax blocks (with or without folding) and can paint the background of the blocks.
+
+•	The XML file admits complete and simplified forms of definitions.
+
+•	It includes several predefined attributes, but it can be defined more dynamically.
+
+
+SynFacilSyn
+===========
 
 Resaltador de sintaxis programable, para el componente  SynEdit de Lazarus.
 
 Este resaltador, es similar al resaltador SynAnySyn de Lazarus, pero mucho más rápido, eficiente y configurable.
 
-El resaltador en sí, es además un completo analizador léxico que puede ser configurado para manejar
-una diversidad de lenguajes de programación.
+El resaltador en sí, es además un completo analizador léxico que puede ser configurado para manejar una diversidad de lenguajes de programación.
 
-El resaltadorTSynFacilSyn es capaz de leer una sintaxis completa definida en un archivo externo en formato XML.
+El resaltador TSynFacilSyn es capaz de leer una sintaxis completa definida en un archivo externo en formato XML.
 
 Características
 
@@ -52,6 +86,7 @@ Una vez copiado, se debe incluir en la sentencia USES, de las unidades que requi
 
 Como con cualquier resaltador, se debe crear una instancia del resaltador (TSynFacilSyn) y asignarla al editor que vayamos a usar:
 
+´´´
 uses  ... , SynHighlighterFacil;
 
 var
@@ -65,6 +100,6 @@ var
   ...
   
   htl.Free;  //libera 
-
+´´´
 
 Para usar el resaltador, es necesario configurar primero la sintaxis. Esto se puede hacer usando un archivo externo (archivo de sintaxis) o por código.
