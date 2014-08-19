@@ -1,14 +1,8 @@
-{                               TSynFacilSyn 0.9.1
-* Se incluye el campo "orig" en el registro TTokEspec, para facilitar el poder recuperar
-el identificador especial tal cual se define.
-* Se agrega la etiqueta "Style" como forma opcional de definir el estilo del texto de los
-atributos.
-* Se agregan las etiqueta "FrameEdg" y "FrameSty" para definir el tipo de borde del texto
-de los atributos.
-* Se permite indicar el color directamente como nombre en los parámetros que admiten
-color en el archivo XML.
+{                               TSynFacilSyn 0.9.2
+* Corregido el problema en el que no se reconocía el color TRabsparente en las secciones.
+* Corregido un porblema con la deteccion de identificadores duplicados en el archivo XML
 
-                                    Por Tito Hinostroza  11/08/2014 - Lima Perú
+                                    Por Tito Hinostroza  15/08/2014 - Lima Perú
 }
 unit SynFacilHighlighter;
 {$mode objfpc}{$H+}
@@ -986,6 +980,7 @@ begin
            if ValidarAtribs(atri, 'TokPos') then break; //valida
            //crea los identificadores especiales
            AddIdentSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
+           if Err<>'' then break;
          end else begin
            Err := Format(ERR_INVAL_LBL_IDEN, [atri.NodeName]);
            break;
@@ -1505,7 +1500,10 @@ var
       if tStart.hay then AddIniSectToTok(tStart.val, 0, blq);
     end;
     if Err<>'' then exit;
-    if tBackCol.hay then blq.BackCol:= tBackCol.col;   //lee color
+    if tBackCol.hay then begin
+      if UpCase(tBackCol.val)='TRANSPARENT' then blq.BackCol:= COL_TRANSPAR
+      else blq.BackCol:= tBackCol.col;   //lee color
+    end;
     if tUnique.hay then blq.UniqSec:=tUnique.bol;  //lee Unique
     ////////// explora nodos hijos //////////
     for i := 0 to nodo.ChildNodes.Count-1 do begin
@@ -1922,10 +1920,11 @@ begin
      Fold := Fold.Parent;
    end;
    //si no encontró devuelve el bloque principal
-   if (Fold = nil) or (Fold.BlockType=nil) then
+   if (Fold = nil) or (Fold.BlockType=nil) then begin
      Result := MainBlk
-   else
+   end else begin
      Result := TFaSynBlock(Fold.BlockType);
+   end;
 end;
 
 procedure TSynFacilSyn.ProcTokenDelim(const d: TTokEspec);
@@ -2678,7 +2677,7 @@ begin
     cbLevel: begin  //pinta por nivel
         Result.Background:=RGB(255- CodeFoldRange.CodeFoldStackSize*25,255- CodeFoldRange.CodeFoldStackSize*25,255);
       end;
-    cbBlock: begin //pinta por tipo de bloque
+    cbBlock: begin  //pinta por tipo de bloque
         topblk := TopBlockOpac;  //bloque con color
         //asigna color
         Result.Background:=topblk.BackCol;
