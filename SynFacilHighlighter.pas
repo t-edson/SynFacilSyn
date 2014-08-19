@@ -1,6 +1,6 @@
 {                               TSynFacilSyn 0.9.2
-* Corregido el problema en el que no se reconocía el color TRabsparente en las secciones.
-* Corregido un porblema con la deteccion de identificadores duplicados en el archivo XML
+* Corregido el problema en el que no se reconocía el color Transparente en las secciones.
+* Corregido un problema con la deteccion de identificadores duplicados en el archivo XML
 
                                     Por Tito Hinostroza  15/08/2014 - Lima Perú
 }
