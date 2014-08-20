@@ -39,12 +39,12 @@ Features
 
 Using on a program.
 
-This highlighter, is contained on a single file that is the unit "SynHighLighterFile.pas". You should copy it to the folder where the project is working, or on your personal units path.
+This highlighter, is contained on a single file that is the unit "SynFacilHighlighter.pas". You should copy it to the folder where the project is working, or on your personal units path.
 
 Once copied, it must be included in the USES statement of the units who are going to work with the highlighter. Then it's necessary to create an object of the class TSynFacilSyn, and assign it to the SynEdit editor:
 
 ```
-uses  ... , SynHighlighterFacil;
+uses  ... , SynFacilHighlighter;
 
 var
     hlt : TSynFacilSyn;
