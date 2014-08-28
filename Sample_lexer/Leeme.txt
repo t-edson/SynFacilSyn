@@ -1,0 +1,4 @@
+Esta implementación es una de las más simples.
+El código fuente es ejecutado por un intérprete interno que se ha 
+definido en "interprete_bas.pas".
+Solo se han implementado operaciones sencillas.
