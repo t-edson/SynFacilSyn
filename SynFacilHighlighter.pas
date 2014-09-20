@@ -1,8 +1,13 @@
-{                               TSynFacilSyn 0.9.2
-* Corregido el problema en el que no se reconocía el color Transparente en las secciones.
-* Corregido un problema con la deteccion de identificadores duplicados en el archivo XML
+{                               TSynFacilSyn 0.9.3b
+* Se agrega el evento OnFirstTok(), para poder interceptar la explroación de líneas
+en el resaltador.
+* Se agrega el IsIDentif campo al registro TFaTokInfo, y se modifica ExploreLine()
+para que actualice este campo.
 
-                                    Por Tito Hinostroza  15/08/2014 - Lima Perú
+Se observa un retraso en el procesamiento, de algo del 1%, debido al uso de
+OnFirstTok(). En caso crítico se podría eliminar.
+
+                                    Por Tito Hinostroza  13/09/2014 - Lima Perú
 }
 unit SynFacilHighlighter;
 {$mode objfpc}{$H+}
@@ -84,6 +89,7 @@ type
      txt    : string;        //texto del token
      TokPos : integer;       //posición del token dentro de la línea
      TokTyp : TSynHighlighterAttributes;  //atributo de token
+     IsIDentif: boolean;     //para saber si es identificador
      posIni : integer;       //posición de inicio en la línea
      curBlk : TFaSynBlock;     //referencia al bloque del token
   end;
@@ -118,6 +124,7 @@ type
     fRange     : ^TTokEspec;    //para trabajar con tokens multilínea
     BlkToClose : TFaSynBlock;   //bandera-variable para posponer el cierre de un bloque
     posTok     : integer;       //para identificar el ordinal del token en una línea
+    OnFirstTok : procedure of object;
     procedure SetTokContent(var tc: tFaTokContent; dStart: string;
       charsCont: string; TypDelim: TFaTypeDelim; charsEnd: string;
       typToken: TSynHighlighterAttributes);
@@ -2431,6 +2438,7 @@ begin
     toks[tam].txt := GetToken;
     toks[tam].TokTyp:=fTokenID;
     toks[tam].posIni:=PosIni;
+    toks[tam].IsIDentif:= (Line[PosIni+1] in car_ini_iden);  //puede ser Keyword
     toks[tam].curBlk := TopCodeFoldBlock(0);  //lee el rango
     Inc(tam);  //actualiza tamaño
 
@@ -2638,6 +2646,9 @@ begin
     BlkToClose := nil;
   end;
   Inc(posTok);  //lleva la cuenta del orden del token
+  if posTok=1 then begin
+    if OnFirstTok<>nil then OnFirstTok;
+  end;
 
   posIni := posFin;   //apunta al primer elemento
   if fRange = nil then begin
