@@ -1,8 +1,10 @@
-{                               TSynFacilSyn 0.9.3b
+{                               TSynFacilSyn 0.9.3
 * Se agrega el evento OnFirstTok(), para poder interceptar la explroación de líneas
 en el resaltador.
 * Se agrega el IsIDentif campo al registro TFaTokInfo, y se modifica ExploreLine()
 para que actualice este campo.
+* Se agrega el campo "length" al registro TFaTokInfo y se modifica ExploreLine()
+para que lo actualice.
 
 Se observa un retraso en el procesamiento, de algo del 1%, debido al uso de
 OnFirstTok(). En caso crítico se podría eliminar.
@@ -91,7 +93,8 @@ type
      TokTyp : TSynHighlighterAttributes;  //atributo de token
      IsIDentif: boolean;     //para saber si es identificador
      posIni : integer;       //posición de inicio en la línea
-     curBlk : TFaSynBlock;     //referencia al bloque del token
+     length : integer;       //tamaño del token (en bytes)
+     curBlk : TFaSynBlock;   //referencia al bloque del token
   end;
   TATokInfo = array of TFaTokInfo;
 
@@ -2436,6 +2439,7 @@ begin
     setlength(toks, tam+1);  //crea espacio
     toks[tam].TokPos:=tam;
     toks[tam].txt := GetToken;
+    toks[tam].length:=posFin - posIni;  //tamaño del token
     toks[tam].TokTyp:=fTokenID;
     toks[tam].posIni:=PosIni;
     toks[tam].IsIDentif:= (Line[PosIni+1] in car_ini_iden);  //puede ser Keyword
