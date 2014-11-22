@@ -24,8 +24,8 @@
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="0"/>
         <WindowIndex Value="0"/>
-        <TopLine Value="1"/>
-        <CursorPos X="23" Y="10"/>
+        <TopLine Value="47"/>
+        <CursorPos X="1" Y="80"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -112,8 +112,8 @@
         <EditorIndex Value="1"/>
         <WindowIndex Value="0"/>
         <TopLine Value="1"/>
-        <CursorPos X="35" Y="16"/>
-        <UsageCount Value="10"/>
+        <CursorPos X="11" Y="5"/>
+        <UsageCount Value="12"/>
         <Loaded Value="True"/>
       </Unit11>
     </Units>
