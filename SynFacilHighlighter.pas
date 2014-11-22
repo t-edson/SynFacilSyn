@@ -5,6 +5,9 @@ en el resaltador.
 para que actualice este campo.
 * Se agrega el campo "length" al registro TFaTokInfo y se modifica ExploreLine()
 para que lo actualice.
+* Se cambia el nombre de "carIni" a "charIni"
+* Se cambia el nombre de "tipDel" a "typDel"
+* Se cambia el nombre de "car_ini_iden" a "charsIniIden"
 
 Se observa un retraso en el procesamiento, de algo del 1%, debido al uso de
 OnFirstTok(). En caso crítico se podría eliminar.
@@ -44,7 +47,7 @@ type
     orig  : string;        //palabra clave tal cual se indica
     TokPos: integer;       //posición del token dentro de la línea
     tTok  : TSynHighlighterAttributes;  //tipo de token
-    tipDel: TFaTypeDelim;  {indica si el token especial actual, es en realidad, el
+    typDel: TFaTypeDelim;  {indica si el token especial actual, es en realidad, el
                             delimitador inicial de un token delimitado o por contenido}
     dEnd  : string;        //delimitador final (en caso de que sea delimitador)
     pRange: TFaProcRange;    //procedimiento para procesar el token o rango(si es multilinea)
@@ -118,11 +121,11 @@ type
     fStringLen : Integer;       //Tamaño del token actual
     fToIdent   : PChar;         //Puntero a identificador
     fTokenID   : TSynHighlighterAttributes;  //Id del token actual
-    carIni     : char;          //caracter al que apunta fLine[posFin]
+    charIni    : char;          //caracter al que apunta fLine[posFin]
     lisBlocks  : TFaListBlocks; //lista de bloques de sintaxis
     delTok     : string;        //delimitador del bloque actual
     folTok     : boolean;       //indica si hay folding que cerrar en token delimitado
-    car_ini_iden: Set of char;  //caracteres iniciales de identificador
+    charsIniIden: Set of char;  //caracteres iniciales de identificador
     nTokenCon  : integer;       //cantidad de tokens por contenido
     fRange     : ^TTokEspec;    //para trabajar con tokens multilínea
     BlkToClose : TFaSynBlock;   //bandera-variable para posponer el cierre de un bloque
@@ -484,7 +487,7 @@ begin
   r.txt:=cad;         //se asigna el nombre
   r.TokPos:=TokPos;   //se asigna ordinal del token
   r.tTok:=nil;        //sin tipo asignado
-  r.tipDel:=tdNull;   //no es delimitador
+  r.typDel:=tdNull;   //no es delimitador
   r.dEnd:='';         //sin delimitador final
   r.pRange:=nil;      //sin función de rango
   r.folTok:=false;    //sin plegado de token
@@ -547,7 +550,7 @@ function TSynFacilSyn.CreaBuscEspec(var tok: TPtrTokEspec; cad: string;
 var mat: TPtrATokEspec;
     i: integer;
 begin
-  if cad[1] in car_ini_iden then begin  //delimitador es identificador
+  if cad[1] in charsIniIden then begin  //delimitador es identificador
     Result := CreaBuscIdeEspec(mat, cad, i, TokPos); //busca o crea
     if Err<>'' then exit; //puede haber error
     if not Result then
@@ -686,7 +689,7 @@ begin
     exit;
   end;
   //verifica si inicia con caracter de identificador.
-  if  delim[1] in car_ini_iden then begin
+  if  delim[1] in charsIniIden then begin
     //Empieza como identificador. Hay que verificar todos los demás caracteres sean
     //también de identificador, De otra forma no se podrá reconocer el token.
     tmp := copy(delim, 2, length(delim) );
@@ -721,14 +724,14 @@ begin
         CreaBuscEspec(tok, c, 0);  //busca o crea
         if Err<>'' then exit;
         //actualiza sus campos. Cambia, si ya existía
-        tok^.tipDel:=TypDelim;  //solo es necesario marcarlo como que es por contenido
+        tok^.typDel:=TypDelim;  //solo es necesario marcarlo como que es por contenido
     end;
   end else begin
     //Es un literal. Configura token especial
     CreaBuscEspec(tok, dStart, 0);  //busca o crea
     if Err<>'' then exit;
     //actualiza sus campos. Cambia, si ya existía
-    tok^.tipDel:=TypDelim;  //solo es necesario marcarlo como que es por contenido
+    tok^.typDel:=TypDelim;  //solo es necesario marcarlo como que es por contenido
   end;
   /////// Configura caracteres de contenido
   //limpia matriz y marca las posiciones apropiadas
@@ -1143,14 +1146,14 @@ begin
   /////// Configura caracteres iniciales
   dStart := copy(dStart,2,length(dStart)-2);  //quita corchetes
   //agrega evento manejador
-  car_ini_iden := [];  //inicia
+  charsIniIden := [];  //inicia
   for c in dStart do begin //permite cualquier caracter inicial
     if c<#128 then begin  //caracter normal
       fProcTable[c] := @metIdent;
-      car_ini_iden += [c];  //agrega
+      charsIniIden += [c];  //agrega
     end else begin   //caracter UTF-8
       fProcTable[c] := @metIdentUTF8;
-      car_ini_iden += [c];  //agrega
+      charsIniIden += [c];  //agrega
     end;
   end;
   /////// Configura caracteres de contenido
@@ -1306,7 +1309,7 @@ var tok  : TPtrTokEspec;
   procedure ActProcRange(var r: TTokEspec);
   //Configura el puntero pRange() para la función apropiada de acuerdo al delimitador final.
   begin
-    if r.tipDel = tdNull then begin  //no es delimitador
+    if r.typDel = tdNull then begin  //no es delimitador
       r.pRange:=nil;
       exit;
     end;
@@ -1317,7 +1320,7 @@ var tok  : TPtrTokEspec;
       exit;
     end;
     //los siguientes casos pueden ser multilínea
-    if r.dEnd[1] in car_ini_iden then begin //es identificador
+    if r.dEnd[1] in charsIniIden then begin //es identificador
       r.pRange:=@ProcRangeEndIden;
     end else begin  //es símbolo
       if length(r.dEnd) = 1 then begin
@@ -1338,7 +1341,7 @@ begin
   if Err<>'' then exit; //puede haber error
   //actualiza sus campos. Cambia, si ya existía
   tok^.dEnd  :=dEnd;
-  tok^.tipDel:=tipDel;
+  tok^.typDel:=tipDel;
   tok^.tTok  :=tokTyp;
   tok^.folTok:=havFolding;
   ActProcRange(tok^);  //completa .pRange()
@@ -1679,29 +1682,29 @@ DebugLn('---------simplificando símbolos----------');
   for i := 0 to High(mSym0) do begin
     r := mSym0[i];
     dSexc:=delStart1Exclus(r.txt);  //ve si es de 1 caracter y exclusivo
-    if dSexc and (r.tipDel = tdConten1) then begin
+    if dSexc and (r.typDel = tdConten1) then begin
       //Token por contenido, que se puede optimizar
 DebugLn('  [' + r.txt[1] + '] -> @metTokCont1 (Token Por Conten. inicio exclusivo)');
       fProcTable[r.txt[1]] := @metTokCont1;
-    end else if dSexc and (r.tipDel=tdConten2) then begin
+    end else if dSexc and (r.typDel=tdConten2) then begin
       //Token por contenido, que se puede optimizar
 DebugLn('  [' + r.txt[1] + '] -> @metTokCont2 (Token Por Conten. inicio exclusivo)');
       fProcTable[r.txt[1]] := @metTokCont2;
-    end else if dSexc and (r.tipDel=tdConten3) then begin
+    end else if dSexc and (r.typDel=tdConten3) then begin
       //Token por contenido, que se puede optimizar
 DebugLn('  [' + r.txt[1] + '] -> @metTokCont3 (Token Por Conten. inicio exclusivo)');
       fProcTable[r.txt[1]] := @metTokCont3;
-    end else if dSexc and (r.tipDel=tdConten4) then begin
+    end else if dSexc and (r.typDel=tdConten4) then begin
       //Token por contenido, que se puede optimizar
 DebugLn('  [' + r.txt[1] + '] -> @metTokCont4 (Token Por Conten. inicio exclusivo)');
       fProcTable[r.txt[1]] := @metTokCont4;
-    end else if dSexc and (r.tipDel=tdUniLin) and (r.txt=r.dEnd) then begin
+    end else if dSexc and (r.typDel=tdUniLin) and (r.txt=r.dEnd) then begin
       //Caso típico de cadenas. Es procesable por nuestra función "metUniLin1"
 DebugLn('  [' + r.txt[1] + '] -> @metUniLin1 (uniLin c/delims iguales de 1 car)');
       fProcTable[r.txt[1]] := @metUniLin1;
       fAtriTable[r.txt[1]] := r.tTok; //para que metUniLin1() lo pueda recuperar
     //busca tokens una línea con delimitador de un caracter
-    end else if dSexc and (r.tipDel=tdUniLin) and (r.dEnd=#13) then begin
+    end else if dSexc and (r.typDel=tdUniLin) and (r.dEnd=#13) then begin
       //Caso típico de comentarios. Es procesable por nuestra función "metFinLinea"
 DebugLn('  [' + r.txt[1] + '] -> @metFinLinea (uniLin con dStart de 1 car y dEnd = #13)');
       fProcTable[r.txt[1]] := @metFinLinea;
@@ -1709,7 +1712,7 @@ DebugLn('  [' + r.txt[1] + '] -> @metFinLinea (uniLin con dStart de 1 car y dEnd
       { TODO : Se podría crear un procedimiento para manejar bloques multilíneas
        con delimitador inicial exclusivo y así optimizar su procesamiento porque puede
        tornarse pesado en la forma actual. }
-    end else if dSexc and (r.tipDel=tdNull) and not r.bloIni and not r.bloFin then begin
+    end else if dSexc and (r.typDel=tdNull) and not r.bloIni and not r.bloFin then begin
       //es símbolo especial de un caracter, exclusivo, que no es parte de token delimitado
       //ni es inicio o fin de bloque
 DebugLn('  [' + r.txt[1] + '] -> @metSym1Car (símbolo simple de 1 car)');
@@ -2021,7 +2024,7 @@ procedure TSynFacilSyn.ProcTokenDelim(const d: TTokEspec);
       EndBlock(eraSec.showFold);  //cierra primero la sección
   end;
 begin
-  case d.tipDel of
+  case d.typDel of
   tdNull: begin       //token que no es delimitador de token
       fTokenID := d.tTok; //no es delimitador de ningún tipo, pone su atributo
       //un delimitador común puede tener plegado de bloque
@@ -2117,13 +2120,13 @@ end;
 procedure TSynFacilSyn.metUniLin1;
 //Procesa tokens de una sola línea y con delimitadores iguales y de un solo caracter.
 begin
-  fTokenID := fAtriTable[carIni];   //lee atributo
+  fTokenID := fAtriTable[charIni];   //lee atributo
   Inc(posFin);  {no hay peligro en incrmentar porque siempre se llama "metUniLin1" con
                  el carcater actual <> #0}
   while posFin <> tamLin do begin
-    if fLine[posFin] = carIni then begin //busca fin de cadena
+    if fLine[posFin] = charIni then begin //busca fin de cadena
       Inc(posFin);
-      if (fLine[posFin] <> carIni) then break;  //si no es doble caracter
+      if (fLine[posFin] <> charIni) then break;  //si no es doble caracter
     end;
     Inc(posFin);
   end;
@@ -2131,7 +2134,7 @@ end;
 procedure TSynFacilSyn.metFinLinea;
 //Procesa tokens de una sola línea que va hasta el fin de línea.
 begin
-  fTokenID := fAtriTable[carIni];   //lee atributo
+  fTokenID := fAtriTable[charIni];   //lee atributo
   Inc(posFin);  {no hay peligro en incrmentar porque siempre se llama "metFinLinea" con
                  el caracter actual <> #0}
   posFin := tamLin;  //salta rápidamente al final
@@ -2139,7 +2142,7 @@ end;
 procedure TSynFacilSyn.metSym1Car;
 //Procesa tokens símbolo de un caracter de ancho.
 begin
-  fTokenID := fAtriTable[carIni];   //lee atributo
+  fTokenID := fAtriTable[charIni];   //lee atributo
   Inc(posFin);  //pasa a la siguiente posición
 end;
 //****** funciones llamadas por puntero y/o en medio de rangos  *************
@@ -2191,7 +2194,7 @@ begin
     c1:=(p-1)^;  {Retrocede. No debería haber problema en retroceder siempre, porque se supone que
            se ha detectado el delimitador inicial, entonces siempre habrá al menos un caracter}
     c2:=(p+length(delTok))^;   //apunta al final, puede ser el final de línea #0
-    if (c1 in car_ini_iden) or CharsIdentif[c1] or CharsIdentif[c2] then begin
+    if (c1 in charsIniIden) or CharsIdentif[c1] or CharsIdentif[c2] then begin
       //está en medio de un identificador. No es válido.
       p := strpos(p+length(delTok),PChar(delTok));  //busca siguiente
     end else begin  //es el identificador buscado
@@ -2442,7 +2445,7 @@ begin
     toks[tam].length:=posFin - posIni;  //tamaño del token
     toks[tam].TokTyp:=fTokenID;
     toks[tam].posIni:=PosIni;
-    toks[tam].IsIDentif:= (Line[PosIni+1] in car_ini_iden);  //puede ser Keyword
+    toks[tam].IsIDentif:= (Line[PosIni+1] in charsIniIden);  //puede ser Keyword
     toks[tam].curBlk := TopCodeFoldBlock(0);  //lee el rango
     Inc(tam);  //actualiza tamaño
 
@@ -2656,8 +2659,8 @@ begin
 
   posIni := posFin;   //apunta al primer elemento
   if fRange = nil then begin
-      carIni:=fLine[posFin]; //guardar para tenerlo disponible en el método que se va a llamar.
-      fProcTable[carIni];    //Se ejecuta la función que corresponda.
+      charIni:=fLine[posFin]; //guardar para tenerlo disponible en el método que se va a llamar.
+      fProcTable[charIni];    //Se ejecuta la función que corresponda.
   end else begin
     if posFin = tamLin then begin  //para acelerar la exploración
       fTokenID:=tkEol; exit;
