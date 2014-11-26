@@ -1,18 +1,29 @@
-{                               TSynFacilSyn 0.9.3
-* Se agrega el evento OnFirstTok(), para poder interceptar la explroación de líneas
-en el resaltador.
-* Se agrega el IsIDentif campo al registro TFaTokInfo, y se modifica ExploreLine()
-para que actualice este campo.
-* Se agrega el campo "length" al registro TFaTokInfo y se modifica ExploreLine()
-para que lo actualice.
-* Se cambia el nombre de "carIni" a "charIni"
-* Se cambia el nombre de "tipDel" a "typDel"
-* Se cambia el nombre de "car_ini_iden" a "charsIniIden"
+{                               TSynFacilSyn 0.9.4
+* Se comenta la llamada al evento OnFirstTok(), para no quitar velocidad al
+resaltador (Se puede activar en caso se requiera).
+* Se eliminan algunas variables no usadas
+* Se cambia nombre de HayEnMatInfo() a BuscTokEspec()
+* Se elimina la variable "haySIMBOLO" de "FirstXMLExplor"
+* Se cambia de nombre a "hayIDENTIF" por "defIDENTIF" en "FirstXMLExplor"
+* Se cambia de nombre a "TTokEspec" por "TTokSpec" y a "TArrayTokEspec" por "TArrayTokSpec"
+* Se traducen las constantes de cadenas a inglés.
+* Se quita una instrucción innecesaria en metFinLinea()
+* Se crea la lista "lisTmp" y la rutina SplitDelim() para simplificar la rutina "SetTokContent".
+* Se modifica DefTokDelim(), para que acepte la forma [a-z], en el delim. inicial de
+tokens delimitados.
+* Se modifica LoadFromFile(), para que acepte el parámetro CharsStart, en la declaración
+de tokens delimitados.
 
-Se observa un retraso en el procesamiento, de algo del 1%, debido al uso de
-OnFirstTok(). En caso crítico se podría eliminar.
+En esta versión se uniformiza la declaración de los tokens por contenido y delimitados
+en lo que respecta al delimitador inicial. Ahora ambos soportan un conjunto de caracteres
+o una cadena.
 
-                                    Por Tito Hinostroza  13/09/2014 - Lima Perú
+Además hay que notar que la documentación ha sido ampliada considerablemente en la sección
+dedicada a Programadores.
+
+Las demás características se mantienen, como la velocidad.
+
+                                    Por Tito Hinostroza  25/11/2014 - Lima Perú
 }
 unit SynFacilHighlighter;
 {$mode objfpc}{$H+}
@@ -23,15 +34,15 @@ uses
 const
   COL_TRANSPAR = $FDFEFF;  //color transparente
 type
-  //identifica si un token es el delimitador inicial
+  //Identifica si un token es el delimitador inicial
   TFaTypeDelim =(tdNull,     //no es delimitado
                  tdUniLin,   //es delimitador inicial de token delimitado de una línea
                  tdMulLin,   //es delimitador inicial de token delimitado multilínea
-                 tdConten1, //es delimitador inicial de token por contenido 1
-                 tdConten2, //es delimitador inicial de token por contenido 2
-                 tdConten3, //es delimitador inicial de token por contenido 3
+                 tdConten1,  //es delimitador inicial de token por contenido 1
+                 tdConten2,  //es delimitador inicial de token por contenido 2
+                 tdConten3,  //es delimitador inicial de token por contenido 3
                  tdConten4); //es delimitador inicial de token por contenido 4
-  //tipos de coloreado de bloques
+  //Tipos de coloreado de bloques
   TFaColBlock = (cbNull,     //sin coloreado
                  cbLevel,    //colorea bloques por nivel
                  cbBlock);   //colorea bloques usando el color definido para cada bloque
@@ -42,7 +53,7 @@ type
 
   TFaSynBlock = class;   //definición adelantada
   //Descripción de tokens especiales (identificador o símbolo)
-  TTokEspec = record
+  TTokSpec = record
     txt   : string;        //palabra clave (puede cambiar la caja y no incluir el primer caracter)
     orig  : string;        //palabra clave tal cual se indica
     TokPos: integer;       //posición del token dentro de la línea
@@ -62,7 +73,7 @@ type
     firstSec: TFaSynBlock;     //sección que se debe abrir al abrir el bloque
   end;
 
-  TArrayTokEspec = array of TTokEspec;
+  TArrayTokSpec = array of TTokSpec;
   //clase para manejar la definición de bloques de sintaxis
   TFaSynBlock = class
     name        : string;    //nombre del bloque
@@ -74,8 +85,8 @@ type
     UniqSec     : boolean;   //índica que es sección única
   end;
 
-  TPtrATokEspec = ^TArrayTokEspec;     //puntero a tabla
-  TPtrTokEspec = ^TTokEspec;     //puntero a tabla
+  TPtrATokEspec = ^TArrayTokSpec;     //puntero a tabla
+  TPtrTokEspec = ^TTokSpec;     //puntero a tabla
 
   //guarda información sobre un atributo de un nodo XML
   TFaXMLatrib = record  //atributo XML
@@ -127,26 +138,28 @@ type
     folTok     : boolean;       //indica si hay folding que cerrar en token delimitado
     charsIniIden: Set of char;  //caracteres iniciales de identificador
     nTokenCon  : integer;       //cantidad de tokens por contenido
-    fRange     : ^TTokEspec;    //para trabajar con tokens multilínea
+    fRange     : ^TTokSpec;    //para trabajar con tokens multilínea
     BlkToClose : TFaSynBlock;   //bandera-variable para posponer el cierre de un bloque
     posTok     : integer;       //para identificar el ordinal del token en una línea
+    lisTmp     : TStringList;   //lista temporal
     OnFirstTok : procedure of object;
     procedure SetTokContent(var tc: tFaTokContent; dStart: string;
       charsCont: string; TypDelim: TFaTypeDelim; charsEnd: string;
       typToken: TSynHighlighterAttributes);
     function ValidateInterval(var cars: string): boolean;
     procedure ValidateParamStart(var Start: string);
-    //manejo de bloques
+    procedure SplitDelim(Start: string);
+    //Manejo de bloques
     procedure StartBlock(ABlockType: Pointer; IncreaseLevel: Boolean);
     procedure EndBlock(DecreaseLevel: Boolean);
     function TopBlock: TFaSynBlock;
     function TopBlockOpac: TFaSynBlock;
     function LeeAtrib(n: TDOMNode; nomb: string): TFaXMLatrib;
   protected   //Funciones de bajo nivel
-    function HayEnMatInfo(var mat: TArrayTokEspec; cad: string; var n: integer;
+    function BuscTokEspec(var mat: TArrayTokSpec; cad: string; var n: integer;
       TokPos: integer=0): boolean;
     procedure ValidAsigDelim(delAct, delNue: TFaTypeDelim; delim: string);
-    function CreaBuscTokEspec(var mat: TArrayTokEspec; cad: string; var i: integer;
+    function CreaBuscTokEspec(var mat: TArrayTokSpec; cad: string; var i: integer;
       TokPos: integer=0): boolean;
     function CreaBuscIdeEspec(var mat: TPtrATokEspec; cad: string; var i: integer;
       TokPos: integer=0): boolean;
@@ -156,24 +169,24 @@ type
       ): boolean;
     procedure TableIdent(iden: string; var mat: TPtrATokEspec; var met: TFaProcMetTable);
     procedure VerifDelim(delim: string);
-    function KeyComp(var r: TTokEspec): Boolean;
+    function KeyComp(var r: TTokSpec): Boolean;
     function IsAttributeName(txt: string): boolean;
     procedure FirstXMLExplor(doc: TXMLDocument);
     function ValidarAtribs(n: TDOMNode; listAtrib: string): boolean;
   public    //funciones públicas de alto nivel
-    Err       : string;         //mensaje de error
-    LangName  : string;         //nombre del lengauje
-    Extensions: String;         //extensiones de archivo
+    Err       : string;         //Mensaje de error
+    LangName  : string;         //Nombre del lengauje
+    Extensions: String;         //Extensiones de archivo
     CaseSensitive: boolean;
     MainBlk   : TFaSynBlock;    //Bloque global
     MulTokBlk : TFaSynBlock;    //Bloque reservado para bloques multitokens
-    ColBlock  : TFaColBlock;      //coloreado por bloques
+    ColBlock  : TFaColBlock;    //Coloreado por bloques
     function GetAttribByName(txt: string): TSynHighlighterAttributes;
     procedure ClearMethodTables; //Limpia la tabla de métodos
-    //definición de tokens por contenido
+    //Definición de tokens por contenido
     procedure DefTokIdentif(dStart, charsCont: string);
     procedure DefTokContent(dStart, charsCont, charsEnd: string; typToken: TSynHighlighterAttributes);
-    //manejo de identificadores especiales
+    //Manejo de identificadores especiales
     procedure ClearSpecials;        //Limpia identif, y símbolos especiales
     procedure AddIdentSpec(iden: string; tokTyp: TSynHighlighterAttributes; TokPos: integer=0);
     procedure AddIdentSpecList(listIden: string; tokTyp: TSynHighlighterAttributes; TokPos: integer=0);
@@ -198,7 +211,7 @@ type
       parentBlk: TFaSynBlock=nil): TFaSynBlock;
     function AddFirstSection(dStart: string; showFold: boolean=true;
       parentBlk: TFaSynBlock=nil): TFaSynBlock;
-    //funciones para obtener información de bloques
+    //Funciones para obtener información de bloques
     function NestedBlocks: Integer;
     function NestedBlocksBegin(LineNumber: integer): Integer;
     function SearchBeginBlock(level: integer; PosY: integer): integer;
@@ -223,9 +236,9 @@ type
     mN, mO, mP, mQ, mR, mS, mT, mU, mV, mW, mX, mY, mZ,
     mA_,mB_,mC_,mD_,mE_,mF_,mG_,mH_,mI_,mJ_,mK_,mL_,mM_, //para minúsculas
     mN_,mO_,mP_,mQ_,mR_,mS_,mT_,mU_,mV_,mW_,mX_,mY_,mZ_,
-    m_, mDol, mArr, mPer, mAmp, mC3 : TArrayTokEspec;
-    mSym        :  TArrayTokEspec;   //tabla de símbolos especiales
-    mSym0       :  TArrayTokEspec;   //tabla temporal para símbolos especiales.
+    m_, mDol, mArr, mPer, mAmp, mC3 : TArrayTokSpec;
+    mSym        :  TArrayTokSpec;   //tabla de símbolos especiales
+    mSym0       :  TArrayTokSpec;   //tabla temporal para símbolos especiales.
     TabMayusc   : array[#0..#255] of Char;     //Tabla para conversiones rápidas a mayúscula
     //métodos para identificadores especiales
     procedure metA;
@@ -292,18 +305,20 @@ type
     procedure metSymbol;
     procedure metIdent;
     procedure metIdentUTF8;
+
+    procedure ProcTokenDelim(const d: TTokSpec);
+    procedure ProcIdentEsp(var mat: TArrayTokSpec);
+    procedure metSimbEsp;
+    //funciones rápidas para la tabla de métodos (símbolos especiales)
+    procedure metSym1Car;
+    //funciones rápidas para la tabla de métodos (tokens por contenido)
     procedure metTokCont1;
     procedure metTokCont2;
     procedure metTokCont3;
     procedure metTokCont4;
-
-    procedure ProcTokenDelim(const d: TTokEspec);
-    procedure ProcIdentEsp(var mat: TArrayTokEspec);
-    procedure metSimbEsp;
-    //funciones rápidas para la tabla de métodos
+    //funciones rápidas para la tabla de métodos (tokens delimitados)
     procedure metUniLin1;
     procedure metFinLinea;
-    procedure metSym1Car;
     //funciones llamadas en medio de rangos
     procedure ProcFinLinea;
     procedure ProcRangeEndSym;
@@ -365,7 +380,7 @@ const
   ERR_IDENT_NO_VALID = 'Identificador no válido.';
   ERR_IDENTIF_EXIST = 'Ya existe identificador: ';
   ERR_EMPTY_SYMBOL = 'Símbolo vacío';
-  ERR_EMPTY_IDENTIF = 'IDentificador vacío';
+  ERR_EMPTY_IDENTIF = 'Identificador vacío';
   ERR_SYMBOL_EXIST = 'Ya existe símbolo.';
   ERR_INVAL_ATTR_LAB = 'Atributo "%s" no válido para etiqueta <%s>';
   ERR_MUST_DEF_CHARS = 'Debe indicarse atributo "CharsStart=" en etiqueta <IDENTIFIERS ...>';
@@ -375,13 +390,278 @@ const
   ERR_BAD_PAR_STR_IDEN = 'Parámetro "Start" debe ser de la forma: [A..Z], en identificadores';
   ERR_INVAL_LBL_IN_LBL = 'Etiqueta "%s" no válida para etiqueta <SYMBOLS ...>';
   ERR_BLK_NO_DEFINED = 'No se encuentra definido el bloque: ';
-
+{
+  ERR_TOK_DELIM_NULL = 'Token delimiter can not be null';
+  ERR_TOK_DEL_IDE_ERR = 'Bad Token delimiter: %s (must be identifier)';
+  ERR_START_NO_EMPTY = 'Parameter "Start" can not be null';
+  ERR_IDEN_ALREA_DEL = 'Identifier "%s" is already a Start delimiter.';
+  ERR_EXP_MUST_BE_BR = 'Expression must be like: [list of chars]';
+  ERR_DEF_INTERVAL = 'Interval definition error: %s';
+  ERR_IDENTIF_EMPTY = 'Empty identifier.';
+  ERR_IDENT_NO_VALID = 'Unvalid identifier.';
+  ERR_IDENTIF_EXIST = 'Identifier already exists: ';
+  ERR_EMPTY_SYMBOL = 'Empty Symbol';
+  ERR_EMPTY_IDENTIF = 'Empty Identifier';
+  ERR_SYMBOL_EXIST = 'Symbol already exists.';
+  ERR_INVAL_ATTR_LAB = 'Invalid attribute "%s" for label <%s>';
+  ERR_MUST_DEF_CHARS = 'It must be indicated "CharsStart=" in label <IDENTIFIERS ...>';
+  ERR_MUST_DEF_CONT = 'It must be indicated "Content=" in label <IDENTIFIERS ...>';
+  ERR_UNKNOWN_LABEL = 'Unknown label <%s> in: %s';
+  ERR_INVAL_LBL_IDEN = 'Invalid label "%s", for label <IDENTIFIERS ...>';
+  ERR_BAD_PAR_STR_IDEN = 'Parameter "Start" must be like: [A..Z], in identifiers';
+  ERR_INVAL_LBL_IN_LBL = 'Invalid label "%s", for label <SYMBOLS ...>';
+  ERR_BLK_NO_DEFINED = 'Undefined block: ';
+}
   { TSynFacilSyn }
 
+// ************* funciones de más alto nivel *****************
+procedure TSynFacilSyn.ClearMethodTables;
+{Limpia la tabla de métodos, usada para identificar a los tokens de la sintaxis.
+ También limpia las definiciones de tokens por contenido.
+ Proporciona una forma rápida de identificar la categoría de token.}
+var i: Char;
+begin
+  lisBlocks.Clear;   //inicia lista de bloques
+  nTokenCon := 0;    //inicia contador de tokens por contenido
+  tc1.carValFin := '';
+  tc2.carValFin := '';
+  tc3.carValFin := '';
+  tc4.carValFin := '';
+  for i := #0 to #255 do
+    case i of
+      //caracteres blancos, son fijos
+      #1..#32 : fProcTable[i] := @metSpace;
+      //fin de línea
+      #0      : fProcTable[i] := @metNull;   //Se lee el caracter de marca de fin de cadena
+      else //los otros caracteres (alfanuméricos o no)
+        fProcTable[i] := @metSymbol;  //se consideran símbolos
+    end;
+end;
+//definición de tokens por contenido
+procedure TSynFacilSyn.DefTokIdentif(dStart, charsCont: string );
+{Define token para identificadores.
+Se debe haber limpiado previamente con "ClearMethodTables"}
+var c     : char;
+begin
+  if dStart = '' then exit;   //protección
+  if dStart[1] <> '[' then begin  //debe ser lista de caracteres
+    Err := ERR_BAD_PAR_STR_IDEN; exit;
+  end;
+  ValidateParamStart(dStart);   //valida el primer parámetro
+  if Err<>'' then exit;
+  /////// Configura caracteres iniciales
+  dStart := copy(dStart,2,length(dStart)-2);  //quita corchetes
+  //agrega evento manejador
+  charsIniIden := [];  //inicia
+  for c in dStart do begin //permite cualquier caracter inicial
+    if c<#128 then begin  //caracter normal
+      fProcTable[c] := @metIdent;
+      charsIniIden += [c];  //agrega
+    end else begin   //caracter UTF-8
+      fProcTable[c] := @metIdentUTF8;
+      charsIniIden += [c];  //agrega
+    end;
+  end;
+  /////// Configura caracteres de contenido
+  if ValidateInterval(charsCont) then exit;   //validación
+  //limpia matriz
+  for c := #0 to #255 do begin
+    CharsIdentif[c] := False;
+    //aprovecha para crear la tabla de mayúsculas para comparaciones
+    if CaseSensitive then TabMayusc[c] := c
+    else begin  //pasamos todo a mayúscula
+      TabMayusc[c] := UpCase(c);
+    end;
+  end;
+  //marca las posiciones apropiadas
+  for c in charsCont do CharsIdentif[c] := True;
+end;
+procedure TSynFacilSyn.DefTokContent(dStart, charsCont, charsEnd: string;
+  typToken: TSynHighlighterAttributes);
+{Define un token por contenido. Se debe haber limpiado previamente con "ClearMethodTables"
+ Solo se permite definir hasta 4 tokens}
+begin
+  ValidateParamStart(dStart);   //valida el primer parámetro
+  if Err<>'' then exit;
+  if ValidateInterval(charsCont) then exit;   //validación
+  if nTokenCon = 0 then begin       //está libre el 1
+    SetTokContent(tc1, dStart, charsCont, tdConten1, charsEnd, typToken);
+    if Err<>'' then exit;
+    inc(nTokenCon);
+  end else if nTokenCon = 1 then begin //está libre el 2
+    SetTokContent(tc2, dStart, charsCont, tdConten2, charsEnd, typToken);
+    if Err<>'' then exit;
+    inc(nTokenCon);
+  end else if nTokenCon = 2 then begin //está libre el 3
+    SetTokContent(tc3, dStart, charsCont, tdConten3, charsEnd, typToken);
+    if Err<>'' then exit;
+    inc(nTokenCon);
+  end else if nTokenCon = 3 then begin //está libre el 4
+    SetTokContent(tc4, dStart, charsCont, tdConten4, charsEnd, typToken);
+    if Err<>'' then exit;
+    inc(nTokenCon);
+  end;  //las demás declaraciones, se ignoran
+end;
+//manejo de identificadores y símbolos especiales
+procedure TSynFacilSyn.ClearSpecials;
+//Limpia la lista de identificadores especiales y de símbolos delimitadores.
+begin
+  //ídentificadores
+  SetLength(mA,0); SetLength(mB,0); SetLength(mC,0); SetLength(mD,0);
+  SetLength(mE,0); SetLength(mF,0); SetLength(mG,0); SetLength(mH,0);
+  SetLength(mI,0); SetLength(mJ,0); SetLength(mK,0); SetLength(mL,0);
+  SetLength(mM,0); SetLength(mN,0); SetLength(mO,0); SetLength(mP,0);
+  SetLength(mQ,0); SetLength(mR,0); SetLength(mS,0); SetLength(mT,0);
+  SetLength(mU,0); SetLength(mV,0); SetLength(mW,0); SetLength(mX,0);
+  SetLength(mY,0); SetLength(mZ,0);
+  SetLength(mA_,0); SetLength(mB_,0); SetLength(mC_,0); SetLength(mD_,0);
+  SetLength(mE_,0); SetLength(mF_,0); SetLength(mG_,0); SetLength(mH_,0);
+  SetLength(mI_,0); SetLength(mJ_,0); SetLength(mK_,0); SetLength(mL_,0);
+  SetLength(mM_,0); SetLength(mN_,0); SetLength(mO_,0); SetLength(mP_,0);
+  SetLength(mQ_,0); SetLength(mR_,0); SetLength(mS_,0); SetLength(mT_,0);
+  SetLength(mU_,0); SetLength(mV_,0); SetLength(mW_,0); SetLength(mX_,0);
+  SetLength(mY_,0); SetLength(mZ_,0);
+  SetLength(m_,0); SetLength(mDol,0); SetLength(mArr,0);
+  SetLength(mPer,0); SetLength(mAmp,0); SetLength(mC3,0);
+  //símbolos
+  SetLength(mSym,0);
+  SetLength(mSym0,0);  //limpia espacio temporal
+end;
+procedure TSynFacilSyn.AddIdentSpec(iden: string; tokTyp: TSynHighlighterAttributes; TokPos: integer
+  );
+//Método público para agregar un identificador especial cualquiera.
+var i: integer;
+    mat: TPtrATokEspec;
+begin
+  Err := '';
+  if iden = '' then begin Err := ERR_EMPTY_IDENTIF; exit; end;
+  //Verifica si existe
+  if CreaBuscIdeEspec(mat, iden, i, TokPos) then begin
+    Err := ERR_IDENTIF_EXIST+iden; exit;
+  end;
+  if Err<>'' then exit;  //pudo haber dado error
+  //se ha creado uno nuevo
+  mat^[i].tTok:=tokTyp;  //solo cambia atributo
+end;
+procedure TSynFacilSyn.AddIdentSpecList(listIden: string; tokTyp: TSynHighlighterAttributes;
+  TokPos: integer);
+//Permite agregar una lista de identificadores especiales separados por espacios.
+var
+  Idens  : TStringList;
+  iden   : string;
+  i      : integer;
+begin
+  //Carga identificadores
+  Idens :=TStringList.Create;
+  Idens.Delimiter := ' ';
+  //StringReplace(listIden, #13#10, ' ',[rfReplaceAll]);
+  IDens.DelimitedText := listIden;
+  for i:= 0 to IDens.Count -1 do
+    begin
+      iden := trim(IDens[i]);
+      if iden = '' then continue;
+      AddIdentSpec(iden, tokTyp, TokPos);
+      if Err <> '' then break;
+    end;
+  Idens.Free;
+end;
+procedure TSynFacilSyn.AddKeyword(iden: string);
+//Método público que agrega un identificador "Keyword" a la sintaxis
+begin
+  AddIdentSpec(iden, tkKeyword);
+end;
+procedure TSynFacilSyn.AddSymbSpec(symb: string; tokTyp: TSynHighlighterAttributes; TokPos: integer);
+//Método público para agregar un símbolo especial cualquiera.
+var i: integer;
+    mat: TPtrATokEspec;
+begin
+  Err := '';
+  if symb = '' then begin Err := ERR_EMPTY_SYMBOL; exit; end;
+  //Verifica si existe
+  if CreaBuscSymEspec(mat, symb, i, TokPos) then begin //busca o crea
+    Err := ERR_SYMBOL_EXIST; exit;
+  end;
+  //se ha creado uno nuevo
+  mat^[i].tTok:=tokTyp;  //solo cambia atributo
+end;
+procedure TSynFacilSyn.AddSymbSpecList(listSym: string; tokTyp: TSynHighlighterAttributes;
+  TokPos: integer);
+//Permite agregar una lista de símbolos especiales separados por espacios.
+var
+  Idens  : TStringList;
+  iden   : string;
+  i      : integer;
+begin
+  //Carga identificadores
+  Idens :=TStringList.Create;
+  Idens.Delimiter := ' ';
+  //StringReplace(listSym, #13#10, ' ',[rfReplaceAll]);
+  IDens.DelimitedText := listSym;
+  for i:= 0 to IDens.Count -1 do
+    begin
+      iden := trim(IDens[i]);
+      if iden = '' then continue;
+      AddSymbSpec(iden, tokTyp, TokPos);
+      if Err <> '' then break;
+    end;
+  Idens.Free;
+end;
+//definición de tokens delimitados
+procedure TSynFacilSyn.DefTokDelim(dStart, dEnd: string; tokTyp: TSynHighlighterAttributes;
+  tipDel: TFaTypeDelim=tdUniLin; havFolding: boolean=false);
+{Función genérica para agregar un token delimitado a la sintaxis. Si encuentra error, sale
+ con el mensaje en "Err"}
+var
+  tok  : TPtrTokEspec;
+  tmp: String;
+  procedure ActProcRange(var r: TTokSpec);
+  //Configura el puntero pRange() para la función apropiada de acuerdo al delimitador final.
+  begin
+    if r.typDel = tdNull then begin  //no es delimitador
+      r.pRange:=nil;
+      exit;
+    end;
+    if r.dEnd = '' then exit;
+    if r.dEnd = #13 then begin   //Como comentario de una línea
+      //no puede ser multilínea
+      r.pRange := @ProcFinLinea;
+      exit;
+    end;
+    //los siguientes casos pueden ser multilínea
+    if r.dEnd[1] in charsIniIden then begin //es identificador
+      r.pRange:=@ProcRangeEndIden;
+    end else begin  //es símbolo
+      if length(r.dEnd) = 1 then begin
+        r.pRange:=@ProcRangeEndSym1;  //es más óptimo
+      end else begin
+        r.pRange:=@ProcRangeEndSym;
+      end;
+    end;
+  end;
+begin
+  if dEnd='' then dEnd := #13;  //no se permite delimitador final vacío
+  VerifDelim(dStart);
+  if Err <> '' then exit;
+  VerifDelim(dEnd);
+  if Err <> '' then exit;
+  //configura token especial
+  SplitDelim(dStart);
+  for tmp in lisTmp do begin
+    CreaBuscEspec(tok, tmp, 0); //busca o crea
+    if Err<>'' then exit; //puede haber error
+    //actualiza sus campos. Cambia, si ya existía
+    tok^.dEnd  :=dEnd;
+    tok^.typDel:=tipDel;
+    tok^.tTok  :=tokTyp;
+    tok^.folTok:=havFolding;
+    ActProcRange(tok^);  //completa .pRange()
+  end;
+end;
+
 //funciones de bajo nivel
-function TSynFacilSyn.HayEnMatInfo(var mat: TArrayTokEspec; cad: string;
+function TSynFacilSyn.BuscTokEspec(var mat: TArrayTokSpec; cad: string;
                          var n: integer; TokPos: integer = 0): boolean;
-//Busca una cadena en una matriz TArrayTokEspec. Si la ubica devuelve el índice en "n".
+//Busca una cadena en una matriz TArrayTokSpec. Si la ubica devuelve el índice en "n".
 var i : integer;
 begin
   Result := false;
@@ -474,15 +754,32 @@ begin
     exit;
   end;
 end;
-function TSynFacilSyn.CreaBuscTokEspec(var mat: TArrayTokEspec; cad: string;
+procedure TSynFacilSyn.SplitDelim(Start: string);
+//Analiza el delimitador y lo separa en la lista "lisTmp".
+var
+  c: Char;
+begin
+  lisTmp.Clear;  //prepara lista
+  if (Start[1] = '[') and (length(Start)>1) then begin  //es intervalo de caracteres
+    Start := copy(Start,2,length(Start)-2);  //quita corchetes
+    //Agrega cada caracter a la lista
+    for c in Start do begin
+      lisTmp.Add(c);
+    end;
+  end else begin
+    //Es un literal. Se asume que es uno solo
+    lisTmp.Add(Start);
+  end;
+end;
+function TSynFacilSyn.CreaBuscTokEspec(var mat: TArrayTokSpec; cad: string;
                                        var i:integer; TokPos: integer = 0): boolean;
 {Busca o crea el token especial indicado en "cad". Si ya existe, devuelve TRUE y
  actualiza "i" con su posición. Si no existe. Crea el token especial y devuelve la referencia
  en "i". Se le debe indicar la tabla a buscar en "mat"}
-var r:TTokEspec;
+var r:TTokSpec;
 begin
   if not CaseSensitive then cad:= UpCase(cad);  //cambia caja si es necesario
-  if HayEnMatInfo(mat,cad, i, TokPos) then exit(true);  //ya existe, devuelve en "i"
+  if BuscTokEspec(mat,cad, i, TokPos) then exit(true);  //ya existe, devuelve en "i"
   //no existe, hay que crearlo. Aquí se definen las propiedades por defecto
   r.txt:=cad;         //se asigna el nombre
   r.TokPos:=TokPos;   //se asigna ordinal del token
@@ -504,9 +801,10 @@ begin
 end;
 function TSynFacilSyn.CreaBuscIdeEspec(var mat: TPtrATokEspec; cad: string;
                                           var i:integer; TokPos: integer = 0): boolean;
-{Busca o crea el identificador especial indicado en "cad". Si ya existe, devuelve TRUE, y
- actualiza "i" con su posición. Si no existe, crea el token especial y devuelve la referencia
- en "i". En "mat" devuelve la referencia a la tabla que corresponda al identificador.}
+{Busca o crea el identificador especial indicado en "cad". Si ya existe, devuelve TRUE,
+ y actualiza "i" con su posición. Si no existe, crea el token especial y devuelve la
+ referencia en "i". En "mat" devuelve la referencia a la tabla que corresponda al
+ identificador.}
 var met: TFaProcMetTable;
     c: Char;
 begin
@@ -706,29 +1004,23 @@ procedure TSynFacilSyn.SetTokContent(var tc: tFaTokContent; dStart: string;
                                      charsEnd: string;
                                      typToken: TSynHighlighterAttributes);
 //Configura la definición de un token por contenido. De ser así devuelve TRUE y
-//actualiza la tabla de métodos con el método indicado. No hace la validación completa de
-//la expresión. Esta debe haber sido ya previemente analizada.
+//actualiza la tabla de métodos con el método indicado. No hace la validación completa
+//de la expresión. Esta debe haber sido ya previamente analizada.
 var
-  c: Char;
+  c  : Char;
+  tmp: string;
   tok: TPtrTokEspec;
 begin
   tc.CarValFin := charsEnd;
-  tc.TokTyp:= typToken;  //fija categoría de token
+  tc.TokTyp:= typToken;  //fija tipo de token
   /////// Configura detección de inicio
-  if dStart[1] = '[' then begin  //es intervalo
-    dStart := copy(dStart,2,length(dStart)-2);  //quita corchetes
-    //Agrega cada caracter como símbolo especial, aunque parezca ineficiente. Pero de esta
-    //forma se podrán procesar tokens por contenido que empiecen con el mismo caracter.
-    //Además, de ser posible, la función Rebuild() optimizará luego el procesamiento.
-    for c in dStart do begin
-        CreaBuscEspec(tok, c, 0);  //busca o crea
-        if Err<>'' then exit;
-        //actualiza sus campos. Cambia, si ya existía
-        tok^.typDel:=TypDelim;  //solo es necesario marcarlo como que es por contenido
-    end;
-  end else begin
-    //Es un literal. Configura token especial
-    CreaBuscEspec(tok, dStart, 0);  //busca o crea
+  {Si es rango de caracteres, agrega cada caracter como símbolo especial, aunque parezca
+  ineficiente. Pero de esta forma se podrán procesar tokens por contenido que empiecen
+  con el mismo caracter. Además, de ser posible, la función Rebuild() optimizará luego
+  el procesamiento.}
+  SplitDelim(dStart);
+  for tmp in lisTmp do begin
+    CreaBuscEspec(tok, tmp, 0);  //busca o crea
     if Err<>'' then exit;
     //actualiza sus campos. Cambia, si ya existía
     tok^.typDel:=TypDelim;  //solo es necesario marcarlo como que es por contenido
@@ -738,7 +1030,7 @@ begin
   for c := #0 to #255 do tc.CharsToken[c] := False;
   for c in charsCont do tc.CharsToken[c] := True;
 end;
-function TSynFacilSyn.KeyComp(var r: TTokEspec): Boolean; inline;
+function TSynFacilSyn.KeyComp(var r: TTokSpec): Boolean; inline;
 {Compara rápidamente una cadena con el token actual, apuntado por "fToIden".
  El tamaño del token debe estar en "fStringLen"}
 var
@@ -916,8 +1208,7 @@ var
   nodo, atri   : TDOMNode;
   i,j            : integer;
   nombre         : string;
-  hayIDENTIF     : boolean;  //bandera
-  haySIMBOLO     : boolean;  //bandera
+  defIDENTIF     : boolean;  //bandera
   tipTok         : TSynHighlighterAttributes;
   tExt, tName, tCasSen: TFaXMLatrib;
   tCharsStart, tContent, tAtrib: TFaXMLatrib;
@@ -935,8 +1226,8 @@ var
   tFrameEdg: TFaXMLatrib;
   tFrameSty: TFaXMLatrib;
 begin
-  hayIDENTIF := false;
-  haySIMBOLO := false;
+  defIDENTIF := false;
+//  defSIMBOLO := false;
   //////////// explora atributos del lenguaje//////////
   tExt  := LeeAtrib(doc.DocumentElement, 'Ext');
   tName := LeeAtrib(doc.DocumentElement, 'Name');
@@ -960,7 +1251,7 @@ begin
      nodo := doc.DocumentElement.ChildNodes[i];
      nombre := UpCase(nodo.NodeName);
      if nombre = 'IDENTIFIERS' then begin
-       hayIDENTIF := true;      //hay definición de identificadores
+       defIDENTIF := true;      //hay definición de identificadores
        ////////// Lee atributos //////////
        tCharsStart  := LeeAtrib(nodo,'CharsStart');
        tContent:= LeeAtrib(nodo,'Content');
@@ -1000,11 +1291,10 @@ begin
          end;
        end;
      end else if nombre = 'SYMBOLS' then begin
-       haySIMBOLO := true;      //hay definición de símbolos
-       ////////// Lee atributos //////////
+//       defSIMBOLO := true;      //hay definición de símbolos
+       ////////// Lee atributos, pero no se usan. Es solo protocolar.
        tCharsStart  := LeeAtrib(nodo,'CharsStart');
        tContent:= LeeAtrib(nodo,'Content');
-       ////////// Aún no se leen los atributos
        ////////// explora nodos hijos //////////
        for j := 0 to nodo.ChildNodes.Count-1 do begin
          atri := nodo.ChildNodes[j];
@@ -1029,7 +1319,6 @@ begin
          end;
        end;
      end else if nombre = 'ATTRIBUTE' then begin
-//       haySIMBOLO := true;      //hay definición de símbolos
        ////////// Lee atributos //////////
        tName    := LeeAtrib(nodo,'Name');
        tBackCol := LeeAtrib(nodo,'BackCol');
@@ -1103,259 +1392,24 @@ begin
      //ignora las otras etiquetas, en esta pasada.
   end;
   //verifica configuraciones por defecto
-  if not hayIDENTIF then //no se indicó etiqueta IDENTIFIERS
+  if not defIDENTIF then //no se indicó etiqueta IDENTIFIERS
     DefTokIdentif('[A..Za..z$_]', 'A..Za..z0..9_');  //def. por defecto
-//  if not haySIMBOLO then //no se indicó etiqueta SYMBOLS
+//  if not defSIMBOLO then //no se indicó etiqueta SYMBOLS
 end;
 
-// ************* funciones de más alto nivel *****************
-procedure TSynFacilSyn.ClearMethodTables;
-{Limpia la tabla de métodos, usada para identificar a los tokens de la sintaxis.
- También limpia las definiciones de tokens por contenido.
- Proporciona una forma rápida de identificar la categoría de token.}
-var i: Char;
-begin
-  lisBlocks.Clear;   //inicia lista de bloques
-  nTokenCon := 0;    //inicia contador de tokens por contenido
-  tc1.carValFin := '';
-  tc2.carValFin := '';
-  tc3.carValFin := '';
-  tc4.carValFin := '';
-  for i := #0 to #255 do
-    case i of
-      //caracteres blancos, son fijos
-      #1..#32 : fProcTable[i] := @metSpace;
-      //fin de línea
-      #0      : fProcTable[i] := @metNull;   //Se lee el caracter de marca de fin de cadena
-      else //los otros caracteres (alfanuméricos o no)
-        fProcTable[i] := @metSymbol;  //se consideran símbolos
-    end;
-end;
-//definición de tokens por contenido
-procedure TSynFacilSyn.DefTokIdentif(dStart, charsCont: string );
-{Define token para identificadores.
-Se debe haber limpiado previamente con "ClearMethodTables"}
-var c     : char;
-begin
-  if dStart = '' then exit;   //protección
-  if dStart[1] <> '[' then begin  //debe ser lista de caracteres
-    Err := ERR_BAD_PAR_STR_IDEN; exit;
-  end;
-  ValidateParamStart(dStart);   //valida el primer parámetro
-  if Err<>'' then exit;
-  /////// Configura caracteres iniciales
-  dStart := copy(dStart,2,length(dStart)-2);  //quita corchetes
-  //agrega evento manejador
-  charsIniIden := [];  //inicia
-  for c in dStart do begin //permite cualquier caracter inicial
-    if c<#128 then begin  //caracter normal
-      fProcTable[c] := @metIdent;
-      charsIniIden += [c];  //agrega
-    end else begin   //caracter UTF-8
-      fProcTable[c] := @metIdentUTF8;
-      charsIniIden += [c];  //agrega
-    end;
-  end;
-  /////// Configura caracteres de contenido
-  if ValidateInterval(charsCont) then exit;   //validación
-  //limpia matriz
-  for c := #0 to #255 do begin
-    CharsIdentif[c] := False;
-    //aprovecha para crear la tabla de mayúsculas para comparaciones
-    if CaseSensitive then TabMayusc[c] := c
-    else begin  //pasamos todo a mayúscula
-      TabMayusc[c] := UpCase(c);
-    end;
-  end;
-  //marca las posiciones apropiadas
-  for c in charsCont do CharsIdentif[c] := True;
-end;
-procedure TSynFacilSyn.DefTokContent(dStart, charsCont, charsEnd: string;
-  typToken: TSynHighlighterAttributes);
-{Define un token por contenido. Se debe haber limpiado previamente con "ClearMethodTables"
- Solo se permite definir hasta 4 tokens}
-begin
-  ValidateParamStart(dStart);   //valida el primer parámetro
-  if Err<>'' then exit;
-  if ValidateInterval(charsCont) then exit;   //validación
-  if nTokenCon = 0 then begin       //está libre el 1
-    SetTokContent(tc1, dStart, charsCont, tdConten1, charsEnd, typToken);
-    if Err<>'' then exit;
-    inc(nTokenCon);
-  end else if nTokenCon = 1 then begin //está libre el 2
-    SetTokContent(tc2, dStart, charsCont, tdConten2, charsEnd, typToken);
-    if Err<>'' then exit;
-    inc(nTokenCon);
-  end else if nTokenCon = 2 then begin //está libre el 3
-    SetTokContent(tc3, dStart, charsCont, tdConten3, charsEnd, typToken);
-    if Err<>'' then exit;
-    inc(nTokenCon);
-  end else if nTokenCon = 3 then begin //está libre el 4
-    SetTokContent(tc4, dStart, charsCont, tdConten4, charsEnd, typToken);
-    if Err<>'' then exit;
-    inc(nTokenCon);
-  end;  //las demás declaraciones, se ignoran
-end;
-//manejo de identificadores y símbolos especiales
-procedure TSynFacilSyn.ClearSpecials;
-//Limpia la lista de identificadores especiales y de símbolos delimitadores.
-begin
-  //ídentificadores
-  SetLength(mA,0); SetLength(mB,0); SetLength(mC,0); SetLength(mD,0);
-  SetLength(mE,0); SetLength(mF,0); SetLength(mG,0); SetLength(mH,0);
-  SetLength(mI,0); SetLength(mJ,0); SetLength(mK,0); SetLength(mL,0);
-  SetLength(mM,0); SetLength(mN,0); SetLength(mO,0); SetLength(mP,0);
-  SetLength(mQ,0); SetLength(mR,0); SetLength(mS,0); SetLength(mT,0);
-  SetLength(mU,0); SetLength(mV,0); SetLength(mW,0); SetLength(mX,0);
-  SetLength(mY,0); SetLength(mZ,0);
-  SetLength(mA_,0); SetLength(mB_,0); SetLength(mC_,0); SetLength(mD_,0);
-  SetLength(mE_,0); SetLength(mF_,0); SetLength(mG_,0); SetLength(mH_,0);
-  SetLength(mI_,0); SetLength(mJ_,0); SetLength(mK_,0); SetLength(mL_,0);
-  SetLength(mM_,0); SetLength(mN_,0); SetLength(mO_,0); SetLength(mP_,0);
-  SetLength(mQ_,0); SetLength(mR_,0); SetLength(mS_,0); SetLength(mT_,0);
-  SetLength(mU_,0); SetLength(mV_,0); SetLength(mW_,0); SetLength(mX_,0);
-  SetLength(mY_,0); SetLength(mZ_,0);
-  SetLength(m_,0); SetLength(mDol,0); SetLength(mArr,0);
-  SetLength(mPer,0); SetLength(mAmp,0); SetLength(mC3,0);
-  //símbolos
-  SetLength(mSym,0);
-  SetLength(mSym0,0);  //limpia espacio temporal
-end;
-procedure TSynFacilSyn.AddIdentSpec(iden: string; tokTyp: TSynHighlighterAttributes; TokPos: integer
-  );
-//Método público para agregar un identificador especial cualquiera.
-var i: integer;
-    mat: TPtrATokEspec;
-begin
-  Err := '';
-  if iden = '' then begin Err := ERR_EMPTY_IDENTIF; exit; end;
-  //Verifica si existe
-  if CreaBuscIdeEspec(mat, iden, i, TokPos) then begin
-    Err := ERR_IDENTIF_EXIST+iden; exit;
-  end;
-  if Err<>'' then exit;  //pudo haber dado error
-  //se ha creado uno nuevo
-  mat^[i].tTok:=tokTyp;  //solo cambia atributo
-end;
-procedure TSynFacilSyn.AddIdentSpecList(listIden: string; tokTyp: TSynHighlighterAttributes;
-  TokPos: integer);
-//Permite agregar una lista de identificadores especiales separados por espacios.
-var
-  Idens  : TStringList;
-  iden   : string;
-  i      : integer;
-begin
-  //Carga identificadores
-  Idens :=TStringList.Create;
-  Idens.Delimiter := ' ';
-  //StringReplace(listIden, #13#10, ' ',[rfReplaceAll]);
-  IDens.DelimitedText := listIden;
-  for i:= 0 to IDens.Count -1 do
-    begin
-      iden := trim(IDens[i]);
-      if iden = '' then continue;
-      AddIdentSpec(iden, tokTyp, TokPos);
-      if Err <> '' then break;
-    end;
-  Idens.Free;
-end;
-procedure TSynFacilSyn.AddKeyword(iden: string);
-//Método público que agrega un identificador "Keyword" a la sintaxis
-begin
-  AddIdentSpec(iden, tkKeyword);
-end;
-procedure TSynFacilSyn.AddSymbSpec(symb: string; tokTyp: TSynHighlighterAttributes; TokPos: integer);
-//Método público para agregar un símbolo especial cualquiera.
-var i: integer;
-    mat: TPtrATokEspec;
-begin
-  Err := '';
-  if symb = '' then begin Err := ERR_EMPTY_SYMBOL; exit; end;
-  //Verifica si existe
-  if CreaBuscSymEspec(mat, symb, i, TokPos) then begin //busca o crea
-    Err := ERR_SYMBOL_EXIST; exit;
-  end;
-  //se ha creado uno nuevo
-  mat^[i].tTok:=tokTyp;  //solo cambia atributo
-end;
-procedure TSynFacilSyn.AddSymbSpecList(listSym: string; tokTyp: TSynHighlighterAttributes;
-  TokPos: integer);
-//Permite agregar una lista de símbolos especiales separados por espacios.
-var
-  Idens  : TStringList;
-  iden   : string;
-  i      : integer;
-begin
-  //Carga identificadores
-  Idens :=TStringList.Create;
-  Idens.Delimiter := ' ';
-  //StringReplace(listSym, #13#10, ' ',[rfReplaceAll]);
-  IDens.DelimitedText := listSym;
-  for i:= 0 to IDens.Count -1 do
-    begin
-      iden := trim(IDens[i]);
-      if iden = '' then continue;
-      AddSymbSpec(iden, tokTyp, TokPos);
-      if Err <> '' then break;
-    end;
-  Idens.Free;
-end;
-//definición de tokens delimitados
-procedure TSynFacilSyn.DefTokDelim(dStart, dEnd: string; tokTyp: TSynHighlighterAttributes;
-  tipDel: TFaTypeDelim; havFolding: boolean);
-{Función genérica para agregar un token delimitado a la sintaxis. Si encuentra error, sale
- con el mensaje en "Err"}
-var tok  : TPtrTokEspec;
-  procedure ActProcRange(var r: TTokEspec);
-  //Configura el puntero pRange() para la función apropiada de acuerdo al delimitador final.
-  begin
-    if r.typDel = tdNull then begin  //no es delimitador
-      r.pRange:=nil;
-      exit;
-    end;
-    if r.dEnd = '' then exit;
-    if r.dEnd = #13 then begin   //Como comentario de una línea
-      //no puede ser multilínea
-      r.pRange := @ProcFinLinea;
-      exit;
-    end;
-    //los siguientes casos pueden ser multilínea
-    if r.dEnd[1] in charsIniIden then begin //es identificador
-      r.pRange:=@ProcRangeEndIden;
-    end else begin  //es símbolo
-      if length(r.dEnd) = 1 then begin
-        r.pRange:=@ProcRangeEndSym1;  //es más óptimo
-      end else begin
-        r.pRange:=@ProcRangeEndSym;
-      end;
-    end;
-  end;
-begin
-  if dEnd='' then dEnd := #13;  //no se permite delimitador final vacío
-  VerifDelim(dStart);
-  if Err <> '' then exit;
-  VerifDelim(dEnd);
-  if Err <> '' then exit;
-  //configura token especial
-  CreaBuscEspec(tok, dStart, 0); //busca o crea
-  if Err<>'' then exit; //puede haber error
-  //actualiza sus campos. Cambia, si ya existía
-  tok^.dEnd  :=dEnd;
-  tok^.typDel:=tipDel;
-  tok^.tTok  :=tokTyp;
-  tok^.folTok:=havFolding;
-  ActProcRange(tok^);  //completa .pRange()
-end;
+
 procedure TSynFacilSyn.RebuildSymbols;
 {Crea entradas en la tabla de métodos para procesar los caracteres iniciales de los símbolos
  especiales. Así se asegura que se detectarán siempre.
-Se debe llamar después de haber agregado los símbolos especiales a mSym[]}
-var i,j,maximo: integer;
-    aux: TTokEspec;
-    c        : char;
+ Se debe llamar después de haber agregado los símbolos especiales a mSym[]}
+var
+  i,j   : integer;
+  maximo: integer;
+  aux   : TTokSpec;
+  c     : char;
 begin
-  {ordena mSym[], poniendo los de mayor tamaño al inicio, para que la búsqueda considere
-  primero a los símbolos de mayor tamaño}
+  {Ordena mSym[], poniendo los de mayor tamaño al inicio, para que la búsqueda considere
+   primero a los símbolos de mayor tamaño}
   maximo := High(mSym);
   for i:=0 to maximo-1 do
     for j:=i+1 to maximo do begin
@@ -1375,7 +1429,7 @@ DebugLn('---------actualizando tabla de funciones----------');
   while i <= High(mSym) do begin
     c := mSym[i].txt[1];   //toma primer caracter
     if fProcTable[c] <> @metSimbEsp then begin  //prepara procesamiento de delimitador
-      DebugLn('  puntero a funcion en: [' + c + '] -> @ProcSimbEsp');
+      DebugLn('  puntero a funcion en: [' + c + '] -> @metSimbEsp');
       fProcTable[c] := @metSimbEsp;  //prepara procesamiento de delimitador
     end;
     { Para hacerlo más óptimo se debería usar una matriz para cada símbolo, de
@@ -1605,12 +1659,13 @@ DebugLn(' === Cargando archivo de sintaxis ===');
          //verifica tipo de definición
          if tContent.hay then begin //Si hay "Content", es token por contenido
            if ValidarAtribs(nodo, 'Start CharsStart Content CharsEnd Attribute') then break;
-           if tStart.hay then  //definición con token especial
-             DefTokContent(tStart.val, tContent.val, tCharsEnd.val, tipTok)
-           else  //definición con lista de caracteres
-             DefTokContent('['+tCharsStart.val+']', tContent.val, tCharsEnd.val, tipTok);
-         end else if tStart.hay then  begin //definición de token delimitado
-           if ValidarAtribs(nodo, 'Start End Attribute Multiline Folding') then break;
+           if tCharsStart.hay then  //se define con lista de caracteres
+             tStart.val:='['+tCharsStart.val+']';
+           DefTokContent(tStart.val, tContent.val, tCharsEnd.val, tipTok)
+         end else begin //definición de token delimitado
+           if ValidarAtribs(nodo, 'Start CharsStart End Attribute Multiline Folding') then break;
+           if tCharsStart.hay then  //se define con lista de caracteres
+             tStart.val:='['+tCharsStart.val+']';
            if tMultiline.bol then  //es multilínea
              DefTokDelim(tStart.val, tEnd.val, tipTok, tdMulLin, tFolding.bol)
            else  //es de una sola líneas
@@ -1645,15 +1700,13 @@ DebugLn(' === Cargando archivo de sintaxis ===');
   end;
 end;
 procedure TSynFacilSyn.Rebuild;
-{Configura los tokens delimitados de acuerdo a la sintaxis definida actualmente, de forma que
- se optimice el procesamiento.
+{Configura los tokens delimitados de acuerdo a la sintaxis definida actualmente, de
+ forma que se optimice el procesamiento.
  Todos los tokens que se procesen aquí, deben tener delimitador inicial símbolo}
 var
   i,j     : integer;
-  r       : TTokEspec;
+  r       : TTokSpec;
   dSexc   : boolean;  //indica que el delimitador inicial es exclusivo.
-  blk: TFaSynBlock;
-  n: Integer;
 
   function delStart1Exclus(cad0: string): boolean;
   {Indica si el token símbolo es de 1 caracter de ancho y no otro token símbolo que empiece
@@ -1672,17 +1725,17 @@ var
   end;
 
 begin
-DebugLn('---------símbolos leidos: mSym0[]----------');
-for i:=0 to High(mSym0) do
-DebugLn('  bloque: '+ mSym0[i].txt + ',' + StringReplace(mSym0[i].dEnd, #13,#25,[]));
-DebugLn('---------simplificando símbolos----------');
+  DebugLn('---------símbolos leidos: mSym0[]----------');
+  for i:=0 to High(mSym0) do
+    DebugLn('  bloque: '+ mSym0[i].txt + ',' + StringReplace(mSym0[i].dEnd, #13,#25,[]));
+  DebugLn('---------simplificando símbolos----------');
 
-  //explora los símbolos para optimizar el procesamiento
+  //Explora los símbolos para optimizar el procesamiento
   setlength(mSym,0);  //limpia, porque vamos a reconstruir
   for i := 0 to High(mSym0) do begin
     r := mSym0[i];
     dSexc:=delStart1Exclus(r.txt);  //ve si es de 1 caracter y exclusivo
-    if dSexc and (r.typDel = tdConten1) then begin
+    if          dSexc and (r.typDel=tdConten1) then begin
       //Token por contenido, que se puede optimizar
 DebugLn('  [' + r.txt[1] + '] -> @metTokCont1 (Token Por Conten. inicio exclusivo)');
       fProcTable[r.txt[1]] := @metTokCont1;
@@ -1713,7 +1766,7 @@ DebugLn('  [' + r.txt[1] + '] -> @metFinLinea (uniLin con dStart de 1 car y dEnd
        con delimitador inicial exclusivo y así optimizar su procesamiento porque puede
        tornarse pesado en la forma actual. }
     end else if dSexc and (r.typDel=tdNull) and not r.bloIni and not r.bloFin then begin
-      //es símbolo especial de un caracter, exclusivo, que no es parte de token delimitado
+      //Es símbolo especial de un caracter, exclusivo, que no es parte de token delimitado
       //ni es inicio o fin de bloque
 DebugLn('  [' + r.txt[1] + '] -> @metSym1Car (símbolo simple de 1 car)');
       fProcTable[r.txt[1]] := @metSym1Car;
@@ -1728,7 +1781,7 @@ DebugLn('  [' + r.txt[1] + '] -> @metSym1Car (símbolo simple de 1 car)');
   //termina el proceso
   RebuildSymbols;
   if CurrentLines <> nil then  //Hay editor asignado
-    ScanAllRanges;  {Necesario, porque se ha reconstruido los TTokEspec y
+    ScanAllRanges;  {Necesario, porque se ha reconstruido los TTokSpec y
                        los valores de "fRange" de las líneas, están "perdidos"}
 DebugLn('--------------------------------');
 //  lisBlocksTmp.Free;
@@ -1837,7 +1890,7 @@ begin
   fTokenID := tkIdentif;  //identificador común
 end;
 procedure TSynFacilSyn.metIdentUTF8;
-//Procesa el identificador actual. considerando que empieza con un caracter (dos bytes) UTF8
+//Procesa el identificador actual. considerando que empieza con un caracter UTF8 (dos bytes)
 begin
   inc(posFin);  {es UTF8, solo filtra por el primer caracter (se asume que el segundo
                  es siempre válido}
@@ -1846,50 +1899,7 @@ begin
   while CharsIdentif[fLine[posFin]] do inc(posFin);
   fTokenID := tkIdentif;  //identificador común
 end;
-procedure TSynFacilSyn.metTokCont1; //Procesa tokens por contenido 1
-begin
-  fTokenID := tc1.TokTyp;   //pone tipo
-  repeat inc(posFin);
-  until not tc1.CharsToken[fLine[posFin]];
-  //verifica si hay validación de caracter final
-  if length(tc1.carValFin)>0 then begin
-    while (posFin>posIni+1) and (Pos(fLine[posFin-1],tc1.carValFin)<>0) do
-      dec(posFin);
-  end;
-end;
-procedure TSynFacilSyn.metTokCont2; //Procesa tokens por contenido 2
-begin
-  fTokenID := tc2.TokTyp;   //pone tipo
-  repeat inc(posFin);
-  until not tc2.CharsToken[fLine[posFin]];
-  //verifica si hay validación de caracter final
-  if length(tc2.carValFin)>0 then begin
-    while (posFin>posIni+1) and (Pos(fLine[posFin-1],tc2.carValFin)<>0) do
-      dec(posFin);
-  end;
-end;
-procedure TSynFacilSyn.metTokCont3; //Procesa tokens por contenido 3
-begin
-  fTokenID := tc3.TokTyp;   //pone tipo
-  repeat inc(posFin);
-  until not tc3.CharsToken[fLine[posFin]];
-  //verifica si hay validación de caracter final
-  if length(tc3.carValFin)>0 then begin
-    while (posFin>posIni+1) and (Pos(fLine[posFin-1],tc3.carValFin)<>0) do
-      dec(posFin);
-  end;
-end;
-procedure TSynFacilSyn.metTokCont4; //Procesa tokens por contenido 3
-begin
-  fTokenID := tc4.TokTyp;   //pone tipo
-  repeat inc(posFin);
-  until not tc4.CharsToken[fLine[posFin]];
-  //verifica si hay validación de caracter final
-  if length(tc4.carValFin)>0 then begin
-    while (posFin>posIni+1) and (Pos(fLine[posFin-1],tc4.carValFin)<>0) do
-      dec(posFin);
-  end;
-end;
+
 /////////// manejo de bloques
 procedure TSynFacilSyn.StartBlock(ABlockType: Pointer; IncreaseLevel: Boolean); inline;
 //Procedimiento geenral para abrir un bloque en el resaltador
@@ -1940,10 +1950,10 @@ begin
    end;
 end;
 
-procedure TSynFacilSyn.ProcTokenDelim(const d: TTokEspec);
+procedure TSynFacilSyn.ProcTokenDelim(const d: TTokSpec);
 //Procesa un posible token delimitador. Debe llamarse después de que se ha reconocido
 //el token especial y el puntero apunte al siguiente token.
-  procedure AbreBloqueAct(const d: TTokEspec); //inline;
+  procedure AbreBloqueAct(const d: TTokSpec); //inline;
   {Abre el bloque actual, verificando si está en el bloque valído}
   var i:integer;
       TopBlk: TFaSynBlock;
@@ -2075,7 +2085,7 @@ begin
     fTokenID := d.tTok; //no es delimitador, solo toma su atributo.
   end;
 end;
-procedure TSynFacilSyn.ProcIdentEsp(var mat: TArrayTokEspec); //inline;
+procedure TSynFacilSyn.ProcIdentEsp(var mat: TArrayTokSpec); //inline;
 //Procesa el identificador actual con la matriz indicada
 var i: integer;
 begin
@@ -2102,7 +2112,7 @@ begin
   fToIdent := Fline + posIni;  //puntero al identificador. Lo guarda para comparación
   //hay un nuevo posible delimitador. Se hace la búsqueda
   for i := 0 to High(mSym) do begin  //se empieza con los de mayor tamaño
-    //fijamos nuevo tamaño para comaprar
+    //fijamos nuevo tamaño para comparar
     fStringLen := length(mSym[i].txt);  //suponemos que tenemos esta cantidad de caracteres
     if fStringLen > nCarDisp then continue;  //no hay suficientes, probar con el siguiente
     if KeyComp(mSym[i]) then begin
@@ -2116,7 +2126,59 @@ begin
    Ahora debemos continuar la exploración al siguiente caracter}
   posFin := posIni + 1;  //a siguiente caracter, y deja el actual como: fTokenID := tkSymbol
 end;
-//************** funciones rápidas para la tabla de métodos ****************
+//funciones rápidas para la tabla de métodos (símbolos especiales)
+procedure TSynFacilSyn.metSym1Car;
+//Procesa tokens símbolo de un caracter de ancho.
+begin
+  fTokenID := fAtriTable[charIni];   //lee atributo
+  Inc(posFin);  //pasa a la siguiente posición
+end;
+//funciones rápidas para la tabla de métodos (tokens por contenido)
+procedure TSynFacilSyn.metTokCont1; //Procesa tokens por contenido 1
+begin
+  fTokenID := tc1.TokTyp;   //pone tipo
+  repeat inc(posFin);
+  until not tc1.CharsToken[fLine[posFin]];
+  //verifica si hay validación de caracter final
+  if length(tc1.carValFin)>0 then begin
+    while (posFin>posIni+1) and (Pos(fLine[posFin-1],tc1.carValFin)<>0) do
+      dec(posFin);
+  end;
+end;
+procedure TSynFacilSyn.metTokCont2; //Procesa tokens por contenido 2
+begin
+  fTokenID := tc2.TokTyp;   //pone tipo
+  repeat inc(posFin);
+  until not tc2.CharsToken[fLine[posFin]];
+  //verifica si hay validación de caracter final
+  if length(tc2.carValFin)>0 then begin
+    while (posFin>posIni+1) and (Pos(fLine[posFin-1],tc2.carValFin)<>0) do
+      dec(posFin);
+  end;
+end;
+procedure TSynFacilSyn.metTokCont3; //Procesa tokens por contenido 3
+begin
+  fTokenID := tc3.TokTyp;   //pone tipo
+  repeat inc(posFin);
+  until not tc3.CharsToken[fLine[posFin]];
+  //verifica si hay validación de caracter final
+  if length(tc3.carValFin)>0 then begin
+    while (posFin>posIni+1) and (Pos(fLine[posFin-1],tc3.carValFin)<>0) do
+      dec(posFin);
+  end;
+end;
+procedure TSynFacilSyn.metTokCont4; //Procesa tokens por contenido 3
+begin
+  fTokenID := tc4.TokTyp;   //pone tipo
+  repeat inc(posFin);
+  until not tc4.CharsToken[fLine[posFin]];
+  //verifica si hay validación de caracter final
+  if length(tc4.carValFin)>0 then begin
+    while (posFin>posIni+1) and (Pos(fLine[posFin-1],tc4.carValFin)<>0) do
+      dec(posFin);
+  end;
+end;
+//funciones rápidas para la tabla de métodos (tokens delimitados)
 procedure TSynFacilSyn.metUniLin1;
 //Procesa tokens de una sola línea y con delimitadores iguales y de un solo caracter.
 begin
@@ -2135,15 +2197,7 @@ procedure TSynFacilSyn.metFinLinea;
 //Procesa tokens de una sola línea que va hasta el fin de línea.
 begin
   fTokenID := fAtriTable[charIni];   //lee atributo
-  Inc(posFin);  {no hay peligro en incrmentar porque siempre se llama "metFinLinea" con
-                 el caracter actual <> #0}
   posFin := tamLin;  //salta rápidamente al final
-end;
-procedure TSynFacilSyn.metSym1Car;
-//Procesa tokens símbolo de un caracter de ancho.
-begin
-  fTokenID := fAtriTable[charIni];   //lee atributo
-  Inc(posFin);  //pasa a la siguiente posición
 end;
 //****** funciones llamadas por puntero y/o en medio de rangos  *************
 procedure TSynFacilSyn.ProcFinLinea;
@@ -2152,7 +2206,7 @@ begin
   posFin := tamLin;  //salta rápidamente al final
 end;
 procedure TSynFacilSyn.ProcRangeEndSym;
-{Procesa la línea actual buscando un delimitador símbolo (delBlk).
+{Procesa la línea actual buscando un delimitador símbolo (delTok).
  Si lo encuentra pone fRange a NIL. El tipo de token, debe estar ya asignado.}
 var p: PChar;
 begin
@@ -2182,7 +2236,7 @@ begin
   end;
 end;
 procedure TSynFacilSyn.ProcRangeEndIden;
-{Procesa la línea actual buscando un delimitador identificador (delBlk).
+{Procesa la línea actual buscando un delimitador identificador (delTok).
  Si lo encuentra pone fRange a rsUnknown. El tipo de token, debe estar ya asignado.}
 var p: Pchar;
     c1, c2: char;
@@ -2191,8 +2245,9 @@ begin
   p := strpos(fLine+posFin,PChar(delTok));
   while p <> nil do begin   //definitivamente no se encuentra
     //verifica si es inicio de identificador
-    c1:=(p-1)^;  {Retrocede. No debería haber problema en retroceder siempre, porque se supone que
-           se ha detectado el delimitador inicial, entonces siempre habrá al menos un caracter}
+    c1:=(p-1)^;  {Retrocede. No debería haber problema en retroceder siempre, porque se
+                  supone que se ha detectado el delimitador inicial, entonces siempre habrá
+                  al menos un caracter}
     c2:=(p+length(delTok))^;   //apunta al final, puede ser el final de línea #0
     if (c1 in charsIniIden) or CharsIdentif[c1] or CharsIdentif[c2] then begin
       //está en medio de un identificador. No es válido.
@@ -2255,8 +2310,8 @@ begin
 end;
 procedure TSynFacilSyn.AddFirstSectToTok(dStart: string; TokPos: integer; blk: TFaSynBlock);
 //Agrega a un token especial, la referencia a una sección.
-var n: integer;
-    tok : TPtrTokEspec;
+var
+  tok : TPtrTokEspec;
 begin
   VerifDelim(dStart);
   if Err <> '' then exit;
@@ -2324,9 +2379,8 @@ function TSynFacilSyn.AddFirstSection(dStart: string; showFold: boolean = true;
                                       parentBlk: TFaSynBlock = nil): TFaSynBlock;
 {Función pública para agregar una sección que se abre siempre al inicio de un bloque. Si
  encuentra error, sale con el mensaje en "Err"}
-var blk : TFaSynBlock;
-    tok : TPtrTokEspec;
-    n: integer;
+var
+  blk : TFaSynBlock;
 begin
   Result := nil;    //valor por defecto
   //Una sección es también un bloque. Crea bloque
@@ -2356,8 +2410,6 @@ begin
 end;
 function TSynFacilSyn.NestedBlocksBegin(LineNumber: integer): Integer;
 //Devuelve la cantidad de bloques anidados al inicio de la línea.
-var
-  Fold: TSynCustomCodeFoldBlock;
 begin
   if LineNumber = 0 then  //primera línea
     Result := 0
@@ -2653,9 +2705,9 @@ begin
     BlkToClose := nil;
   end;
   Inc(posTok);  //lleva la cuenta del orden del token
-  if posTok=1 then begin
-    if OnFirstTok<>nil then OnFirstTok;
-  end;
+//  if posTok=1 then begin
+//    if OnFirstTok<>nil then OnFirstTok;
+//  end;
 
   posIni := posFin;   //apunta al primer elemento
   if fRange = nil then begin
@@ -2780,10 +2832,10 @@ begin
   tkComment.Foreground := clGray;
 end;
 constructor TSynFacilSyn.Create(AOwner: TComponent);
-var
-  i: Integer;
 begin
   inherited Create(AOwner);
+  lisTmp := TStringList.Create;   //crea lista temporal
+
   CaseSensitive := false;
   fRange := nil;     //inicia rango
 
@@ -2814,7 +2866,8 @@ destructor TSynFacilSyn.Destroy;
 begin
   MulTokBlk.Free;
   MainBlk.Free;
-  lisBlocks.Free;            //libera
+  lisBlocks.Destroy;        //libera
+  lisTmp.Destroy;
   //no es necesario destruir los attrributos, porque  la clase ya lo hace
   inherited Destroy;
 end;
