@@ -1,27 +1,16 @@
-{                               TSynFacilSyn 0.9.4
-* Se comenta la llamada al evento OnFirstTok(), para no quitar velocidad al
-resaltador (Se puede activar en caso se requiera).
-* Se eliminan algunas variables no usadas
-* Se cambia nombre de HayEnMatInfo() a BuscTokEspec()
-* Se elimina la variable "haySIMBOLO" de "FirstXMLExplor"
-* Se cambia de nombre a "hayIDENTIF" por "defIDENTIF" en "FirstXMLExplor"
-* Se cambia de nombre a "TTokEspec" por "TTokSpec" y a "TArrayTokEspec" por "TArrayTokSpec"
-* Se traducen las constantes de cadenas a inglés.
-* Se quita una instrucción innecesaria en metFinLinea()
-* Se crea la lista "lisTmp" y la rutina SplitDelim() para simplificar la rutina "SetTokContent".
-* Se modifica DefTokDelim(), para que acepte la forma [a-z], en el delim. inicial de
-tokens delimitados.
-* Se modifica LoadFromFile(), para que acepte el parámetro CharsStart, en la declaración
-de tokens delimitados.
+{                               TSynFacilSyn 0.9.5b
+* Se corrigen los nombres de colores y su correspondiente RGB, en la rutina LeeAtrib().
+* Se convierte el tipo "tFaTokContent" en clase.
+* Se cambian las constantes de mensaje de error al idioma Inglés, y se crean nuevas
+constantes.
+* Se corrige un error que se generaba cuando se usaban comentarios en el archivo XML.
+* Se corrige Rebuild(), para que acepte símbolos de un caracter como inicio de
+secciones.
+* Se modifica ProcTokenDelim(), para que considere tambié a los tokens tdUniLin,
+como posibles delimitadores iniciales de un bloque.
 
-En esta versión se uniformiza la declaración de los tokens por contenido y delimitados
-en lo que respecta al delimitador inicial. Ahora ambos soportan un conjunto de caracteres
-o una cadena.
-
-Además hay que notar que la documentación ha sido ampliada considerablemente en la sección
-dedicada a Programadores.
-
-Las demás características se mantienen, como la velocidad.
+Esta versión es básicamente una versión de corrección de errores. No se afecta la
+velocidad.
 
                                     Por Tito Hinostroza  25/11/2014 - Lima Perú
 }
@@ -113,7 +102,7 @@ type
   TATokInfo = array of TFaTokInfo;
 
   //Estructura para almacenar la descripción de los token por contenido
-  tFaTokContent = record
+  tFaTokContent = class
     TokTyp    : TSynHighlighterAttributes;   //categoría de token por contenido
     CharsToken: array[#0..#255] of ByteBool; //caracteres válidos para token por contenido
     carValFin : string[64];                  //caracteres válidos para el fin
@@ -370,48 +359,54 @@ type
 
 implementation
 const
-  ERR_TOK_DELIM_NULL = 'Delimitador de token no puede ser nulo';
-  ERR_TOK_DEL_IDE_ERR = 'Delimitador de token erróneo: %s (debe ser identificador)';
-  ERR_START_NO_EMPTY = 'Parámetro "Start" No puede ser nulo';
-  ERR_IDEN_ALREA_DEL = 'Identificador "%s" ya es delimitador inicial.';
-  ERR_EXP_MUST_BE_BR = 'Expresión debe ser de tipo [lista de caracteres]';
-  ERR_DEF_INTERVAL = 'Error en definición de intervalo: %s';
-  ERR_IDENTIF_EMPTY = 'Identificador vacío.';
-  ERR_IDENT_NO_VALID = 'Identificador no válido.';
-  ERR_IDENTIF_EXIST = 'Ya existe identificador: ';
-  ERR_EMPTY_SYMBOL = 'Símbolo vacío';
-  ERR_EMPTY_IDENTIF = 'Identificador vacío';
-  ERR_SYMBOL_EXIST = 'Ya existe símbolo.';
-  ERR_INVAL_ATTR_LAB = 'Atributo "%s" no válido para etiqueta <%s>';
-  ERR_MUST_DEF_CHARS = 'Debe indicarse atributo "CharsStart=" en etiqueta <IDENTIFIERS ...>';
-  ERR_MUST_DEF_CONT = 'Debe indicarse atributo "Content=" en etiqueta <IDENTIFIERS ...>';
-  ERR_UNKNOWN_LABEL = 'Etiqueta no reconocida <%s> en: %s';
-  ERR_INVAL_LBL_IDEN = 'Etiqueta "%s" no válida para etiqueta <IDENTIFIERS ...>';
-  ERR_BAD_PAR_STR_IDEN = 'Parámetro "Start" debe ser de la forma: [A..Z], en identificadores';
-  ERR_INVAL_LBL_IN_LBL = 'Etiqueta "%s" no válida para etiqueta <SYMBOLS ...>';
-  ERR_BLK_NO_DEFINED = 'No se encuentra definido el bloque: ';
-{
-  ERR_TOK_DELIM_NULL = 'Token delimiter can not be null';
-  ERR_TOK_DEL_IDE_ERR = 'Bad Token delimiter: %s (must be identifier)';
-  ERR_START_NO_EMPTY = 'Parameter "Start" can not be null';
-  ERR_IDEN_ALREA_DEL = 'Identifier "%s" is already a Start delimiter.';
-  ERR_EXP_MUST_BE_BR = 'Expression must be like: [list of chars]';
-  ERR_DEF_INTERVAL = 'Interval definition error: %s';
-  ERR_IDENTIF_EMPTY = 'Empty identifier.';
-  ERR_IDENT_NO_VALID = 'Unvalid identifier.';
-  ERR_IDENTIF_EXIST = 'Identifier already exists: ';
-  ERR_EMPTY_SYMBOL = 'Empty Symbol';
-  ERR_EMPTY_IDENTIF = 'Empty Identifier';
-  ERR_SYMBOL_EXIST = 'Symbol already exists.';
-  ERR_INVAL_ATTR_LAB = 'Invalid attribute "%s" for label <%s>';
-  ERR_MUST_DEF_CHARS = 'It must be indicated "CharsStart=" in label <IDENTIFIERS ...>';
-  ERR_MUST_DEF_CONT = 'It must be indicated "Content=" in label <IDENTIFIERS ...>';
-  ERR_UNKNOWN_LABEL = 'Unknown label <%s> in: %s';
-  ERR_INVAL_LBL_IDEN = 'Invalid label "%s", for label <IDENTIFIERS ...>';
-  ERR_BAD_PAR_STR_IDEN = 'Parameter "Start" must be like: [A..Z], in identifiers';
-  ERR_INVAL_LBL_IN_LBL = 'Invalid label "%s", for label <SYMBOLS ...>';
-  ERR_BLK_NO_DEFINED = 'Undefined block: ';
-}
+{    ERR_TOK_DELIM_NULL = 'Delimitador de token no puede ser nulo';
+    ERR_TOK_DEL_IDE_ERR = 'Delimitador de token erróneo: %s (debe ser identificador)';
+    ERR_START_NO_EMPTY = 'Parámetro "Start" No puede ser nulo';
+    ERR_IDEN_ALREA_DEL = 'Identificador "%s" ya es delimitador inicial.';
+    ERR_EXP_MUST_BE_BR = 'Expresión debe ser de tipo [lista de caracteres]';
+    ERR_EMPTY_INTERVAL = 'Error: Intervalo vacío.';
+    ERR_DEF_INTERVAL = 'Error en definición de intervalo: %s';
+    ERR_IDENTIF_EMPTY = 'Identificador vacío.';
+    ERR_IDENT_NO_VALID = 'Identificador no válido.';
+    ERR_IDENTIF_EXIST = 'Ya existe identificador: ';
+    ERR_EMPTY_SYMBOL = 'Símbolo vacío';
+    ERR_EMPTY_IDENTIF = 'Identificador vacío';
+    ERR_SYMBOL_EXIST = 'Ya existe símbolo.';
+    ERR_INVAL_ATTR_LAB = 'Atributo "%s" no válido para etiqueta <%s>';
+    ERR_MUST_DEF_CHARS = 'Debe indicarse atributo "CharsStart=" en etiqueta <IDENTIFIERS ...>';
+    ERR_MUST_DEF_CONT = 'Debe indicarse atributo "Content=" en etiqueta <IDENTIFIERS ...>';
+    ERR_INVAL_LAB_BLK = 'Etiqueta "%S" no válida para etiqueta <BLOCK ...>';
+    ERR_INVAL_LAB_SEC = 'Etiqueta "%S" no válida para etiqueta <SECTION ...>';
+    ERR_UNKNOWN_LABEL = 'Etiqueta no reconocida <%s> en: %s';
+    ERR_INVAL_LBL_IDEN = 'Etiqueta "%s" no válida para etiqueta <IDENTIFIERS ...>';
+    ERR_BAD_PAR_STR_IDEN = 'Parámetro "Start" debe ser de la forma: [A..Z], en identificadores';
+    ERR_INVAL_LBL_IN_LBL = 'Etiqueta "%s" no válida para etiqueta <SYMBOLS ...>';
+    ERR_BLK_NO_DEFINED = 'No se encuentra definido el bloque: ';
+  }
+    ERR_TOK_DELIM_NULL = 'Token delimiter can not be null';
+    ERR_TOK_DEL_IDE_ERR = 'Bad Token delimiter: %s (must be identifier)';
+    ERR_START_NO_EMPTY = 'Parameter "Start" can not be null';
+    ERR_IDEN_ALREA_DEL = 'Identifier "%s" is already a Start delimiter.';
+    ERR_EXP_MUST_BE_BR = 'Expression must be like: [list of chars]';
+    ERR_EMPTY_INTERVAL = 'Error: Empty Interval.';
+    ERR_DEF_INTERVAL = 'Interval definition error: %s';
+    ERR_IDENTIF_EMPTY = 'Empty identifier.';
+    ERR_IDENT_NO_VALID = 'Unvalid identifier.';
+    ERR_IDENTIF_EXIST = 'Identifier already exists: ';
+    ERR_EMPTY_SYMBOL = 'Empty Symbol';
+    ERR_EMPTY_IDENTIF = 'Empty Identifier';
+    ERR_SYMBOL_EXIST = 'Symbol already exists.';
+    ERR_INVAL_ATTR_LAB = 'Invalid attribute "%s" for label <%s>';
+    ERR_MUST_DEF_CHARS = 'It must be indicated "CharsStart=" in label <IDENTIFIERS ...>';
+    ERR_MUST_DEF_CONT = 'It must be indicated "Content=" in label <IDENTIFIERS ...>';
+    ERR_INVAL_LAB_BLK = 'Invalid label "%s" for <BLOCK ...>';
+    ERR_INVAL_LAB_SEC = 'Invalid label "%s" for <SECTION ...>';
+    ERR_UNKNOWN_LABEL = 'Unknown label <%s> in: %s';
+    ERR_INVAL_LBL_IDEN = 'Invalid label "%s", for label <IDENTIFIERS ...>';
+    ERR_BAD_PAR_STR_IDEN = 'Parameter "Start" must be like: [A..Z], in identifiers';
+    ERR_INVAL_LBL_IN_LBL = 'Invalid label "%s", for label <SYMBOLS ...>';
+    ERR_BLK_NO_DEFINED = 'Undefined block: ';
+
   { TSynFacilSyn }
 
 // ************* funciones de más alto nivel *****************
@@ -1136,28 +1131,29 @@ begin
       end else begin  //constantes de color
         case UpCase(cad) of
         'WHITE'      : Result.col:=rgb($FF,$FF,$FF);
+        'SILVER'     : Result.col:=rgb($C0,$C0,$C0);
+        'GRAY'       : Result.col:=rgb($80,$80,$80);
+        'BLACK'      : Result.col:=rgb($00,$00,$00);
         'RED'        : Result.col:=rgb($FF,$00,$00);
-        'GREEN'      : Result.col:=rgb($00,$FF,$00);
+        'MAROON'     : Result.col:=rgb($80,$00,$00);
+        'YELLOW'     : Result.col:=rgb($FF,$FF,$00);
+        'OLIVE'      : Result.col:=rgb($80,$80,$00);
+        'LIME'       : Result.col:=rgb($00,$FF,$00);
+        'GREEN'      : Result.col:=rgb($00,$80,$00);
+        'AQUA'       : Result.col:=rgb($00,$FF,$FF);
+        'TEAL'       : Result.col:=rgb($00,$80,$80);
         'BLUE'       : Result.col:=rgb($00,$00,$FF);
+        'NAVY'       : Result.col:=rgb($00,$00,$80);
+        'FUCHSIA'    : Result.col:=rgb($FF,$00,$FF);
+        'PURPLE'     : Result.col:=rgb($80,$00,$80);
+
         'MAGENTA'    : Result.col:=rgb($FF,$00,$FF);
         'CYAN'       : Result.col:=rgb($00,$FF,$FF);
-        'YELLOW'     : Result.col:=rgb($FF,$FF,$00);
-        'BLACK'      : Result.col:=rgb($00,$00,$00);
-        'AQUA'       : Result.col:=rgb($70,$DB,$93);
-        'BLUE VIOLET': Result.col:=rgb($9F,$5F,$9F);
-        'BRASS'      : Result.col:=rgb($B5,$A6,$42);
-        'BRIGHT GOLD': Result.col:=rgb($D9,$D9,$19);
-        'BROWN'      : Result.col:=rgb($A6,$2A,$2A);
-        'BRONZE'     : Result.col:=rgb($8C,$78,$53);
-        'COPPER'     : Result.col:=rgb($B8,$73,$33);
-        'CORAL'      : Result.col:=rgb($FF,$7F,$00);
-        'GRAY'       : Result.col:=rgb($C0,$C0,$C0);
-        'LIME'       : Result.col:=rgb($32,$CD,$32);
-        'MAROON'     : Result.col:=rgb($8E,$23,$6B);
-        'NAVY'       : Result.col:=rgb($23,$23,$8E);
-        'SILVER'     : Result.col:=rgb($E6,$E8,$FA);
-        'VIOLET'     : Result.col:=rgb($4F,$2F,$4F);
-        'VIOLET RED' : Result.col:=rgb($CC,$32,$99);
+        'BLUE VIOLET': Result.col:=rgb($8A,$2B,$E2);
+        'GOLD'       : Result.col:=rgb($FF,$D7,$00);
+        'BROWN'      : Result.col:=rgb($A5,$2A,$2A);
+        'CORAL'      : Result.col:=rgb($FF,$7F,$50);
+        'VIOLET'     : Result.col:=rgb($EE,$82,$EE);
         end;
       end;
     end;
@@ -1521,8 +1517,7 @@ var
       end else if ProcBloque(nodo2, blq) then begin  //definición de bloque anidado
         if Err<>'' then exit;  //solo verifica error
       end else begin
-        Err := 'Etiqueta "' + nodo2.NodeName +
-               '" no válida para etiqueta <BLOCK ...>';
+        Err := Format(ERR_INVAL_LAB_BLK,[nodo2.NodeName]);
         exit;
       end;
     end;
@@ -1538,11 +1533,13 @@ var
     nodo2  : TDOMNode;
     tStartPos: TFaXMLatrib;
     tFirstSec: TFaXMLatrib;
+    tTokenStart: TFaXMLatrib;
   begin
     if UpCase(nodo.NodeName) <> 'SECTION' then exit(false);
     Result := true;  //encontró
     //lee atributos
     tStart    := LeeAtrib(nodo,'Start');
+    tTokenStart:= LeeAtrib(nodo,'TokenStart');
     tName     := LeeAtrib(nodo,'Name');
     tFolding  := LeeAtrib(nodo,'Folding');    //Falso, si no existe
     tParent   := LeeAtrib(nodo,'Parent');
@@ -1552,7 +1549,7 @@ var
     //validaciones
     if not tFolding.hay then tFolding.bol:=true;  //por defecto
     if not tName.hay then tName.val:='Sec'+IntToStr(lisBlocks.Count+1);
-    if ValidarAtribs(nodo, 'Start Name Folding Parent BackCol Unique FirstSec') then
+    if ValidarAtribs(nodo, 'Start TokenStart Name Folding Parent BackCol Unique FirstSec') then
        exit; //valida
     if tParent.hay then begin //se especificó blqPad padre
       blqPad := BuscarBloque(tParent.val);  //ubica blqPad
@@ -1561,10 +1558,17 @@ var
     //crea la sección, con el bloque padre indicado, o el que viene en el parámetro
     blq := CreateBlock(tName.val, tFolding.bol, blqPad);
     blq.IsSection:=true;
-    if tFirstSec.hay then begin  //hay primera sección
-      if tStart.hay then AddFirstSectToTok(tStart.val, 0, blq)
-    end else begin               //sección normal
-      if tStart.hay then AddIniSectToTok(tStart.val, 0, blq);
+    if tStart.hay then begin   //configuración normal con "Start"
+      if tFirstSec.hay then begin  //hay primera sección
+        AddFirstSectToTok(tStart.val, 0, blq)
+      end else begin               //sección normal
+        AddIniSectToTok(tStart.val, 0, blq);
+      end;
+    end else if tTokenStart.hay  then begin  //configuración indicando nombre de token
+      {Se usará la misma función AddIniSectToTok(), para encontrar al token, pero
+       formalmente debería usarse una función especial para ubicar al token usnado
+       su nombre}
+      AddIniSectToTok(tTokenStart.val, 0, blq);
     end;
     if Err<>'' then exit;
     if tBackCol.hay then begin
@@ -1585,8 +1589,7 @@ var
         end else if ProcBloque(nodo2, blq) then begin  //definición de bloque anidado
           if Err<>'' then exit;  //solo verifica error
         end else begin
-          Err := 'Etiqueta "' + nodo2.NodeName +
-                 '" no válida para etiqueta <SECTION ...>';
+          Err := Format(ERR_INVAL_LAB_SEC,[nodo2.NodeName]);
           exit;
         end;
     end;
@@ -1614,8 +1617,9 @@ DebugLn(' === Cargando archivo de sintaxis ===');
        // Lee un Nodo o Registro
        nodo := doc.DocumentElement.ChildNodes[i];
        nombre := UpCase(nodo.NodeName);
-       if (nombre = 'IDENTIFIERS') or (nombre = 'SYMBOLS') OR
-          (nombre = 'ATTRIBUTE') or (nombre = 'COMPLETION') then begin
+       if (nombre = 'IDENTIFIERS') or (nombre = 'SYMBOLS') or
+          (nombre = 'ATTRIBUTE') or (nombre = 'COMPLETION') or
+          (nombre = '#COMMENT') then begin
          //solo se incluye para evitar error de "etiqueta desconocida"
 //     end else if IsAttributeName(nombre)  then begin
        end else if nombre =  'KEYWORD' then begin
@@ -1765,7 +1769,8 @@ DebugLn('  [' + r.txt[1] + '] -> @metFinLinea (uniLin con dStart de 1 car y dEnd
       { TODO : Se podría crear un procedimiento para manejar bloques multilíneas
        con delimitador inicial exclusivo y así optimizar su procesamiento porque puede
        tornarse pesado en la forma actual. }
-    end else if dSexc and (r.typDel=tdNull) and not r.bloIni and not r.bloFin then begin
+    end else if dSexc and (r.typDel=tdNull) and not r.bloIni and not r.bloFin and
+                not r.secIni then begin
       //Es símbolo especial de un caracter, exclusivo, que no es parte de token delimitado
       //ni es inicio o fin de bloque
 DebugLn('  [' + r.txt[1] + '] -> @metSym1Car (símbolo simple de 1 car)');
@@ -2054,6 +2059,15 @@ begin
       folTok := false;    //No tiene sentido el plegado, en token de una línea.
       if posFin=tamLin then exit;  //si está al final, necesita salir con fTokenID fijado.
       d.pRange;  //ejecuta función de procesamiento
+      //Se considera que este tipo de tokens, puede ser también inicio o fin de bloque
+      if d.bloFin then begin //verifica primero, si es cierre de algún bloque
+        CierraBloqueAct(d.bloFinL);  //cierra primero
+      end;
+      if d.secIni then begin //Verifica primero si es bloque de sección
+        if not AbreSeccionAct(d.secIniL) then  //prueba si abre como sección
+           if d.bloIni then AbreBloqueAct(d); //verifica como bloque normal
+      end else if d.bloIni then  //verifica si abre bloque
+        AbreBloqueAct(d);
     end;
   tdMulLin: begin  //delimitador de token multilínea
       //Se pueden resolver en la línea actual o en las siguientes líneas.
@@ -2835,6 +2849,10 @@ constructor TSynFacilSyn.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   lisTmp := TStringList.Create;   //crea lista temporal
+  tc1:= tFaTokContent.Create;
+  tc2:= tFaTokContent.Create;
+  tc3:= tFaTokContent.Create;
+  tc4:= tFaTokContent.Create;
 
   CaseSensitive := false;
   fRange := nil;     //inicia rango
@@ -2867,6 +2885,10 @@ begin
   MulTokBlk.Free;
   MainBlk.Free;
   lisBlocks.Destroy;        //libera
+  tc1.Destroy;
+  tc2.Destroy;
+  tc3.Destroy;
+  tc4.Destroy;
   lisTmp.Destroy;
   //no es necesario destruir los attrributos, porque  la clase ya lo hace
   inherited Destroy;

@@ -21,11 +21,10 @@
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="Unit1"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="0"/>
         <WindowIndex Value="0"/>
         <TopLine Value="70"/>
-        <CursorPos X="34" Y="87"/>
+        <CursorPos X="19" Y="85"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -99,10 +98,11 @@
       <Unit9>
         <Filename Value="..\SynFacilHighlighter.pas"/>
         <UnitName Value="SynFacilHighlighter"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
         <WindowIndex Value="0"/>
-        <TopLine Value="1"/>
-        <CursorPos X="16" Y="8"/>
+        <TopLine Value="1514"/>
+        <CursorPos X="13" Y="1540"/>
         <UsageCount Value="12"/>
         <Bookmarks Count="1">
           <Item0 X="1" Y="1" ID="2"/>
@@ -116,47 +116,47 @@
     <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="121" Column="15" TopLine="94"/>
+        <Caret Line="83" Column="13" TopLine="70"/>
       </Position1>
       <Position2>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="2634" Column="25" TopLine="2616"/>
+        <Caret Line="82" Column="83" TopLine="70"/>
       </Position2>
       <Position3>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="83" Column="13" TopLine="70"/>
+        <Caret Line="2436" Column="8" TopLine="2412"/>
       </Position3>
       <Position4>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="79" Column="3" TopLine="70"/>
+        <Caret Line="70" Column="1" TopLine="68"/>
       </Position4>
       <Position5>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="83" Column="13" TopLine="70"/>
+        <Caret Line="117" Column="5" TopLine="90"/>
       </Position5>
       <Position6>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="82" Column="83" TopLine="70"/>
+        <Caret Line="115" Column="17" TopLine="90"/>
       </Position6>
       <Position7>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="2436" Column="8" TopLine="2412"/>
+        <Caret Line="117" Column="17" TopLine="90"/>
       </Position7>
       <Position8>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="70" Column="1" TopLine="68"/>
+        <Caret Line="542" Column="28" TopLine="515"/>
       </Position8>
       <Position9>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="117" Column="5" TopLine="90"/>
+        <Caret Line="1" Column="1" TopLine="1"/>
       </Position9>
       <Position10>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="115" Column="17" TopLine="90"/>
+        <Caret Line="117" Column="17" TopLine="96"/>
       </Position10>
       <Position11>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="117" Column="17" TopLine="90"/>
+        <Caret Line="541" Column="1" TopLine="515"/>
       </Position11>
       <Position12>
         <Filename Value="..\SynFacilHighlighter.pas"/>
@@ -164,19 +164,19 @@
       </Position12>
       <Position13>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="1" Column="1" TopLine="1"/>
+        <Caret Line="681" Column="31" TopLine="654"/>
       </Position13>
       <Position14>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="117" Column="17" TopLine="96"/>
+        <Caret Line="1" Column="1" TopLine="1"/>
       </Position14>
       <Position15>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="541" Column="1" TopLine="515"/>
+        <Caret Line="117" Column="17" TopLine="90"/>
       </Position15>
       <Position16>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="542" Column="28" TopLine="515"/>
+        <Caret Line="542" Column="28" TopLine="538"/>
       </Position16>
       <Position17>
         <Filename Value="..\SynFacilHighlighter.pas"/>
@@ -184,55 +184,55 @@
       </Position17>
       <Position18>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="1" Column="1" TopLine="1"/>
+        <Caret Line="1138" Column="15" TopLine="1111"/>
       </Position18>
       <Position19>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="117" Column="17" TopLine="90"/>
+        <Caret Line="1142" Column="19" TopLine="1115"/>
       </Position19>
       <Position20>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="542" Column="28" TopLine="538"/>
+        <Caret Line="1145" Column="19" TopLine="1118"/>
       </Position20>
       <Position21>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="681" Column="31" TopLine="654"/>
+        <Caret Line="1312" Column="33" TopLine="1285"/>
       </Position21>
       <Position22>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="1138" Column="15" TopLine="1111"/>
+        <Caret Line="2407" Column="34" TopLine="2405"/>
       </Position22>
       <Position23>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="1142" Column="19" TopLine="1115"/>
+        <Caret Line="9" Column="1" TopLine="1"/>
       </Position23>
       <Position24>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="1145" Column="19" TopLine="1118"/>
+        <Caret Line="25" Column="36" TopLine="1"/>
       </Position24>
       <Position25>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="1312" Column="33" TopLine="1285"/>
+        <Caret Line="1" Column="1" TopLine="1"/>
       </Position25>
       <Position26>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="2407" Column="34" TopLine="2405"/>
+        <Caret Line="2816" Column="1" TopLine="2784"/>
       </Position26>
       <Position27>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="9" Column="1" TopLine="1"/>
+        <Caret Line="441" Column="26" TopLine="415"/>
       </Position27>
       <Position28>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="25" Column="36" TopLine="1"/>
+        <Caret Line="1" Column="1" TopLine="1"/>
       </Position28>
       <Position29>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="1" Column="1" TopLine="1"/>
+        <Caret Line="318" Column="37" TopLine="292"/>
       </Position29>
       <Position30>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <Caret Line="2816" Column="1" TopLine="2784"/>
+        <Caret Line="1534" Column="13" TopLine="1508"/>
       </Position30>
     </JumpHistory>
   </ProjectSession>

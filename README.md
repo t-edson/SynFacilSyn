@@ -1,5 +1,5 @@
-SynFacilSyn 0.9.4
-=================
+SynFacilSyn 0.9.5b
+==================
 
 Scriptable Highlighter for SynEdit Component of Lazarus 
 
