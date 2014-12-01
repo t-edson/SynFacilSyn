@@ -3,11 +3,13 @@
 * Se convierte el tipo "tFaTokContent" en clase.
 * Se cambian las constantes de mensaje de error al idioma Inglés, y se crean nuevas
 constantes.
-* Se corrige un error que se generaba cuando se usaban comentarios en el archivo XML.
+* Se modifica LoadFromFile() para corregir un error que se generaba cuando se usaban
+comentarios en el archivo XML.
 * Se corrige Rebuild(), para que acepte símbolos de un caracter como inicio de
 secciones.
 * Se modifica ProcTokenDelim(), para que considere tambié a los tokens tdUniLin,
 como posibles delimitadores iniciales de un bloque.
+* Se crea el parámetro "tTokenStart", en la declaración de tokens, a modo de prueba.
 
 Esta versión es básicamente una versión de corrección de errores. No se afecta la
 velocidad.
@@ -1516,6 +1518,8 @@ var
         if Err<>'' then exit;  //solo verifica error
       end else if ProcBloque(nodo2, blq) then begin  //definición de bloque anidado
         if Err<>'' then exit;  //solo verifica error
+      end else if UpCase(nodo2.NodeName) = '#COMMENT' then begin
+        //solo para evitar que de mensaje de error
       end else begin
         Err := Format(ERR_INVAL_LAB_BLK,[nodo2.NodeName]);
         exit;
@@ -1588,6 +1592,8 @@ var
           if Err<>'' then exit;  //solo verifica error
         end else if ProcBloque(nodo2, blq) then begin  //definición de bloque anidado
           if Err<>'' then exit;  //solo verifica error
+        end else if UpCase(nodo2.NodeName) = '#COMMENT' then begin
+          //solo para evitar que de mensaje de error
         end else begin
           Err := Format(ERR_INVAL_LAB_SEC,[nodo2.NodeName]);
           exit;
