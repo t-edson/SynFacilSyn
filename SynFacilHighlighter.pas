@@ -1,18 +1,26 @@
 {                               TSynFacilSyn 0.9.5b
 * Se corrigen los nombres de colores y su correspondiente RGB, en la rutina LeeAtrib().
-* Se convierte el tipo "tFaTokContent" en clase.
+* Se convierte el tipo "tFaTokContent" en clase, y se agregan campos y métodos.
+* Se crea el tipo "tFaTokContentInst", para manejar tokens por contenido avanzados.
 * Se cambian las constantes de mensaje de error al idioma Inglés, y se crean nuevas
 constantes.
 * Se modifica LoadFromFile() para corregir un error que se generaba cuando se usaban
 comentarios en el archivo XML.
 * Se corrige Rebuild(), para que acepte símbolos de un caracter como inicio de
 secciones.
-* Se modifica ProcTokenDelim(), para que considere tambié a los tokens tdUniLin,
+* Se modifica ProcTokenDelim(), para que considere también a los tokens tdUniLin,
 como posibles delimitadores iniciales de un bloque.
+* Se renombra ValidarAtribs() a ValidateParams().
+* Se usa la lista temporal "lisTmp" en ValidateParams(), AddIdentSpecList() y
+AddSymbSpecList(), para evitar crear listas dinámicamente.
 * Se crea el parámetro "tTokenStart", en la declaración de tokens, a modo de prueba.
 
 Esta versión es básicamente una versión de corrección de errores. No se afecta la
-velocidad.
+velocidad, excepto tal vez por la verificación adicional de los tokens tdUniLin.
+
+EL convertir a "tFaTokContent" en clase (y el agregarle campos y métodos) así como
+la creación de "tFaTokContentInst" son cambios que no se usan en esta versión pero
+que se hacen como evolución hacia la versión siguiente. No se usan aquí.
 
                                     Por Tito Hinostroza  25/11/2014 - Lima Perú
 }
@@ -43,6 +51,17 @@ type
   TFaProcRange = procedure of object;      //Procedimiento para procesar en medio de un rango.
 
   TFaSynBlock = class;   //definición adelantada
+
+  //Estructura para almacenar un punto de token por contenido
+  tFaTokContentInst = record
+    isText   : boolean;   //indica si se usará el campo "Text"
+    Chars    : array[#0..#255] of ByteBool; //caracteres
+    Text     : string;          //cadena válida
+    TokTyp   : TSynHighlighterAttributes;   //tipo de token al salir
+    dMatch   : byte;   //desplazamiento en caso de coincidencia (0 = salir)
+    dMiss    : byte;   //desplazamiento en caso de no coincidencia (0 = salir)
+  end;
+
   //Descripción de tokens especiales (identificador o símbolo)
   TTokSpec = record
     txt   : string;        //palabra clave (puede cambiar la caja y no incluir el primer caracter)
@@ -104,10 +123,20 @@ type
   TATokInfo = array of TFaTokInfo;
 
   //Estructura para almacenar la descripción de los token por contenido
+
+  { tFaTokContent }
+
   tFaTokContent = class
     TokTyp    : TSynHighlighterAttributes;   //categoría de token por contenido
     CharsToken: array[#0..#255] of ByteBool; //caracteres válidos para token por contenido
     carValFin : string[64];                  //caracteres válidos para el fin
+    //elementos adicionales no usados en esta versión
+    Instrucs : array of tFaTokContentInst;  //Instrucciones del token por contenido
+    nInstruc : integer;      //Cantidad de instrucciones
+    Err      : string;       //Mensaje de error
+    procedure Clear;
+    function ValidateInterval(var cars: string): boolean;
+    procedure AddInstruct(Text: string; TokTyp0:TSynHighlighterAttributes = nil);
   end;
 
   { TSynFacilSyn }
@@ -163,7 +192,7 @@ type
     function KeyComp(var r: TTokSpec): Boolean;
     function IsAttributeName(txt: string): boolean;
     procedure FirstXMLExplor(doc: TXMLDocument);
-    function ValidarAtribs(n: TDOMNode; listAtrib: string): boolean;
+    function ValidateParams(n: TDOMNode; listAtrib: string): boolean;
   public    //funciones públicas de alto nivel
     Err       : string;         //Mensaje de error
     LangName  : string;         //Nombre del lengauje
@@ -409,6 +438,84 @@ const
     ERR_INVAL_LBL_IN_LBL = 'Invalid label "%s", for label <SYMBOLS ...>';
     ERR_BLK_NO_DEFINED = 'Undefined block: ';
 
+{ tFaTokContent }
+
+procedure tFaTokContent.Clear;
+begin
+  Err := '';
+  nInstruc := 0;
+  setLength(Instrucs,0);
+end;
+function tFaTokContent.ValidateInterval(var cars: string): boolean;
+//Es igual a  TSynFacilSyn.ValidateInterval()
+//Valida un conjunto de caracteres para ser usado en la definición de tokens por contenido
+//Si hay error sale con TRUE
+var i: integer;
+  bajos: string[128];
+  altos: string[128];
+  p: SizeInt;
+  car1, car2, c: char;
+  expanded: string;
+begin
+  //prepara definición de comodines
+  bajos[0] := #127;
+  for i:=1 to 127 do bajos[i] := chr(i);  //todo menos #0
+  altos[0] := #128;
+  for i:=1 to 128 do altos[i] := chr(i+127);
+  //reemplaza intervalos
+  Result := false;  //por defecto
+  if cars = '' then begin
+    Err:=ERR_EMPTY_INTERVAL;
+    exit(true);   //validación
+  end;
+  p:= Pos('..',cars);
+  while  p <> 0 do begin
+    if (p=1) or (p=length(cars)-1) then begin
+      Err:=Format(ERR_DEF_INTERVAL,[cars]);
+      exit(true);
+    end;
+    //hay intervalo, reemplaza
+    car1 := cars[p-1]; car2 := cars[p+2];
+    expanded := '';
+    for c:=car1 to car2  //construye intervalo explícito
+      do expanded += c;
+    cars := copy(cars,1,p-2)+expanded+copy(cars,p+3,1000);
+    p:= Pos('..',cars);   //busca si hay más
+  end;
+  cars := StringReplace(cars, '%HIGH%', altos,[rfReplaceAll]);
+  cars := StringReplace(cars, '%ALL%', bajos+altos,[rfReplaceAll]);
+  //podría actualizar la variable "Err"
+end;
+procedure tFaTokContent.AddInstruct(Text: string;
+  TokTyp0: TSynHighlighterAttributes);
+var
+  list: String;
+  n: Integer;
+  c: Char;
+begin
+  if Text='' then exit;
+  Err := '';
+  n := nInstruc;
+  nInstruc := n+1;
+  setlength(Instrucs, nInstruc);
+  if (Text[1]='[') and (length(Text)>1) and (Text[length(Text)]=']') then begin
+    //Es de tipo lista de caracteres
+    Instrucs[n].isText:=false;  //marca Chars
+    Instrucs[n].TokTyp := TokTyp;
+    list := copy(Text,2,length(Text)-2);  //toma interior
+    //valida si hay intervalos de caracteres y los reemplaza
+    if ValidateInterval(list) then exit;
+    //Configura caracteres de contenido
+    for c := #0 to #255 do Instrucs[n].Chars[c] := False;
+    for c in list do Instrucs[n].Chars[c] := True;
+  end else begin
+    //Es de tipo texto literal
+    Instrucs[n].isText:=true;  //marca Chars
+    Instrucs[n].TokTyp := TokTyp0;
+    Instrucs[n].Text := Text;
+  end;
+end;
+
   { TSynFacilSyn }
 
 // ************* funciones de más alto nivel *****************
@@ -544,23 +651,21 @@ procedure TSynFacilSyn.AddIdentSpecList(listIden: string; tokTyp: TSynHighlighte
   TokPos: integer);
 //Permite agregar una lista de identificadores especiales separados por espacios.
 var
-  Idens  : TStringList;
   iden   : string;
   i      : integer;
 begin
   //Carga identificadores
-  Idens :=TStringList.Create;
-  Idens.Delimiter := ' ';
+  lisTmp.Clear;
+  lisTmp.Delimiter := ' ';
   //StringReplace(listIden, #13#10, ' ',[rfReplaceAll]);
-  IDens.DelimitedText := listIden;
-  for i:= 0 to IDens.Count -1 do
+  lisTmp.DelimitedText := listIden;
+  for i:= 0 to lisTmp.Count -1 do
     begin
-      iden := trim(IDens[i]);
+      iden := trim(lisTmp[i]);
       if iden = '' then continue;
       AddIdentSpec(iden, tokTyp, TokPos);
       if Err <> '' then break;
     end;
-  Idens.Free;
 end;
 procedure TSynFacilSyn.AddKeyword(iden: string);
 //Método público que agrega un identificador "Keyword" a la sintaxis
@@ -585,23 +690,21 @@ procedure TSynFacilSyn.AddSymbSpecList(listSym: string; tokTyp: TSynHighlighterA
   TokPos: integer);
 //Permite agregar una lista de símbolos especiales separados por espacios.
 var
-  Idens  : TStringList;
   iden   : string;
   i      : integer;
 begin
   //Carga identificadores
-  Idens :=TStringList.Create;
-  Idens.Delimiter := ' ';
+  lisTmp.Clear;
+  lisTmp.Delimiter := ' ';
   //StringReplace(listSym, #13#10, ' ',[rfReplaceAll]);
-  IDens.DelimitedText := listSym;
-  for i:= 0 to IDens.Count -1 do
+  lisTmp.DelimitedText := listSym;
+  for i:= 0 to lisTmp.Count -1 do
     begin
-      iden := trim(IDens[i]);
+      iden := trim(lisTmp[i]);
       if iden = '' then continue;
       AddSymbSpec(iden, tokTyp, TokPos);
       if Err <> '' then break;
     end;
-  Idens.Free;
 end;
 //definición de tokens delimitados
 procedure TSynFacilSyn.DefTokDelim(dStart, dEnd: string; tokTyp: TSynHighlighterAttributes;
@@ -691,7 +794,10 @@ begin
   for i:=1 to 128 do altos[i] := chr(i+127);
   //reemplaza intervalos
   Result := false;  //por defecto
-  if cars = '' then exit(true);   //validación
+  if cars = '' then begin
+    Err:=ERR_EMPTY_INTERVAL;
+    exit(true);   //validación
+  end;
   p:= Pos('..',cars);
   while  p <> 0 do begin
     if (p=1) or (p=length(cars)-1) then begin
@@ -1161,20 +1267,19 @@ begin
     end;
   end;
 end;
-function TSynFacilSyn.ValidarAtribs(n: TDOMNode; listAtrib: string): boolean;
+function TSynFacilSyn.ValidateParams(n: TDOMNode; listAtrib: string): boolean;
 //Valida la existencia completa de los nodos indicados. Si encuentra alguno más
 //actualiza la bandera "Err" y devuelve TRUE. Los nodos deben estar separados por espacios.
 var i,j   : integer;
     atri  : TDOMNode;
     nombre, tmp : string;
-    Idens : TStringList;
     hay   : boolean;
 begin
   //Carga lista de atributos
-  Idens :=TStringList.Create;
-  Idens.Delimiter := ' ';
+  lisTmp.Clear;  //usa lista temproal
+  lisTmp.Delimiter := ' ';
   //StringReplace(listSym, #13#10, ' ',[rfReplaceAll]);
-  IDens.DelimitedText := listAtrib;
+  lisTmp.DelimitedText := listAtrib;
   //Realiza la verificación
   Result := false;  //Se asume que todo va bien
   for i:= 0 to n.Attributes.Length-1 do begin
@@ -1182,8 +1287,8 @@ begin
     nombre := UpCase(atri.NodeName);
     //verifica existencia
     hay := false;
-    for j:= 0 to IDens.Count -1 do begin
-      tmp := trim(IDens[j]);
+    for j:= 0 to lisTmp.Count -1 do begin
+      tmp := trim(lisTmp[j]);
       if nombre = UpCase(tmp) then begin
          hay := true; break;
       end;
@@ -1196,7 +1301,6 @@ begin
       break;
     end;
   end;
-  Idens.Free;
 end;
 procedure TSynFacilSyn.FirstXMLExplor(doc: TXMLDocument);
 {Hace al primera explración al archivo XML, para procesar la definición de Symbolos e
@@ -1232,7 +1336,7 @@ begin
   tCasSen :=LeeAtrib(doc.DocumentElement, 'CaseSensitive');
   tColBlk :=LeeAtrib(doc.DocumentElement, 'ColorBlock');
   //carga atributos leidos
-  ValidarAtribs(doc.DocumentElement, 'Ext Name CaseSensitive ColorBlock');
+  ValidateParams(doc.DocumentElement, 'Ext Name CaseSensitive ColorBlock');
   LangName := tName.val;
   Extensions := tExt.val;
   CaseSensitive := tCasSen.bol;
@@ -1253,7 +1357,7 @@ begin
        ////////// Lee atributos //////////
        tCharsStart  := LeeAtrib(nodo,'CharsStart');
        tContent:= LeeAtrib(nodo,'Content');
-       if ValidarAtribs(nodo, 'CharsStart Content') then break; //valida
+       if ValidateParams(nodo, 'CharsStart Content') then break; //valida
        ////////// verifica los atributos indicados
        if tCharsStart.hay and tContent.hay then  //lo normal
          DefTokIdentif('['+tCharsStart.val+']', tContent.val)   //Fija caracteres
@@ -1272,14 +1376,14 @@ begin
            //lee atributos
            tAtrib:= LeeAtrib(atri,'Attribute');
            tTokPos:= LeeAtrib(atri,'TokPos');  //posición de token
-           if ValidarAtribs(atri, 'Attribute TokPos') then break; //valida
+           if ValidateParams(atri, 'Attribute TokPos') then break; //valida
            tipTok := GetAttribByName(tAtrib.val);
            //crea los identificadores especiales
            AddIdentSpecList(atri.TextContent, tipTok, tTokPos.n);
          end else if IsAttributeName(nombre) then begin  //definición simplificada
            //lee atributos
            tTokPos:= LeeAtrib(atri,'TokPos');  //posición de token
-           if ValidarAtribs(atri, 'TokPos') then break; //valida
+           if ValidateParams(atri, 'TokPos') then break; //valida
            //crea los identificadores especiales
            AddIdentSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
            if Err<>'' then break;
@@ -1301,14 +1405,14 @@ begin
            //lee atributos
            tAtrib:= LeeAtrib(atri,'Attribute');
            tTokPos:= LeeAtrib(atri,'TokPos');  //posición de token
-           if ValidarAtribs(atri, 'Attribute TokPos') then break; //valida
+           if ValidateParams(atri, 'Attribute TokPos') then break; //valida
            tipTok := GetAttribByName(tAtrib.val);
            //crea los símbolos especiales
            AddSymbSpecList(atri.TextContent, tipTok, tTokPos.n);
          end else if IsAttributeName(nombre) then begin  //definición simplificada
            //lee atributos
            tTokPos:= LeeAtrib(atri,'TokPos');  //posición de token
-           if ValidarAtribs(atri, 'TokPos') then break; //valida
+           if ValidateParams(atri, 'TokPos') then break; //valida
            //crea los símbolos especiales
            AddSymbSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
          end else begin
@@ -1329,7 +1433,7 @@ begin
        tStyUnder:= LeeAtrib(nodo,'Underline');
        tStyStrike:=LeeAtrib(nodo,'StrikeOut');
        tStyle   := LeeAtrib(nodo,'Style');
-       if ValidarAtribs(nodo, 'Name BackCol ForeCol FrameCol FrameEdg FrameSty '+
+       if ValidateParams(nodo, 'Name BackCol ForeCol FrameCol FrameEdg FrameSty '+
                               'Bold Italic Underline StrikeOut Style') then
          break; //valida
        ////////// cambia atributo //////////
@@ -1486,7 +1590,7 @@ var
     //validaciones
     if not tFolding.hay then tFolding.bol:=true;  //por defecto
     if not tName.hay then tName.val:='Blk'+IntToStr(lisBlocks.Count+1);
-    if ValidarAtribs(nodo, 'Start End Name Folding Parent BackCol') then exit;
+    if ValidateParams(nodo, 'Start End Name Folding Parent BackCol') then exit;
     if tParent.hay then begin //se especificó blqPad padre
       blqPad := BuscarBloque(tParent.val);  //ubica blqPad
       if Err<>'' then exit;  //no encontró nombre blqPad
@@ -1506,12 +1610,12 @@ var
       nodo2 := nodo.ChildNodes[i];
       if UpCAse(nodo2.NodeName)='START' then begin  //definición alternativa de delimitador
         tTokPos := LeeAtrib(nodo2,'TokPos');
-        if ValidarAtribs(nodo2, 'TokPos') then exit;
+        if ValidateParams(nodo2, 'TokPos') then exit;
         //agrega la referecnia del bloque al nuevo token delimitador
         AddIniBlockToTok(trim(nodo2.TextContent), tTokPos.n, blq);
       end else if UpCAse(nodo2.NodeName)='END' then begin  //definición alternativa de delimitador
         tTokPos := LeeAtrib(nodo2,'TokPos');
-        if ValidarAtribs(nodo2, 'TokPos') then exit;
+        if ValidateParams(nodo2, 'TokPos') then exit;
         //agrega la referecnia del bloque al nuevo token delimitador
         AddFinBlockToTok(trim(nodo2.TextContent), tTokPos.n, blq);
       end else if ProcSeccion(nodo2, blq) then begin  //definición de sección
@@ -1553,7 +1657,7 @@ var
     //validaciones
     if not tFolding.hay then tFolding.bol:=true;  //por defecto
     if not tName.hay then tName.val:='Sec'+IntToStr(lisBlocks.Count+1);
-    if ValidarAtribs(nodo, 'Start TokenStart Name Folding Parent BackCol Unique FirstSec') then
+    if ValidateParams(nodo, 'Start TokenStart Name Folding Parent BackCol Unique FirstSec') then
        exit; //valida
     if tParent.hay then begin //se especificó blqPad padre
       blqPad := BuscarBloque(tParent.val);  //ubica blqPad
@@ -1585,7 +1689,7 @@ var
         nodo2 := nodo.ChildNodes[i];
         if UpCAse(nodo2.NodeName)='START' then begin  //definición alternativa de delimitador
           tStartPos := LeeAtrib(nodo2,'StartPos');
-          if ValidarAtribs(nodo2, 'StartPos') then exit;
+          if ValidateParams(nodo2, 'StartPos') then exit;
           //agrega la referecnia del bloque al nuevo token delimitador
           AddIniSectToTok(trim(nodo2.TextContent), tStartPos.n, blq);
         end else if ProcSeccion(nodo2, blq) then begin  //definición de sección
@@ -1638,7 +1742,7 @@ DebugLn(' === Cargando archivo de sintaxis ===');
          tMultiline:=LeeAtrib(nodo,'Multiline');  //Falso, si no existe
          tFolding := LeeAtrib(nodo,'Folding');    //Falso, si no existe
          //Crea blqPad
-         if ValidarAtribs(nodo, 'Start End Multiline Folding') then break;
+         if ValidateParams(nodo, 'Start End Multiline Folding') then break;
          if tMultiline.bol then  //se asume multilínea
            DefTokDelim(tStart.val, tEnd.val, tkComment, tdMulLin, tFolding.bol)
          else
@@ -1650,7 +1754,7 @@ DebugLn(' === Cargando archivo de sintaxis ===');
          tMultiline:=LeeAtrib(nodo,'Multiline');  //Falso, si no existe
          tFolding := LeeAtrib(nodo,'Folding');    //Falso, si no existe
          //Crea blqPad
-         if ValidarAtribs(nodo, 'Start End Multiline Folding') then break;
+         if ValidateParams(nodo, 'Start End Multiline Folding') then break;
          if tMultiline.bol then   //multilínea
            DefTokDelim(tStart.val, tEnd.val, tkString, tdMulLin, tFolding.bol)
          else
@@ -1668,12 +1772,12 @@ DebugLn(' === Cargando archivo de sintaxis ===');
          tipTok := GetAttribByName(tAtrib.val);
          //verifica tipo de definición
          if tContent.hay then begin //Si hay "Content", es token por contenido
-           if ValidarAtribs(nodo, 'Start CharsStart Content CharsEnd Attribute') then break;
+           if ValidateParams(nodo, 'Start CharsStart Content CharsEnd Attribute') then break;
            if tCharsStart.hay then  //se define con lista de caracteres
              tStart.val:='['+tCharsStart.val+']';
            DefTokContent(tStart.val, tContent.val, tCharsEnd.val, tipTok)
          end else begin //definición de token delimitado
-           if ValidarAtribs(nodo, 'Start CharsStart End Attribute Multiline Folding') then break;
+           if ValidateParams(nodo, 'Start CharsStart End Attribute Multiline Folding') then break;
            if tCharsStart.hay then  //se define con lista de caracteres
              tStart.val:='['+tCharsStart.val+']';
            if tMultiline.bol then  //es multilínea
