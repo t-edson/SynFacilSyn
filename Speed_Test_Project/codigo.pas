@@ -11,6 +11,16 @@ interface
 uses
   Classes, Graphics; 'cadena' 1234567789
   #32 $123
+1 12 123 1234 123456 1. 1.0  1.1 1.23 1.2345  12456456544555 4564546787897
+1 12 123 1234 123456 1. 1.0  1.1 1.23 1.2345  12456456544555 4564546787897
+1 12 123 1234 123456 1. 1.0  1.1 1.23 1.2345  12456456544555 4564546787897
+1 12 123 1234 123456 1. 1.0  1.1 1.23 1.2345  12456456544555 4564546787897
+1 12 123 1234 123456 1. 1.0  1.1 1.23 1.2345  12456456544555 4564546787897
+1 12 123 1234 123456 1. 1.0  1.1 1.23 1.2345  12456456544555 4564546787897
+1 12 123 1234 123456 1. 1.0  1.1 1.23 1.2345  12456456544555 4564546787897
+1 12 123 1234 123456 1. 1.0  1.1 1.23 1.2345  12456456544555 4564546787897
+1 12 123 1234 123456 1. 1.0  1.1 1.23 1.2345  12456456544555 4564546787897
+1 12 123 1234 123456 1. 1.0  1.1 1.23 1.2345  12456456544555 4564546787897
 type
   TRangeState = (rsUnknown,
                  rsCommentSym,   //comentario terminado en delimitador Símbolo
@@ -965,38 +975,6 @@ begin
     tkComment: Result := fCommentAttri;
     else Result := nil;
   end;
-end;
-function TSynFileSyn.GetDefaultAttribute(Index: integer): TSynHighlighterAttributes;
-{Este método es llamado por la clase "TSynCustomHighlighter", cuando se accede a alguna de
- sus propiedades:  CommentAttribute, IdentifierAttribute, KeywordAttribute, StringAttribute,
- SymbolAttribute o WhitespaceAttribute.}
-begin
-  case Index of
-    SYN_ATTR_COMMENT   : Result := fCommentAttri;
-    SYN_ATTR_IDENTIFIER: Result := fIdentifAttri;
-    SYN_ATTR_KEYWORD   : Result := fKeywordAttri;
-    SYN_ATTR_WHITESPACE: Result := fSpaceAttri;
-    SYN_ATTR_STRING    : Result := fStringAttri;
-    SYN_ATTR_SYMBOL    : Result := fSymbolAttri;
-    else Result := nil;
-  end;
-end;
-{Las siguientes funciones, son usadas por SynEdit para el manejo de las llaves, corchetes,
- parentesis y comillas. No son cruciales para el coloreado de tokens, pero deben responder bien.}
-function TSynFileSyn.GetToken: String;
-var
-  Len: LongInt;
-begin
-  Len := posFin - posIni;
-  SetString(Result, (FLine + posIni), Len);
-end;
-function TSynFileSyn.GetTokenPos: Integer;
-begin
-  Result := posIni;
-end;
-function TSynFileSyn.GetTokenKind: integer;
-begin
-  Result := Ord(fTokenId);
 end;
 
 end.

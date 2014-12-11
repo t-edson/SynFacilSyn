@@ -18,7 +18,7 @@ AddSymbSpecList(), para evitar crear listas dinámicamente.
 Esta versión es básicamente una versión de corrección de errores. No se afecta la
 velocidad, excepto tal vez por la verificación adicional de los tokens tdUniLin.
 
-EL convertir a "tFaTokContent" en clase (y el agregarle campos y métodos) así como
+El convertir a "tFaTokContent" en clase (y el agregarle campos y métodos) así como
 la creación de "tFaTokContentInst" son cambios que no se usan en esta versión pero
 que se hacen como evolución hacia la versión siguiente. No se usan aquí.
 
