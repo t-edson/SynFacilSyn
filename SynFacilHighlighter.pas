@@ -9,6 +9,11 @@ avanzada del contenido.
 del archivo XML.
 * Se crea la unidad "SynFacilExtra" y se mueve código referente a Expresiones
 regulares y al amanejo de tokens por contenido.
+* Se separa ValidateInterval(), como procedimiento independiente y se cambia su
+modo de trabajo para que reconozca los intervalos usando el caracter "-". en lugar
+de "..".
+* Se cambia la forma de expresar el segundo parámetro de DefTokIdentif(). Ahora se
+debe pasar como Expresión regular.
 * Se cambia el modo de trabajo en el tratamiento de errores. Ahora se generan
 excepciones.
 
@@ -139,7 +144,6 @@ type
 //      typToken: TSynHighlighterAttributes);
     procedure SetTokContent(tc: tFaTokContent; dStart: string;
       TypDelim: TFaTypeDelim; typToken: TSynHighlighterAttributes);
-    function ValidateInterval(var cars: string): boolean;
     procedure ValidateParamStart(var Start: string);
     procedure SplitDelim(Start: string);
     //Manejo de bloques
@@ -151,6 +155,7 @@ type
   protected   //Funciones de bajo nivel
     function BuscTokEspec(var mat: TArrayTokSpec; cad: string; var n: integer;
       TokPos: integer=0): boolean;
+    function ToRegExp(interv: string): string;
     procedure ValidAsigDelim(delAct, delNue: TFaTypeDelim; delim: string);
     function CreaBuscTokEspec(var mat: TArrayTokSpec; cad: string; var i: integer;
       TokPos: integer=0): boolean;
@@ -177,7 +182,7 @@ type
     function GetAttribByName(txt: string): TSynHighlighterAttributes;
     procedure ClearMethodTables; //Limpia la tabla de métodos
     //Definición de tokens por contenido
-    procedure DefTokIdentif(dStart, charsCont: string);
+    procedure DefTokIdentif(dStart, Content: string);
 //    procedure DefTokContent(dStart, charsCont, charsEnd: string; typToken: TSynHighlighterAttributes);
     function DefTokContent(dStart: string; typToken: TSynHighlighterAttributes
       ): tFaTokContent;
@@ -384,7 +389,8 @@ const
     ERR_INVAL_LAB_SEC = 'Etiqueta "%S" no válida para etiqueta <SECTION ...>';
     ERR_UNKNOWN_LABEL = 'Etiqueta no reconocida <%s> en: %s';
     ERR_INVAL_LBL_IDEN = 'Etiqueta "%s" no válida para etiqueta <IDENTIFIERS ...>';
-    ERR_BAD_PAR_STR_IDEN = 'Parámetro "Start" debe ser de la forma: [A..Z], en identificadores';
+    ERR_BAD_PAR_STR_IDEN = 'Parámetro "Start" debe ser de la forma: "[A-Z]", en identificadores';
+    ERR_BAD_PAR_CON_IDEN = 'Parámetro "Content" debe ser de la forma: "[A-Z]*", en identificadores';
     ERR_INVAL_LBL_IN_LBL = 'Etiqueta "%s" no válida para etiqueta <SYMBOLS ...>';
     ERR_BLK_NO_DEFINED = 'No se encuentra definido el bloque: ';
   }
@@ -406,7 +412,8 @@ const
     ERR_INVAL_LAB_SEC = 'Invalid label "%s" for <SECTION ...>';
     ERR_UNKNOWN_LABEL = 'Unknown label <%s> in: %s';
     ERR_INVAL_LBL_IDEN = 'Invalid label "%s", for label <IDENTIFIERS ...>';
-    ERR_BAD_PAR_STR_IDEN = 'Parameter "Start" must be like: [A..Z], in identifiers';
+    ERR_BAD_PAR_STR_IDEN = 'Parameter "Start" must be like: "[A-Z]", in identifiers';
+    ERR_BAD_PAR_CON_IDEN = 'Parameter "Content" must be like: "[A-Z]*", in identifiers';
     ERR_INVAL_LBL_IN_LBL = 'Invalid label "%s", for label <SYMBOLS ...>';
     ERR_BLK_NO_DEFINED = 'Undefined block: ';
 
@@ -432,48 +439,16 @@ begin
         end
   end;
 end;
-function TSynFacilSyn.ValidateInterval(var cars: string): boolean;
-//Valida un conjunto de caracteres para ser usado en la definición de tokens por contenido
-//Si hay error sale con TRUE
-var i: integer;
-  bajos: string[128];
-  altos: string[128];
-  p: SizeInt;
-  car1, car2, c: char;
-  expanded: string;
+function TSynFacilSyn.ToRegExp(interv: string): string;
+//Reemplaza el contenido de un intervalo al formato de expresiones regualres.
+//Los caracteres "..", cambian a "-" y el caracter "-", cambia a "\-"
 begin
-  //prepara definición de comodines
-  bajos[0] := #127;
-  for i:=1 to 127 do bajos[i] := chr(i);  //todo menos #0
-  altos[0] := #128;
-  for i:=1 to 128 do altos[i] := chr(i+127);
-  //reemplaza intervalos
-  Result := false;  //por defecto
-  if cars = '' then begin
-    Err:='Intervalo vacío';  //!!!OJO
-    exit(true);   //validación
-  end;
-  p:= Pos('..',cars);
-  while  p <> 0 do begin
-    if (p=1) or (p=length(cars)-1) then begin
-      Err:=Format('Error en definiicón de intervalo',[cars]);  //!!!OJO
-      exit(true);
-    end;
-    //hay intervalo, reemplaza
-    car1 := cars[p-1]; car2 := cars[p+2];
-    expanded := '';
-    for c:=car1 to car2  //construye intervalo explícito
-      do expanded += c;
-    cars := copy(cars,1,p-2)+expanded+copy(cars,p+3,1000);
-    p:= Pos('..',cars);   //busca si hay más
-  end;
-  cars := StringReplace(cars, '%HIGH%', altos,[rfReplaceAll]);
-  cars := StringReplace(cars, '%ALL%', bajos+altos,[rfReplaceAll]);
-  //podría actualizar la variable "Err"
+  interv := StringReplace(interv, '-', '\-',[rfReplaceAll]);
+  Result := StringReplace(interv, '..', '-',[rfReplaceAll]);
 end;
 procedure TSynFacilSyn.ValidateParamStart(var Start: string);
 //Valida si la expresión del parámetro es de tipo <literal> o [<lista>]. En los casos de
-//listas de caracteres, expande los intervalos de tipo: A..Z.
+//listas de caracteres, expande los intervalos de tipo: A-Z.
 //Si encuentra error, devuelve mensaje en "Err".
 var
   list: String;
@@ -489,7 +464,7 @@ begin
     end;
     list := copy(Start,2,length(Start)-2);  //toma interior
     //valida si hay intervalos de caracteres y los reemplaza
-    if ValidateInterval(list) then exit;
+    ValidateInterval(list);  //puede generar excepción
     //Actualiza cadena expandida
     Start := '['+list+']';
   end else if length(Start) = 1 then begin  //Es un literal de un solo caracter.
@@ -1038,9 +1013,9 @@ begin
        if ValidateParams(nodo, 'CharsStart Content') then break; //valida
        ////////// verifica los atributos indicados
        if tCharsStart.hay and tContent.hay then  //lo normal
-         DefTokIdentif('['+tCharsStart.val+']', tContent.val)   //Fija caracteres
+         DefTokIdentif('['+ToRegExp(tCharsStart.val)+']', '['+ToRegExp(tContent.val)+']*')   //Fija caracteres
        else if not tCharsStart.hay and not tContent.hay then  //etiqueta vacía
-         DefTokIdentif('[A..Za..z$_]', 'A..Za..z0..9_')  //def. por defecto
+         DefTokIdentif('[A-Za-z$_]', '[A-Za-z0-9_]*')  //def. por defecto
        else if not tCharsStart.hay  then
          Err := ERR_MUST_DEF_CHARS
        else if not tContent.hay  then
@@ -1173,7 +1148,7 @@ begin
   end;
   //verifica configuraciones por defecto
   if not defIDENTIF then //no se indicó etiqueta IDENTIFIERS
-    DefTokIdentif('[A..Za..z$_]', 'A..Za..z0..9_');  //def. por defecto
+    DefTokIdentif('[A-Za-z$_]', '[A-Za..z0-9_]*');  //def. por defecto
 //  if not defSIMBOLO then //no se indicó etiqueta SYMBOLS
 end;
 // ************* funciones de más alto nivel *****************
@@ -1200,14 +1175,21 @@ begin
     end;
 end;
 //definición de tokens por contenido
-procedure TSynFacilSyn.DefTokIdentif(dStart, charsCont: string );
-{Define token para identificadores.
+procedure TSynFacilSyn.DefTokIdentif(dStart, Content: string );
+{Define token para identificadores. Los parámetros deben ser intervalos.
+El parámetro "dStart" deben ser de la forma: "[A..Za..z]"
+El parámetro "charsCont" deben ser de la forma: "[A..Za..z]*"
+Si los parámetros no cumplen con el formato se generará una excepción.
 Se debe haber limpiado previamente con "ClearMethodTables"}
-var c     : char;
+var
+  c : char;
+  t : tFaRegExpType;
+  listChars: string;
+  str: string;
 begin
   if dStart = '' then exit;   //protección
   if dStart[1] <> '[' then begin  //debe ser lista de caracteres
-    Err := ERR_BAD_PAR_STR_IDEN; exit;
+    raise ESynFacilSyn.Create(ERR_BAD_PAR_STR_IDEN);
   end;
   ValidateParamStart(dStart);   //valida el primer parámetro
   if Err<>'' then exit;
@@ -1225,7 +1207,9 @@ begin
     end;
   end;
   /////// Configura caracteres de contenido
-  if ValidateInterval(charsCont) then exit;   //validación
+  t := ExtractRegExp(Content, str, listChars);
+  if (t <> tregChars0_) or (Content<>'') then  //solo se permite el formato [ ... ]*
+    raise ESynFacilSyn.Create(ERR_BAD_PAR_CON_IDEN);
   //limpia matriz
   for c := #0 to #255 do begin
     CharsIdentif[c] := False;
@@ -1236,7 +1220,7 @@ begin
     end;
   end;
   //marca las posiciones apropiadas
-  for c in charsCont do CharsIdentif[c] := True;
+  for c in listChars do CharsIdentif[c] := True;
 end;
 function TSynFacilSyn.DefTokContent(dStart: string;
   typToken: TSynHighlighterAttributes): tFaTokContent;
@@ -1707,14 +1691,14 @@ DebugLn(' === Cargando archivo de sintaxis ===');
          if tContent.hay then begin //Si hay "Content", es token por contenido
            if ValidateParams(nodo, 'Start CharsStart Content Attribute') then break;
            if tCharsStart.hay then  //se define con lista de caracteres
-             tStart.val:='['+tCharsStart.val+']';
+             tStart.val:='['+ToRegExp(tCharsStart.val)+']';
            p := DefTokContent(tStart.val, tipTok);
-           p.AddInstruct('['+tContent.val+']');
-
+           //define contenido
+           p.AddInstruct('['+ToRegExp(tContent.val)+']*');
          end else begin //definición de token delimitado
            if ValidateParams(nodo, 'Start CharsStart End Attribute Multiline Folding') then break;
            if tCharsStart.hay then  //se define con lista de caracteres
-             tStart.val:='['+tCharsStart.val+']';
+             tStart.val:='['+ToRegExp(tCharsStart.val)+']';
            if tMultiline.bol then  //es multilínea
              DefTokDelim(tStart.val, tEnd.val, tipTok, tdMulLin, tFolding.bol)
            else  //es de una sola líneas
@@ -2220,6 +2204,18 @@ begin
         if tc.Instrucs[n].Chars[fLine[posFin]] then begin
           //cumple el caracter
           inc(posFin);  //pasa a la siguiente instrucción
+          //Cumple el caracter
+          case tc.Instrucs[n].actionMatch of
+          aomNext:;   //no hace nada, pasa al siguiente elemento
+          aomExit: break;    //simplemente sale
+          aomExitpar: begin  //sale con parámetro
+            nf := tc.Instrucs[n].destOnMatch;   //lee posición final
+            posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
+            break;
+          end;
+          aomMovePar:        //se mueve a una posición
+            n := tc.Instrucs[n].destOnMatch;   //ubica posición
+          end;
         end else begin
           //no se encuentra ningún caracter de la lista
           case tc.Instrucs[n].actionFail of
@@ -2989,7 +2985,7 @@ begin
   MulTokBlk.UniqSec:=false;
 
   ClearMethodTables;   //Crea tabla de funciones
-  DefTokIdentif('[A..Za..z$_]','A..Za..z0123456789_');
+  DefTokIdentif('[A-Za-z$_]','[A-Za-z0-9_]*');
 end;
 destructor TSynFacilSyn.Destroy;
 begin
