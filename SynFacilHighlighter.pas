@@ -16,14 +16,19 @@ de "..".
 debe pasar como Expresión regular.
 * Se cambia el modo de trabajo en el tratamiento de errores. Ahora se generan
 excepciones.
+* Se elimina el camnp "Err", que almacenaba el texto del mensaje de error.
 * Se simplifica ValidateParamStart(), usando ExtractRegExp().
 * Se crea la clase padre TSynFacilSynBase, para mover propiedades y métodos
 básicos y así reducir la cantidad de código de esta unidad.
 * Se cambia de nombre a LeeAtrib() por ReadXMLParam().
 * Se cambia de nombre a ValidateParams() por CheckXMLParams().
+* Se convierte la función LoadFromFile.BuscarBloque() como método y se cambia de
+nombre a SearchBlock().
 
 En esta versión se dio un salto en cuanto a la definición de contenidos avanzados.
 Se cambia la forma como trabaja DefTokContent().
+Otro de los grandes cambios, está en la forma de manejo de errores. Cuando se
+detecta una condición erronea, se genera ahora una excepción de tipo ESynFacilSyn.
 A pesar de que se le ha dado más trabajo a los métodos metTokCont1(), ..., no se
 ha podido detectar un retraso adicional en el procesamiento, comparándolo con ´las
 versiones anteriores.
@@ -74,6 +79,7 @@ type
     procedure EndBlock(DecreaseLevel: Boolean);
     function TopBlock: TFaSynBlock;
     function TopBlockOpac: TFaSynBlock;
+    function SearchBlock(blk: string; var Success: boolean): TFaSynBlock;
   protected   //Funciones de bajo nivel
     function CreaBuscIdeEspec(var mat: TPtrATokEspec; cad: string; var i: integer;
       TokPos: integer=0): boolean;
@@ -84,7 +90,7 @@ type
     procedure TableIdent(iden: string; var mat: TPtrATokEspec; var met: TFaProcMetTable);
     procedure FirstXMLExplor(doc: TXMLDocument);
   public    //funciones públicas de alto nivel
-    Err       : string;         //Mensaje de error
+//    Err       : string;         //Mensaje de error
     LangName  : string;         //Nombre del lengauje
     Extensions: String;         //Extensiones de archivo
     MainBlk   : TFaSynBlock;    //Bloque global
@@ -246,7 +252,7 @@ implementation
 const
 {
     ERR_IDENTIF_EMPTY = 'Identificador vacío.';
-    ERR_IDENT_NO_VALID = 'Identificador no válido.';
+    ERR_INVAL_CHAR_IDEN_ = 'Caracter no válido para Identificador: ';
     ERR_IDENTIF_EXIST = 'Ya existe identificador: ';
     ERR_EMPTY_SYMBOL = 'Símbolo vacío';
     ERR_EMPTY_IDENTIF = 'Identificador vacío';
@@ -255,16 +261,17 @@ const
     ERR_MUST_DEF_CONT = 'Debe indicarse atributo "Content=" en etiqueta <IDENTIFIERS ...>';
     ERR_INVAL_LAB_BLK = 'Etiqueta "%S" no válida para etiqueta <BLOCK ...>';
     ERR_INVAL_LAB_SEC = 'Etiqueta "%S" no válida para etiqueta <SECTION ...>';
-    ERR_UNKNOWN_LABEL = 'Etiqueta no reconocida <%s> en: %s';
+    ERR_UNKNOWN_LABEL = 'Etiqueta no reconocida <%s>;
     ERR_INVAL_LBL_IDEN = 'Etiqueta "%s" no válida para etiqueta <IDENTIFIERS ...>';
     ERR_BAD_PAR_STR_IDEN = 'Parámetro "Start" debe ser de la forma: "[A-Z]", en identificadores';
     ERR_BAD_PAR_CON_IDEN = 'Parámetro "Content" debe ser de la forma: "[A-Z]*", en identificadores';
     ERR_INVAL_LBL_IN_LBL = 'Etiqueta "%s" no válida para etiqueta <SYMBOLS ...>';
     ERR_BLK_NO_DEFINED = 'No se encuentra definido el bloque: ';
     ERR_MAX_NUM_TOKCON = 'Máximo número de tokens por contenido superado';
+    ERROR_LOADING_ = 'Error cargando: ';
   }
     ERR_IDENTIF_EMPTY = 'Empty identifier.';
-    ERR_IDENT_NO_VALID = 'Unvalid identifier.';
+    ERR_INVAL_CHAR_IDEN_ = 'Invalid character for identifier: ';
     ERR_IDENTIF_EXIST = 'Identifier already exists: ';
     ERR_EMPTY_SYMBOL = 'Empty Symbol';
     ERR_EMPTY_IDENTIF = 'Empty Identifier';
@@ -273,29 +280,30 @@ const
     ERR_MUST_DEF_CONT = 'It must be indicated "Content=" in label <IDENTIFIERS ...>';
     ERR_INVAL_LAB_BLK = 'Invalid label "%s" for <BLOCK ...>';
     ERR_INVAL_LAB_SEC = 'Invalid label "%s" for <SECTION ...>';
-    ERR_UNKNOWN_LABEL = 'Unknown label <%s> in: %s';
+    ERR_UNKNOWN_LABEL = 'Unknown label <%s>';
     ERR_INVAL_LBL_IDEN = 'Invalid label "%s", for label <IDENTIFIERS ...>';
     ERR_BAD_PAR_STR_IDEN = 'Parameter "Start" must be like: "[A-Z]", in identifiers';
     ERR_BAD_PAR_CON_IDEN = 'Parameter "Content" must be like: "[A-Z]*", in identifiers';
     ERR_INVAL_LBL_IN_LBL = 'Invalid label "%s", for label <SYMBOLS ...>';
     ERR_BLK_NO_DEFINED = 'Undefined block: ';
     ERR_MAX_NUM_TOKCON = 'Maximun numbers of tokens by Content Added.';
+    ERROR_LOADING_ = 'Error loading: ';
 
   { TSynFacilSyn }
 
 //**************** Funciones de bajo nivel ****************
 function TSynFacilSyn.CreaBuscIdeEspec(var mat: TPtrATokEspec; cad: string;
                                           var i:integer; TokPos: integer = 0): boolean;
-{Busca o crea el identificador especial indicado en "cad". Si ya existe, devuelve TRUE,
- y actualiza "i" con su posición. Si no existe, crea el token especial y devuelve la
- referencia en "i". En "mat" devuelve la referencia a la tabla que corresponda al
- identificador.}
+{Busca o crea el identificador especial indicado en "cad". Si ya existe, devuelve
+ TRUE, y actualiza "i" con su posición. Si no existe, crea el token especial y devuelve
+ la referencia en "i". En "mat" devuelve la referencia a la tabla que corresponda al
+ identificador. Puede generar una excepción si el identificador no empieza con un
+ caracter válido}
 var met: TFaProcMetTable;
     c: Char;
 begin
   Result := false;  //valor por defecto
-  TableIdent(cad, mat, met);  //busca tabla y método
-  if Err<>'' then exit;  //Identificador vacío o no hay tabla apropiada
+  TableIdent(cad, mat, met);  //busca tabla y método (Puede generar excepción)
   //Verifica si existe
   if CreaBuscTokEspec(mat^, copy(cad,2,length(cad)), i, TokPos) then begin
     exit(true);  //Ya existe
@@ -329,13 +337,12 @@ function TSynFacilSyn.CreaBuscEspec(var tok: TPtrTokEspec; cad: string;
 {Busca o crea un token especial (identificador o símbolo), con texto "cad" y posición en
  "TokPos". Si ya existe, devuelve TRUE, y su posición en "i". Si no existe, crea el token
  especial y devuelve su posición en "i". En "mat" devuelve la referencia a la matriz que
- corresponda al identificador o símbolo especial.}
+ corresponda al identificador o símbolo especial. Puede generar excepción.}
 var mat: TPtrATokEspec;
     i: integer;
 begin
   if cad[1] in charsIniIden then begin  //delimitador es identificador
     Result := CreaBuscIdeEspec(mat, cad, i, TokPos); //busca o crea
-    if Err<>'' then exit; //puede haber error
     if not Result then
       mat^[i].tTok:=tkIdentif;  //es token nuevo, hay que darle atributo por defecto
   end else begin   //el delimitador inicial es símbolo
@@ -349,14 +356,12 @@ end;
 procedure TSynFacilSyn.TableIdent(iden: string; var mat: TPtrATokEspec;
   var met: TFaProcMetTable);
 {Devuelve una referencia a la tabla que corresponde a un identificador y el método
-que debe procesarlo.}
+que debe procesarlo. Si no encuentra una tabla apropiada para el identificador
+(caracter inicial no válido) genera una excepción}
 var
   c: char;
 begin
-  if iden = '' then begin
-    Err := ERR_IDENTIF_EMPTY;
-    exit;
-  end;
+  if iden = '' then raise ESynFacilSyn.Create(ERR_IDENTIF_EMPTY);
   c := iden[1]; //primer caracter
   mat :=nil; met := nil;   //valores por defecto
   if CaseSensitive then begin //sensible a la caja
@@ -458,13 +463,13 @@ begin
   end;
   //verifica error
   if mat = nil then begin
-    Err := ERR_IDENT_NO_VALID+': '+iden; exit;
+    raise ESynFacilSyn.Create(ERR_INVAL_CHAR_IDEN_+iden);
   end;
 end;
 procedure TSynFacilSyn.SetTokContent(tc: tFaTokContent; dStart: string;
    TypDelim: TFaTypeDelim; typToken: TSynHighlighterAttributes);
 //Configura la definición de un token por contenido. De ser así devuelve TRUE y
-//actualiza la tabla de métodos con el método indicado.
+//actualiza la tabla de métodos con el método indicado. Puede generar excepción.
 var
   tmp: string;
   tok: TPtrTokEspec;
@@ -478,16 +483,15 @@ begin
   el procesamiento.}
   for tmp in lisTmp do begin
     CreaBuscEspec(tok, tmp, 0);  //busca o crea
-    if Err<>'' then exit;
     //actualiza sus campos. Cambia, si ya existía
     tok^.tTok:=typToken;   //no se espera usar este campo, sino  "tc.TokTyp"
     tok^.typDel:=TypDelim;  //solo es necesario marcarlo como que es por contenido
   end;
 end;
 procedure TSynFacilSyn.FirstXMLExplor(doc: TXMLDocument);
-{Hace al primera explración al archivo XML, para procesar la definición de Symbolos e
- Identificadores. Si encuentra algún error, sale actualizando el campo "Err".
- Si no encuentra definición de Identificadores, crea uan definición por defecto}
+{Hace la primera exploración al archivo XML, para procesar la definición de Symbolos
+ e Identificadores. Si encuentra algún error, genera una excepción.
+ Si no encuentra definición de Identificadores, crea una definición por defecto}
 var
   nodo, atri   : TDOMNode;
   i,j            : integer;
@@ -530,7 +534,6 @@ begin
 
   ////////////// explora nodos ////////////
   for i:= 0 to doc.DocumentElement.ChildNodes.Count - 1 do begin
-     if Err <> '' then  break;  //si hay error, sale
      // Lee un Nodo o Registro
      nodo := doc.DocumentElement.ChildNodes[i];
      nombre := UpCase(nodo.NodeName);
@@ -546,10 +549,9 @@ begin
        else if not tCharsStart.hay and not tContent.hay then  //etiqueta vacía
          DefTokIdentif('[A-Za-z$_]', '[A-Za-z0-9_]*')  //def. por defecto
        else if not tCharsStart.hay  then
-         Err := ERR_MUST_DEF_CHARS
+         raise ESynFacilSyn.Create(ERR_MUST_DEF_CHARS)
        else if not tContent.hay  then
-         Err := ERR_MUST_DEF_CONT;
-       if Err <> '' then  break;  //si hay error, sale
+         raise ESynFacilSyn.Create(ERR_MUST_DEF_CONT);
        ////////// explora nodos hijos //////////
        for j := 0 to nodo.ChildNodes.Count-1 do begin
          atri := nodo.ChildNodes[j];
@@ -566,12 +568,10 @@ begin
            //lee atributos
            tTokPos:= ReadXMLParam(atri,'TokPos');  //posición de token
            CheckXMLParams(atri, 'TokPos'); //valida
-           //crea los identificadores especiales
+           //Crea los identificadores especiales
            AddIdentSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
-           if Err<>'' then break;
          end else begin
-           Err := Format(ERR_INVAL_LBL_IDEN, [atri.NodeName]);
-           break;
+           raise ESynFacilSyn.Create(Format(ERR_INVAL_LBL_IDEN, [atri.NodeName]));
          end;
        end;
      end else if nombre = 'SYMBOLS' then begin
@@ -598,8 +598,7 @@ begin
            //crea los símbolos especiales
            AddSymbSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
          end else begin
-           Err := Format(ERR_INVAL_LBL_IN_LBL, [atri.NodeName]);
-           break;
+           raise ESynFacilSyn.Create(Format(ERR_INVAL_LBL_IN_LBL, [atri.NodeName]));
          end;
        end;
      end else if nombre = 'ATTRIBUTE' then begin
@@ -751,27 +750,23 @@ function TSynFacilSyn.DefTokContent(dStart: string;
   typToken: TSynHighlighterAttributes): tFaTokContent;
 {Crea un token por contenido, y devuelve una referencia al token especial agregado.
 Se debe haber limpiado previamente la tabla de métodos con "ClearMethodTables"
-Solo se permite definir hasta 4 tokens pro contenido}
+Solo se permite definir hasta 4 tokens por contenido. Puede generar excepción}
 begin
   if nTokenCon = 0 then begin       //está libre el 1
     SetTokContent(tc1, dStart, tdConten1, typToken);
     Result := tc1;   //devuelve referencia
-    if Err<>'' then exit;
     inc(nTokenCon);
   end else if nTokenCon = 1 then begin //está libre el 2
     SetTokContent(tc2, dStart, tdConten2, typToken);
     Result := tc2;   //devuelve referencia
-    if Err<>'' then exit;
     inc(nTokenCon);
   end else if nTokenCon = 2 then begin //está libre el 3
     SetTokContent(tc3, dStart, tdConten3, typToken);
     Result := tc3;   //devuelve referencia
-    if Err<>'' then exit;
     inc(nTokenCon);
   end else if nTokenCon = 3 then begin //está libre el 4
     SetTokContent(tc4, dStart, tdConten4, typToken);
     Result := tc4;   //devuelve referencia
-    if Err<>'' then exit;
     inc(nTokenCon);
   end else begin //las demás declaraciones, generan error
     raise ESynFacilSyn.Create(ERR_MAX_NUM_TOKCON);
@@ -815,25 +810,25 @@ begin
   SetLength(mSym,0);
   SetLength(mSym0,0);  //limpia espacio temporal
 end;
-procedure TSynFacilSyn.AddIdentSpec(iden: string; tokTyp: TSynHighlighterAttributes; TokPos: integer
-  );
+procedure TSynFacilSyn.AddIdentSpec(iden: string; tokTyp: TSynHighlighterAttributes; TokPos: integer);
 //Método público para agregar un identificador especial cualquiera.
+//Si el identificador no inicia con caracter válido, o ya existe, genera una excepción.
 var i: integer;
     mat: TPtrATokEspec;
 begin
-  Err := '';
-  if iden = '' then begin Err := ERR_EMPTY_IDENTIF; exit; end;
+  if iden = '' then raise ESynFacilSyn.Create(ERR_EMPTY_IDENTIF);
   //Verifica si existe
-  if CreaBuscIdeEspec(mat, iden, i, TokPos) then begin
-    Err := ERR_IDENTIF_EXIST+iden; exit;
+  if CreaBuscIdeEspec(mat, iden, i, TokPos) then begin  //puede generar excepción
+    //Genera error, porque el identif. ya existe
+    raise ESynFacilSyn.Create(ERR_IDENTIF_EXIST+iden);
   end;
-  if Err<>'' then exit;  //pudo haber dado error
   //se ha creado uno nuevo
   mat^[i].tTok:=tokTyp;  //solo cambia atributo
 end;
 procedure TSynFacilSyn.AddIdentSpecList(listIden: string; tokTyp: TSynHighlighterAttributes;
   TokPos: integer);
 //Permite agregar una lista de identificadores especiales separados por espacios.
+//Puede gernerar excepción, si algún identificador está duplicado o es erróneo.
 var
   iden   : string;
   i      : integer;
@@ -847,25 +842,27 @@ begin
     begin
       iden := trim(lisTmp[i]);
       if iden = '' then continue;
-      AddIdentSpec(iden, tokTyp, TokPos);
-      if Err <> '' then break;
+      AddIdentSpec(iden, tokTyp, TokPos);  //puede generar excepción
     end;
 end;
 procedure TSynFacilSyn.AddKeyword(iden: string);
 //Método público que agrega un identificador "Keyword" a la sintaxis
+//Si el identificador es erróneso (caracter inicial no válido) o ya existe, genera
+//una excepción.
 begin
   AddIdentSpec(iden, tkKeyword);
 end;
 procedure TSynFacilSyn.AddSymbSpec(symb: string; tokTyp: TSynHighlighterAttributes; TokPos: integer);
 //Método público para agregar un símbolo especial cualquiera.
+//Si el símbolo ya existe, genera una excepción.
 var i: integer;
     mat: TPtrATokEspec;
 begin
-  Err := '';
-  if symb = '' then begin Err := ERR_EMPTY_SYMBOL; exit; end;
+  if symb = '' then raise ESynFacilSyn.Create(ERR_EMPTY_SYMBOL);
   //Verifica si existe
   if CreaBuscSymEspec(mat, symb, i, TokPos) then begin //busca o crea
-    Err := ERR_SYMBOL_EXIST; exit;
+    //Genera error, porque el símbolo. ya existe
+    raise ESynFacilSyn.Create(ERR_SYMBOL_EXIST);
   end;
   //se ha creado uno nuevo
   mat^[i].tTok:=tokTyp;  //solo cambia atributo
@@ -873,6 +870,7 @@ end;
 procedure TSynFacilSyn.AddSymbSpecList(listSym: string; tokTyp: TSynHighlighterAttributes;
   TokPos: integer);
 //Permite agregar una lista de símbolos especiales separados por espacios.
+//Puede gernerar excepción, si algún símbolo está duplicado.
 var
   iden   : string;
   i      : integer;
@@ -886,15 +884,14 @@ begin
     begin
       iden := trim(lisTmp[i]);
       if iden = '' then continue;
-      AddSymbSpec(iden, tokTyp, TokPos);
-      if Err <> '' then break;
+      AddSymbSpec(iden, tokTyp, TokPos);  //puede generar excepción
     end;
 end;
 //definición de tokens delimitados
 procedure TSynFacilSyn.DefTokDelim(dStart, dEnd: string; tokTyp: TSynHighlighterAttributes;
   tipDel: TFaTypeDelim=tdUniLin; havFolding: boolean=false);
-{Función genérica para agregar un token delimitado a la sintaxis. Si encuentra error, sale
- con el mensaje en "Err"}
+{Función genérica para agregar un token delimitado a la sintaxis. Si encuentra error,
+genera una excepción}
 var
   tok  : TPtrTokEspec;
   tmp: String;
@@ -929,7 +926,6 @@ begin
   //configura token especial
   for tmp in lisTmp do begin
     CreaBuscEspec(tok, tmp, 0); //busca o crea
-    if Err<>'' then exit; //puede haber error
     //actualiza sus campos. Cambia, si ya existía
     tok^.dEnd  :=dEnd;
     tok^.typDel:=tipDel;
@@ -993,31 +989,16 @@ var
   t : tFaRegExpType;
 
   function ProcSeccion(nodo: TDOMNode; blqPad: TFaSynBlock): boolean; forward;
-  function BuscarBloque(blk: string): TFaSynBlock;
-  var i: integer;
-  begin
-    Result := nil;  //valor por defecto
-    if UpCase(blk) = 'NONE' then exit;
-    if UpCase(blk) = 'MAIN' then begin
-      Result := MainBlk; exit;
-    end;
-    for i := 0 to lisBlocks.Count-1 do
-      if Upcase(lisBlocks[i].name) = Upcase(blk) then begin
-         Result := lisBlocks[i];  //devuelve referencia
-         exit;
-      end;
-    //no se encontró el blqPad pedido
-    Err := ERR_BLK_NO_DEFINED + blk;
-  end;
   function ProcBloque(nodo: TDOMNode; blqPad: TFaSynBlock): boolean;
   //Verifica si el nodo tiene la etiqueta <BLOCK>. De ser así, devuelve TRUE y lo procesa.
-  //Si encuentra error, actualiza "Err"
+  //Si encuentra error, genera una excepción.
   var
     i: integer;
     tStart, tFolding, tName, tParent : TFaXMLatrib;
     tBackCol, tTokPos: TFaXMLatrib;
     blq : TFaSynBlock;
     nodo2  : TDOMNode;
+    Success: boolean;
   begin
     if UpCase(nodo.NodeName) <> 'BLOCK' then exit(false);
     Result := true;  //encontró
@@ -1033,15 +1014,13 @@ var
     if not tName.hay then tName.val:='Blk'+IntToStr(lisBlocks.Count+1);
     CheckXMLParams(nodo, 'Start End Name Folding Parent BackCol');
     if tParent.hay then begin //se especificó blqPad padre
-      blqPad := BuscarBloque(tParent.val);  //ubica blqPad
-      if Err<>'' then exit;  //no encontró nombre blqPad
+      blqPad := SearchBlock(tParent.val, Success);  //ubica blqPad
+      if not Success then raise ESynFacilSyn.Create(ERR_BLK_NO_DEFINED + tParent.val);
     end;
     //crea el blqoue, con el bloque padre indicado, o el que viene en el parámetro
     blq := CreateBlock(tName.val, tFolding.bol, blqPad);
     if tStart.hay then AddIniBlockToTok(tStart.val, 0, blq);
-    if Err<>'' then exit;
     if tEnd.hay   then AddFinBlockToTok(tEnd.val, 0, blq);
-    if Err<>'' then exit;
     if tBackCol.hay then begin //lee color
       if UpCase(tBackCol.val)='TRANSPARENT' then blq.BackCol:= COL_TRANSPAR
       else blq.BackCol:= tBackCol.col;
@@ -1060,20 +1039,19 @@ var
         //agrega la referecnia del bloque al nuevo token delimitador
         AddFinBlockToTok(trim(nodo2.TextContent), tTokPos.n, blq);
       end else if ProcSeccion(nodo2, blq) then begin  //definición de sección
-        if Err<>'' then exit;  //solo verifica error
+        //No es necesario procesar
       end else if ProcBloque(nodo2, blq) then begin  //definición de bloque anidado
-        if Err<>'' then exit;  //solo verifica error
+        //No es necesario procesar
       end else if UpCase(nodo2.NodeName) = '#COMMENT' then begin
         //solo para evitar que de mensaje de error
       end else begin
-        Err := Format(ERR_INVAL_LAB_BLK,[nodo2.NodeName]);
-        exit;
+        raise ESynFacilSyn.Create(Format(ERR_INVAL_LAB_BLK,[nodo2.NodeName]));
       end;
     end;
   end;
   function ProcSeccion(nodo: TDOMNode; blqPad: TFaSynBlock): boolean;
   //Verifica si el nodo tiene la etiqueta <SECCION>. De ser así, devuelve TRUE y lo procesa.
-  //Si encuentra error, actualiza "Err"
+  //Si encuentra error, genera una excepción.
   var
     i: integer;
     tStart, tFolding, tName, tParent : TFaXMLatrib;
@@ -1083,6 +1061,7 @@ var
     tStartPos: TFaXMLatrib;
     tFirstSec: TFaXMLatrib;
     tTokenStart: TFaXMLatrib;
+    Success: boolean;
   begin
     if UpCase(nodo.NodeName) <> 'SECTION' then exit(false);
     Result := true;  //encontró
@@ -1100,8 +1079,8 @@ var
     if not tName.hay then tName.val:='Sec'+IntToStr(lisBlocks.Count+1);
     CheckXMLParams(nodo, 'Start TokenStart Name Folding Parent BackCol Unique FirstSec');
     if tParent.hay then begin //se especificó blqPad padre
-      blqPad := BuscarBloque(tParent.val);  //ubica blqPad
-      if Err<>'' then exit;  //no encontró nombre blqPad
+      blqPad := SearchBlock(tParent.val, Success);  //ubica blqPad
+      if not Success then raise ESynFacilSyn.Create(ERR_BLK_NO_DEFINED + tParent.val);
     end;
     //crea la sección, con el bloque padre indicado, o el que viene en el parámetro
     blq := CreateBlock(tName.val, tFolding.bol, blqPad);
@@ -1118,7 +1097,6 @@ var
        su nombre}
       AddIniSectToTok(tTokenStart.val, 0, blq);
     end;
-    if Err<>'' then exit;
     if tBackCol.hay then begin
       if UpCase(tBackCol.val)='TRANSPARENT' then blq.BackCol:= COL_TRANSPAR
       else blq.BackCol:= tBackCol.col;   //lee color
@@ -1133,34 +1111,26 @@ var
           //agrega la referecnia del bloque al nuevo token delimitador
           AddIniSectToTok(trim(nodo2.TextContent), tStartPos.n, blq);
         end else if ProcSeccion(nodo2, blq) then begin  //definición de sección
-          if Err<>'' then exit;  //solo verifica error
+          //No es necesario procesar
         end else if ProcBloque(nodo2, blq) then begin  //definición de bloque anidado
-          if Err<>'' then exit;  //solo verifica error
+          //No es necesario procesar
         end else if UpCase(nodo2.NodeName) = '#COMMENT' then begin
           //solo para evitar que de mensaje de error
         end else begin
-          Err := Format(ERR_INVAL_LAB_SEC,[nodo2.NodeName]);
-          exit;
+          raise ESynFacilSyn.Create(Format(ERR_INVAL_LAB_SEC,[nodo2.NodeName]));
         end;
     end;
   end;
 begin
 DebugLn('');
 DebugLn(' === Cargando archivo de sintaxis ===');
-  Err := '';
   ClearSpecials;     //limpia tablas de identif. y simbolos especiales
   CreateAttributes;  //Limpia todos los atributos y crea los predefinidos.
   ClearMethodTables; //Limpia tabla de caracter inicial, y los bloques
   try
     ReadXMLFile(doc, Arc);  //carga archivo de lenguaje
     ////////Primera exploración para capturar elementos básicos de la sintaxis/////////
-    FirstXMLExplor(doc);  //Hace la primera exploración
-    if Err <> '' then begin  //verifica si hay error
-      Err +=  #13#10 + Arc;  //completa mensaje con nombre de archivo
-      ShowMessage(Err);
-      doc.Free;          //libera
-      exit;
-    end;
+    FirstXMLExplor(doc);  //Hace la primera exploración. Puede generar excepción.
     ///////////Segunda exploración para capturar elementos complementarios///////////
     //inicia exploración
     for i:= 0 to doc.DocumentElement.ChildNodes.Count - 1 do begin
@@ -1233,30 +1203,21 @@ DebugLn(' === Cargando archivo de sintaxis ===');
              DefTokDelim(tStart.val, tEnd.val, tipTok, tdUniLin, tFolding.bol);
          end;
        end else if ProcBloque(nodo, nil) then begin  //bloques válidos en cualquier parte
-         if Err<>'' then break;  //solo verifica error
+         //No es necesario hacer nada
        end else if ProcSeccion(nodo, MainBlk) then begin //secciones en "MAIN"
-         if Err<>'' then break;  //solo verifica error
+         //No es necesario hacer nada
        end else begin
-          Err := Format(ERR_UNKNOWN_LABEL,[nombre,Arc]);
-          break;
-       end;
-       if Err <> '' then begin
-          Err +=  ' <' + nombre + '> en: ' + Arc;  //completa mensaje
-          break;
+          raise ESynFacilSyn.Create(Format(ERR_UNKNOWN_LABEL,[nombre]));
        end;
     end;
+    Rebuild;  //prepara al resaltador
     doc.Free;  //libera
-    if Err <> '' then begin  //verifica si hay error
-      ShowMessage(Err); exit
-    end;
-    Rebuild;  //prepara el resaltador
-    if Err <> '' then begin  //verifica si hay error
-      ShowMessage(Err); exit
-    end;
   except
-    on E: Exception do begin
-      ShowMessage('Error cargando: ' + Arc + #13#10 + e.Message);
+    on e: Exception do begin
+      //completa el mensaje
+      e.Message:=ERROR_LOADING_ + Arc + #13#10 + e.Message;
       doc.Free;
+      raise
     end;
   end;
 end;
@@ -1337,7 +1298,6 @@ DebugLn('  [' + r.txt[1] + '] -> @metSym1Car (símbolo simple de 1 car)');
       //Lo agrega a la tabla de símbolos para búsqueda normal.
       CreaBuscTokEspec(mSym, r.txt, j);  //No puede usar CreaBuscSymEspec(), porque usa mSymb0
       mSym[j] := r;  //actualiza o agrega
-      if Err<> '' then break;  //sale del lazo
     end
   end;
   //termina el proceso
@@ -1510,6 +1470,30 @@ begin
    end else begin
      Result := TFaSynBlock(Fold.BlockType);
    end;
+end;
+function TSynFacilSyn.SearchBlock(blk: string; var Success: boolean): TFaSynBlock;
+{Busca un bloque por su nombre. Se ignora la caja.
+ Si la búsqueda tuvo éxito, pone la bandera "Success" en TRUE}
+var i: integer;
+begin
+  Result := nil;  //valor por defecto. Es un valor "válido".
+  Success := false;
+  if UpCase(blk) = 'NONE' then begin
+    Success := true;
+    exit;
+  end;
+  if UpCase(blk) = 'MAIN' then begin
+    Result := MainBlk;
+    Success := true;
+    exit;
+  end;
+  for i := 0 to lisBlocks.Count-1 do
+    if Upcase(lisBlocks[i].name) = Upcase(blk) then begin
+       Result := lisBlocks[i];  //devuelve referencia
+       Success := true;
+       exit;
+    end;
+  //no se encontró el blqPad pedido
 end;
 
 procedure TSynFacilSyn.ProcTokenDelim(const d: TTokSpec);
@@ -1790,14 +1774,13 @@ begin
 end;
 
 procedure TSynFacilSyn.AddIniBlockToTok(dStart: string; TokPos: integer; blk: TFaSynBlock);
-  //Agrega a un token especial, la referencia a un bloque, en la parte inicial.
+//Agrega a un token especial, la referencia a un bloque, en la parte inicial.
+//Si hay error, genera excepción.
 var n: integer;
     tok : TPtrTokEspec;
 begin
-  VerifDelim(dStart);
-  if Err <> '' then exit;
-  CreaBuscEspec(tok, dStart, TokPos); //busca o crea
-  if Err<>'' then exit; //puede haber error
+  VerifDelim(dStart);  //puede generar excepción
+  CreaBuscEspec(tok, dStart, TokPos); //busca o crea. Puede generar excepción
   //agrega referencia
   tok^.bloIni:=true;
   n:=High(tok^.bloIniL)+1;  //lee tamaño
@@ -1805,14 +1788,13 @@ begin
   tok^.bloIniL[n]:=blk;  //escribe referencia
 end;
 procedure TSynFacilSyn.AddFinBlockToTok(dEnd: string; TokPos: integer; blk: TFaSynBlock);
-  //Agrega a un token especial, la referencia a un bloque, en la parte final.
+//Agrega a un token especial, la referencia a un bloque, en la parte final.
+//Si hay error, genera excepción.
 var n: integer;
     tok : TPtrTokEspec;
 begin
-  VerifDelim(dEnd);
-  if Err <> '' then exit;
-  CreaBuscEspec(tok, dEnd, TokPos); //busca o crea
-  if Err<>'' then exit; //puede haber error
+  VerifDelim(dEnd);  //puede generar excepción
+  CreaBuscEspec(tok, dEnd, TokPos); //busca o crea. Puede generar excepción
   //agrega referencia
   tok^.bloFin:=true;
   n:=High(tok^.bloFinL)+1;  //lee tamaño
@@ -1821,13 +1803,12 @@ begin
 end;
 procedure TSynFacilSyn.AddIniSectToTok(dStart: string; TokPos: integer; blk: TFaSynBlock);
 //Agrega a un token especial, la referencia a una sección.
+//Si hay error, genera excepción.
 var n: integer;
     tok : TPtrTokEspec;
 begin
-  VerifDelim(dStart);
-  if Err <> '' then exit;
-  CreaBuscEspec(tok, dStart, TokPos); //busca o crea
-  if Err<>'' then exit; //puede haber error
+  VerifDelim(dStart);  //puede generar excepción
+  CreaBuscEspec(tok, dStart, TokPos); //busca o crea. Puede generar excepción
   //agrega referencia
   tok^.secIni:=true;
   n:=High(tok^.secIniL)+1;  //lee tamaño
@@ -1839,10 +1820,8 @@ procedure TSynFacilSyn.AddFirstSectToTok(dStart: string; TokPos: integer; blk: T
 var
   tok : TPtrTokEspec;
 begin
-  VerifDelim(dStart);
-  if Err <> '' then exit;
-  CreaBuscEspec(tok, dStart, TokPos); //busca o crea
-  if Err<>'' then exit; //puede haber error
+  VerifDelim(dStart);  //puede generar excepción
+  CreaBuscEspec(tok, dStart, TokPos); //busca o crea. Puede generar excepción
   //agrega referencia
   tok^.firstSec := blk; //agrega referencia
 end;
@@ -1867,8 +1846,8 @@ begin
 end;
 function TSynFacilSyn.AddBlock(dStart, dEnd: string; showFold: boolean = true;
                                parentBlk: TFaSynBlock = nil): TFaSynBlock;
-{Función pública para agregar un bloque a la sintaxis. Si encuentra error, sale con
- el mensaje en "Err"}
+{Función pública para agregar un bloque a la sintaxis. Si encuentra error, genera una
+excepción}
 var blk : TFaSynBlock;
 begin
   Result := nil;    //valor por defecto
@@ -1877,15 +1856,13 @@ begin
   Result := blk;           //devuelve referencia
   //procesa delimitador inicial
   AddIniBlockToTok(dStart, 0, blk);  //agrega referencia
-  if Err<>'' then exit; //puede haber error
   //procesa delimitador final
   AddFinBlockToTok(dEnd, 0, blk);  //agrega referencia
-  if Err<>'' then exit; //puede haber error
 end;
 function TSynFacilSyn.AddSection(dStart: string; showFold: boolean = true;
                                  parentBlk: TFaSynBlock = nil): TFaSynBlock;
-{Función pública para agregar una sección a un bloque a la sintaxis. Si encuentra error,
- sale con el mensaje en "Err"}
+{Función pública para agregar una sección a un bloque a la sintaxis. Si encuentra
+genera una excepción}
 var blk : TFaSynBlock;
 begin
   Result := nil;    //valor por defecto
@@ -1899,12 +1876,11 @@ begin
   Result := blk;           //devuelve referencia
   //procesa delimitador inicial
   AddIniSectToTok(dStart, 0, Blk);  //agrega referencia
-  if Err<>'' then exit; //puede haber error
 end;
 function TSynFacilSyn.AddFirstSection(dStart: string; showFold: boolean = true;
                                       parentBlk: TFaSynBlock = nil): TFaSynBlock;
-{Función pública para agregar una sección que se abre siempre al inicio de un bloque. Si
- encuentra error, sale con el mensaje en "Err"}
+{Función pública para agregar una sección que se abre siempre al inicio de un bloque.
+Si encuentra error, genera una excepción}
 var
   blk : TFaSynBlock;
 begin
@@ -1915,7 +1891,6 @@ begin
   Result := blk;           //devuelve referencia
   //procesa delimitador inicial
   AddFirstSectToTok(dStart, 0, blk);
-//  if Err<>'' then exit; //puede haber error
 end;
 //funciones para obtener información de bloques
 function TSynFacilSyn.NestedBlocks: Integer;

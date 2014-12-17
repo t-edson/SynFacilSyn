@@ -822,12 +822,12 @@ end;
 function TSynFacilSynBase.CreaBuscTokEspec(var mat: TArrayTokSpec; cad: string;
                                        var i:integer; TokPos: integer = 0): boolean;
 {Busca o crea el token especial indicado en "cad". Si ya existe, devuelve TRUE y
- actualiza "i" con su posición. Si no existe. Crea el token especial y devuelve la referencia
- en "i". Se le debe indicar la tabla a buscar en "mat"}
+ actualiza "i" con su posición. Si no existe. Crea el token especial y devuelve la
+ referencia en "i". Se le debe indicar la tabla a buscar en "mat"}
 var r:TTokSpec;
 begin
   if not CaseSensitive then cad:= UpCase(cad);  //cambia caja si es necesario
-  if BuscTokEspec(mat,cad, i, TokPos) then exit(true);  //ya existe, devuelve en "i"
+  if BuscTokEspec(mat, cad, i, TokPos) then exit(true);  //ya existe, devuelve en "i"
   //no existe, hay que crearlo. Aquí se definen las propiedades por defecto
   r.txt:=cad;         //se asigna el nombre
   r.TokPos:=TokPos;   //se asigna ordinal del token
