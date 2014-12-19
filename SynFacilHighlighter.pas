@@ -98,10 +98,10 @@ type
     ColBlock  : TFaColBlock;    //Coloreado por bloques
     procedure ClearMethodTables; //Limpia la tabla de métodos
     //Definición de tokens por contenido
-    procedure DefTokIdentif(dStart, Content: string);
     function DefTokContent(dStart: string; typToken: TSynHighlighterAttributes
       ): tFaTokContent;
-    procedure DefTokContent(dStart, Content: string; typToken: TSynHighlighterAttributes);
+    procedure DefTokContent(dStart, Content: string;
+      typToken: TSynHighlighterAttributes; Complete: boolean=false);
     //Manejo de identificadores especiales
     procedure ClearSpecials;        //Limpia identif, y símbolos especiales
     procedure AddIdentSpec(iden: string; tokTyp: TSynHighlighterAttributes; TokPos: integer=0);
@@ -207,8 +207,6 @@ type
     procedure metNull;
     procedure metSpace;
     procedure metSymbol;
-    procedure metIdent;
-    procedure metIdentUTF8;
 
     procedure ProcTokenDelim(const d: TTokSpec);
     procedure ProcIdentEsp(var mat: TArrayTokSpec);
@@ -263,8 +261,6 @@ const
     ERR_INVAL_LAB_SEC = 'Etiqueta "%S" no válida para etiqueta <SECTION ...>';
     ERR_UNKNOWN_LABEL = 'Etiqueta no reconocida <%s>;
     ERR_INVAL_LBL_IDEN = 'Etiqueta "%s" no válida para etiqueta <IDENTIFIERS ...>';
-    ERR_BAD_PAR_STR_IDEN = 'Parámetro "Start" debe ser de la forma: "[A-Z]", en identificadores';
-    ERR_BAD_PAR_CON_IDEN = 'Parámetro "Content" debe ser de la forma: "[A-Z]*", en identificadores';
     ERR_INVAL_LBL_IN_LBL = 'Etiqueta "%s" no válida para etiqueta <SYMBOLS ...>';
     ERR_BLK_NO_DEFINED = 'No se encuentra definido el bloque: ';
     ERR_MAX_NUM_TOKCON = 'Máximo número de tokens por contenido superado';
@@ -282,8 +278,6 @@ const
     ERR_INVAL_LAB_SEC = 'Invalid label "%s" for <SECTION ...>';
     ERR_UNKNOWN_LABEL = 'Unknown label <%s>';
     ERR_INVAL_LBL_IDEN = 'Invalid label "%s", for label <IDENTIFIERS ...>';
-    ERR_BAD_PAR_STR_IDEN = 'Parameter "Start" must be like: "[A-Z]", in identifiers';
-    ERR_BAD_PAR_CON_IDEN = 'Parameter "Content" must be like: "[A-Z]*", in identifiers';
     ERR_INVAL_LBL_IN_LBL = 'Invalid label "%s", for label <SYMBOLS ...>';
     ERR_BLK_NO_DEFINED = 'Undefined block: ';
     ERR_MAX_NUM_TOKCON = 'Maximun numbers of tokens by Content Added.';
@@ -702,50 +696,6 @@ begin
     end;
 end;
 //definición de tokens por contenido
-procedure TSynFacilSyn.DefTokIdentif(dStart, Content: string );
-{Define token para identificadores. Los parámetros deben ser intervalos.
-El parámetro "dStart" deben ser de la forma: "[A..Za..z]"
-El parámetro "charsCont" deben ser de la forma: "[A..Za..z]*"
-Si los parámetros no cumplen con el formato se generará una excepción.
-Se debe haber limpiado previamente con "ClearMethodTables"}
-var
-  c : char;
-  t : tFaRegExpType;
-  listChars: string;
-  str: string;
-begin
-  /////// Configura caracteres de inicio
-  if dStart = '' then exit;   //protección
-  t := ExtractRegExp(dStart, str, listChars);
-  if (t <> tregChars) or (dStart<>'') then  //solo se permite el formato [ ... ]
-    raise ESynFacilSyn.Create(ERR_BAD_PAR_STR_IDEN);
-  //Agrega evento manejador en caracteres iniciales
-  charsIniIden := [];  //inicia
-  for c in listChars do begin //permite cualquier caracter inicial
-    if c<#128 then begin  //caracter normal
-      fProcTable[c] := @metIdent;
-      charsIniIden += [c];  //agrega
-    end else begin   //caracter UTF-8
-      fProcTable[c] := @metIdentUTF8;
-      charsIniIden += [c];  //agrega
-    end;
-  end;
-  /////// Configura caracteres de contenido
-  t := ExtractRegExp(Content, str, listChars);
-  if (t <> tregChars0_) or (Content<>'') then  //solo se permite el formato [ ... ]*
-    raise ESynFacilSyn.Create(ERR_BAD_PAR_CON_IDEN);
-  //limpia matriz
-  for c := #0 to #255 do begin
-    CharsIdentif[c] := False;
-    //aprovecha para crear la tabla de mayúsculas para comparaciones
-    if CaseSensitive then TabMayusc[c] := c
-    else begin  //pasamos todo a mayúscula
-      TabMayusc[c] := UpCase(c);
-    end;
-  end;
-  //marca las posiciones apropiadas
-  for c in listChars do CharsIdentif[c] := True;
-end;
 function TSynFacilSyn.DefTokContent(dStart: string;
   typToken: TSynHighlighterAttributes): tFaTokContent;
 {Crea un token por contenido, y devuelve una referencia al token especial agregado.
@@ -773,7 +723,7 @@ begin
   end;
 end;
 procedure TSynFacilSyn.DefTokContent(dStart, Content: string;
-  typToken: TSynHighlighterAttributes);
+  typToken: TSynHighlighterAttributes; Complete:boolean = false);
 {Versión simplificada para crear tokens por contenido sencillos. El parámetro
 "Content", se debe ingresar com expresión regular. Un ejemplo sencillo sería:
   hlt.DefTokContent('[0-9]','[0-9]*');
@@ -783,7 +733,7 @@ var
   p: tFaTokContent;
 begin
   p := DefTokContent(dStart, typToken);
-  p.AddRegEx(Content);   //agrega contenido como expresión regular
+  p.AddRegEx(Content, Complete);   //agrega contenido como expresión regular
 end;
 //manejo de identificadores y símbolos especiales
 procedure TSynFacilSyn.ClearSpecials;
@@ -1402,24 +1352,6 @@ begin
   while (fProcTable[fLine[posFin]] = @metSymbol)
   do inc(posFin);
   fTokenID := tkSymbol;
-end;
-procedure TSynFacilSyn.metIdent;
-//Procesa el identificador actual
-begin
-  inc(posFin);  {debe incrementarse, para pasar a comparar los caracteres siguientes,
-                 o de otra forma puede quedarse en un lazo infinito}
-  while CharsIdentif[fLine[posFin]] do inc(posFin);
-  fTokenID := tkIdentif;  //identificador común
-end;
-procedure TSynFacilSyn.metIdentUTF8;
-//Procesa el identificador actual. considerando que empieza con un caracter UTF8 (dos bytes)
-begin
-  inc(posFin);  {es UTF8, solo filtra por el primer caracter (se asume que el segundo
-                 es siempre válido}
-  inc(posFin);  {debe incrementarse, para pasar a comparar los caracteres siguientes,
-                 o de otra forma puede quedarse en un lazo infinito}
-  while CharsIdentif[fLine[posFin]] do inc(posFin);
-  fTokenID := tkIdentif;  //identificador común
 end;
 
 /////////// manejo de bloques

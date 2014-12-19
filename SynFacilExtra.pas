@@ -25,6 +25,7 @@ type
     tregChars1_   //Lista de caracteres: [A..Z]+
   );
 
+  //Acciones a ejecutar en las comparaciones
   tFaActionOnMatch = (
     aomNext,    //pasa a la siguiente instrucción
     aomExit,    //termina la exploración
@@ -62,13 +63,13 @@ type
     nInstruc : integer;      //Cantidad de instrucciones
     procedure Clear;
 //    function ValidateInterval(var cars: string): boolean;
-    procedure AddInstruct(exp: string; ifFalse: string='exit';
+    procedure AddInstruct(exp: string; ifTrue: string='next'; ifFalse: string='exit';
       TokTyp0: TSynHighlighterAttributes = nil);
-    procedure AddRegEx(exp: string);
+    procedure AddRegEx(exp: string; Complete: boolean=false);
   private
     function AddItem(expTyp: tFaRegExpType; ifMatch, ifFail: string): integer;
-    procedure AddOneInstruct(var exp: string; ifFalse: string='exit';
-      TokTyp0: TSynHighlighterAttributes=nil);
+    procedure AddOneInstruct(var exp: string; ifTrue: string='next'; ifFalse: string
+      ='exit'; TokTyp0: TSynHighlighterAttributes=nil);
   end;
 
   ///////// Definiciones básicas para el resaltador ///////////
@@ -190,6 +191,11 @@ type
     procedure metTokCont2;
     procedure metTokCont3;
     procedure metTokCont4;
+  protected  //Procesamiento de identificadores
+    procedure metIdent;
+    procedure metIdentUTF8;
+  public     //Funciones públicas
+    procedure DefTokIdentif(dStart, Content: string );
   public     //Atributos y sus propiedades de acceso
     //ID para los atributos predefinidos
     tkEol     : TSynHighlighterAttributes;  //id para los tokens salto de línea
@@ -218,6 +224,8 @@ const
 //    ERR_TOK_DEL_IDE_ERR = 'Delimitador de token erróneo: %s (debe ser identificador)';
 //    ERR_IDEN_ALREA_DEL = 'Identificador "%s" ya es delimitador inicial.';
 //    ERR_INVAL_ATTR_LAB = 'Atributo "%s" no válido para etiqueta <%s>';
+//    ERR_BAD_PAR_STR_IDEN = 'Parámetro "Start" debe ser de la forma: "[A-Z]", en identificadores';
+//    ERR_BAD_PAR_CON_IDEN = 'Parámetro "Content" debe ser de la forma: "[A-Z]*", en identificadores';
 
     ERR_START_NO_EMPTY = 'Parameter "Start" can not be null';
     ERR_EXP_MUST_BE_BR = 'Expression must be like: [list of chars]';
@@ -225,6 +233,8 @@ const
     ERR_TOK_DEL_IDE_ERR = 'Bad Token delimiter: %s (must be identifier)';
     ERR_IDEN_ALREA_DEL = 'Identifier "%s" is already a Start delimiter.';
     ERR_INVAL_ATTR_LAB = 'Invalid attribute "%s" for label <%s>';
+    ERR_BAD_PAR_STR_IDEN = 'Parameter "Start" must be like: "[A-Z]", in identifiers';
+    ERR_BAD_PAR_CON_IDEN = 'Parameter "Content" must be like: "[A-Z]*", in identifiers';
 
     //Mensajes de tokens por contenido
 //    ERR_EMPTY_INTERVAL = 'Error: Intervalo vacío.';
@@ -650,7 +660,8 @@ begin
     end;
   end;
 end;
-procedure tFaTokContent.AddOneInstruct(var exp: string; ifFalse: string = 'exit';
+procedure tFaTokContent.AddOneInstruct(var exp: string;
+                ifTrue: string = 'next'; ifFalse: string = 'exit';
   TokTyp0: TSynHighlighterAttributes=nil);
 //Agrega una y solo instrucción al token por contenido. Si encuentra más de una
 //instrucción, genera una excepción.
@@ -672,14 +683,14 @@ begin
   tregChars0_,  //Es de tipo lista de caracteres [...]*
   tregChars1_:  //Es de tipo lista de caracteres [...]+
     begin
-      n := AddItem(t, '', ifFalse)-1;  //agrega
+      n := AddItem(t, ifTrue, ifFalse)-1;  //agrega
       Instrucs[n].TokTyp := TokTyp0;
       //Configura caracteres de contenido
       for c := #0 to #255 do Instrucs[n].Chars[c] := False;
       for c in list do Instrucs[n].Chars[c] := True;
     end;
   tregString: begin      //Es de tipo texto literal
-      n := AddItem(t, '', ifFalse)-1;  //agrega
+      n := AddItem(t, ifTrue, ifFalse)-1;  //agrega
       Instrucs[n].TokTyp := TokTyp0;
       Instrucs[n].Text := str;
     end;
@@ -687,31 +698,43 @@ begin
     raise ESynFacilSyn.Create(ERR_UNSUPPOR_EXP_ + expr);
   end;
 end;
-procedure tFaTokContent.AddInstruct(exp: string; ifFalse: string = 'exit';
-  TokTyp0: TSynHighlighterAttributes=nil);
+procedure tFaTokContent.AddInstruct(exp: string; ifTrue: string;
+  ifFalse: string; TokTyp0: TSynHighlighterAttributes);
 //Agrega una instrucción para el procesamiento del token pro contenido.
 //Solo se dbe indicar una instrucción, de otra forma se generará un error.
 var
   expr: String;
 begin
   expr := exp;   //guarda, porque se va a trozar
-  AddOneInstruct(exp, ifFalse, TokTyp0);  //si hay error genera excepción
+  AddOneInstruct(exp, ifTrue, ifFalse, TokTyp0);  //si hay error genera excepción
   //Si llegó aquí es porque se obtuvo una expresión válida, pero la
   //expresión continua.
   if exp<>'' then begin
     raise ESynFacilSyn.Create(ERR_UNSUPPOR_EXP_ + expr);
   end;
 end;
-procedure tFaTokContent.AddRegEx(exp: string);
+procedure tFaTokContent.AddRegEx(exp: string; Complete: boolean = false);
 {Agrega una expresión regular (un conjunto de instrucciones sin opciones de control), al
 token por contenido. Las expresiones regulares deben ser solo las soportadas.
 Ejemplos son:  "[0..9]*[\.][0..9]", "[A..Za..z]*"
 Las expresiones se evalúan parte por parte. Si un token no coincide completamente con la
 expresión regular, se considera al token, solamente hasta el punto en que coincide.
 Si se produce algún error se generará una excepción.}
+var
+  dToStart: Integer;
 begin
-  while exp<>'' do begin
-    AddOneInstruct(exp);  //en principio, siempre debe coger una expresión
+  if Complete then begin
+    //Cuando no coincide completamente, retrocede hasta el demimitador incial
+    dToStart := 0;  //distamcia al inicio
+    while exp<>'' do begin
+      AddOneInstruct(exp,'','exit(-'+ IntToStr(dToStart) + ')');
+      Inc(dToStart);
+    end;
+  end else begin
+    //La coinicidencia puede ser parcial
+    while exp<>'' do begin
+      AddOneInstruct(exp);  //en principio, siempre debe coger una expresión
+    end;
   end;
 end;
 
@@ -735,7 +758,7 @@ begin
   end;
 end;
 function TSynFacilSynBase.ToRegExp(interv: string): string;
-//Reemplaza el contenido de un intervalo al formato de expresiones regualres.
+//Reemplaza el contenido de un intervalo al formato de expresiones regulares.
 //Los caracteres "..", cambian a "-" y el caracter "-", cambia a "\-"
 begin
   interv := StringReplace(interv, '-', '\-',[rfReplaceAll]);
@@ -998,8 +1021,10 @@ begin
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
-          aomMovePar:        //se mueve a una posición
+          aomMovePar: begin  //se mueve a una posición
             n := tc.Instrucs[n].destOnMatch;   //ubica posición
+            continue;
+          end;
           end;
         end else begin      //no cumple
           posFin := posFin0;   //restaura posición
@@ -1011,8 +1036,10 @@ begin
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
-          aomMovePar:        //se mueve a una posición
+          aomMovePar: begin  //se mueve a una posición
             n := tc.Instrucs[n].destOnFail;   //ubica posición
+            continue;
+          end;
           end;
         end;
       end;
@@ -1030,8 +1057,10 @@ begin
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
-          aomMovePar:        //se mueve a una posición
+          aomMovePar: begin  //se mueve a una posición
             n := tc.Instrucs[n].destOnMatch;   //ubica posición
+            continue;
+          end;
           end;
         end else begin
           //no se encuentra ningún caracter de la lista
@@ -1043,8 +1072,10 @@ begin
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
-          aomMovePar:        //se mueve a una posición
+          aomMovePar: begin  //se mueve a una posición
             n := tc.Instrucs[n].destOnFail;   //ubica posición
+            continue;
+          end;
           end;
         end;
     end;
@@ -1062,8 +1093,10 @@ begin
           posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
           break;
         end;
-        aomMovePar:        //se mueve a una posición
+        aomMovePar: begin  //se mueve a una posición
           n := tc.Instrucs[n].destOnMatch;   //ubica posición
+          continue;
+        end;
         end;
     end;
     tregChars0_: begin   //conjunto de caracteres: [ ... ]*
@@ -1088,8 +1121,10 @@ begin
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
-          aomMovePar:        //se mueve a una posición
+          aomMovePar: begin  //se mueve a una posición
             n := tc.Instrucs[n].destOnMatch;   //ubica posición
+            continue;
+          end;
           end;
         end else begin   //No cumple
           case tc.Instrucs[n].actionFail of
@@ -1100,8 +1135,10 @@ begin
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
-          aomMovePar:        //se mueve a una posición
+          aomMovePar: begin  //se mueve a una posición
             n := tc.Instrucs[n].destOnFail;   //ubica posición
+            continue;
+          end;
           end;
         end;
       end;
@@ -1124,6 +1161,70 @@ end;
 procedure TSynFacilSynBase.metTokCont4; //Procesa tokens por contenido 3
 begin
   metTokCont(tc4);
+end;
+//Procesamiento de identificadores
+procedure TSynFacilSynBase.metIdent;
+//Procesa el identificador actual
+begin
+  inc(posFin);  {debe incrementarse, para pasar a comparar los caracteres siguientes,
+                 o de otra forma puede quedarse en un lazo infinito}
+  while CharsIdentif[fLine[posFin]] do inc(posFin);
+  fTokenID := tkIdentif;  //identificador común
+end;
+procedure TSynFacilSynBase.metIdentUTF8;
+//Procesa el identificador actual. considerando que empieza con un caracter UTF8 (dos bytes)
+begin
+  inc(posFin);  {es UTF8, solo filtra por el primer caracter (se asume que el segundo
+                 es siempre válido}
+  inc(posFin);  {debe incrementarse, para pasar a comparar los caracteres siguientes,
+                 o de otra forma puede quedarse en un lazo infinito}
+  while CharsIdentif[fLine[posFin]] do inc(posFin);
+  fTokenID := tkIdentif;  //identificador común
+end;
+//Funciones públicas
+procedure TSynFacilSynBase.DefTokIdentif(dStart, Content: string );
+{Define token para identificadores. Los parámetros deben ser intervalos.
+El parámetro "dStart" deben ser de la forma: "[A..Za..z]"
+El parámetro "charsCont" deben ser de la forma: "[A..Za..z]*"
+Si los parámetros no cumplen con el formato se generará una excepción.
+Se debe haber limpiado previamente con "ClearMethodTables"}
+var
+  c : char;
+  t : tFaRegExpType;
+  listChars: string;
+  str: string;
+begin
+  /////// Configura caracteres de inicio
+  if dStart = '' then exit;   //protección
+  t := ExtractRegExp(dStart, str, listChars);
+  if (t <> tregChars) or (dStart<>'') then  //solo se permite el formato [ ... ]
+    raise ESynFacilSyn.Create(ERR_BAD_PAR_STR_IDEN);
+  //Agrega evento manejador en caracteres iniciales
+  charsIniIden := [];  //inicia
+  for c in listChars do begin //permite cualquier caracter inicial
+    if c<#128 then begin  //caracter normal
+      fProcTable[c] := @metIdent;
+      charsIniIden += [c];  //agrega
+    end else begin   //caracter UTF-8
+      fProcTable[c] := @metIdentUTF8;
+      charsIniIden += [c];  //agrega
+    end;
+  end;
+  /////// Configura caracteres de contenido
+  t := ExtractRegExp(Content, str, listChars);
+  if (t <> tregChars0_) or (Content<>'') then  //solo se permite el formato [ ... ]*
+    raise ESynFacilSyn.Create(ERR_BAD_PAR_CON_IDEN);
+  //limpia matriz
+  for c := #0 to #255 do begin
+    CharsIdentif[c] := False;
+    //aprovecha para crear la tabla de mayúsculas para comparaciones
+    if CaseSensitive then TabMayusc[c] := c
+    else begin  //pasamos todo a mayúscula
+      TabMayusc[c] := UpCase(c);
+    end;
+  end;
+  //marca las posiciones apropiadas
+  for c in listChars do CharsIdentif[c] := True;
 end;
 //Manejo de atributos
 function TSynFacilSynBase.NewTokType(TypeName: string): TSynHighlighterAttributes;
