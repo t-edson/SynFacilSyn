@@ -3,6 +3,8 @@ SynFacilSyn
 
 Resaltador de sintaxis programable, para el componente  SynEdit de Lazarus.
 
+![SynFacilCompletion](http://blog.pucp.edu.pe/media/4946/20141220-synfacilsyn1.png "Título de la imagen")
+
 Este resaltador, es similar al resaltador SynAnySyn de Lazarus, pero mucho más rápido, eficiente y configurable.
 
 El resaltador en sí, es además un completo analizador léxico que puede ser configurado para manejar una diversidad de lenguajes de programación.
@@ -21,7 +23,7 @@ Características
 
 •	Permite definir los caracteres que son válidos para los identificadores. Así se puede adaptar a la definición específica de cada lenguaje.
 
-•	Permite manejar subconjuntos de identificadores (palabras reservadas, variables, directivas, etc) y subconjuntos de símbolos (operadores, separadores, etc).
+•	Permite manejar subconjuntos de identificadores (palabras reservadas, variables, etc) y subconjuntos de símbolos (operadores, separadores, etc).
 
 •	Permite definir comentarios y cadenas multi-línea.
 
@@ -37,12 +39,13 @@ Características
 
 •	Maneja diversos atributos predefinidos, pero pueden crearse más dinámicamente.
 
+•	Puede manejar expresiones regulares sencillas para la definición de tokens.
 
 Uso dentro de un programa.
 
-Este resaltador, se compone de un solo archivo que es la unidad “SynHighLighterFile.pas”. Se debe descargar este archivo y copiarlo en la carpeta donde está el proyecto de trabajo.
+Este resaltador, se compone de dos archivos que son  "SynFacilHighlighter.pas” y "SynFacilBasic.pas”. Se deben descargar estos archivos y copiarlos en la carpeta donde está el proyecto de trabajo o en la carpeta de unidades.
 
-Una vez copiado, se debe incluir en la sentencia USES, de las unidades que requieran trabajar con este resaltador.
+Una vez copiados, se debe incluir "SynFacilHighlighter" en la sentencia USES, de las unidades que requieran trabajar con este resaltador.
 
 Como con cualquier resaltador, se debe crear una instancia del resaltador (TSynFacilSyn) y asignarla al editor que vayamos a usar:
 
@@ -63,5 +66,15 @@ var
 ```
 
 Para usar el resaltador, es necesario configurar primero la sintaxis. Esto se puede hacer usando un archivo externo (archivo de sintaxis) o por código.
+
+Un archivo XML de sintaxis sencilla podría ser:
+
+```
+<Language name=”simple”>
+  <Keywords> 
+and echo else exit for if 
+ </Keywords>
+</Language>
+```
 
 Para más información, revisar la documentación.

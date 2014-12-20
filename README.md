@@ -3,6 +3,9 @@ SynFacilSyn 1.0
 
 Scriptable Highlighter for SynEdit Component of Lazarus 
 
+
+![SynFacilCompletion](http://blog.pucp.edu.pe/media/4946/20141220-synfacilsyn1.png "Título de la imagen")
+
 This highlighter is similar to the SynAnySyn of Lazarus, but it's much more faster, efficient and more configurable.
 
 It can be used too, like a full lexical analyzer that can be configured to handle a variety of programming languages.
@@ -37,11 +40,15 @@ Features
 
 •	It includes several predefined attributes, but it can be defined more dynamically.
 
+•	It can use basic Regex for the token definition.
+
 Using on a program.
 
-This highlighter, is contained on a single file that is the unit "SynFacilHighlighter.pas". You should copy it to the folder where the project is working, or on your personal units path.
+This highlighter, is contained on two files: "SynFacilHighlighter.pas" and "SynFacilBasic.pas". You should copy them to the folder where the project is working, or on your personal units path.
 
-Once copied, it must be included in the USES statement of the units who are going to work with the highlighter. Then it's necessary to create an object of the class TSynFacilSyn, and assign it to the SynEdit editor:
+Once copied, it must be included the unit "SynFacilHighlighter" in the USES statement of the units who are going to work with the highlighter. 
+
+Then it's necessary to create an object of the class TSynFacilSyn, and assign it to the SynEdit editor:
 
 ```
 uses  ... , SynFacilHighlighter;
@@ -60,6 +67,16 @@ var
 ```
 
 For to use the highlighter, it's necessary first, to have the syntax configurated on the XML file or by code. 
+
+One simple XML syntax file could be:
+
+```
+<Language name=”simple”>
+  <Keywords> 
+and echo else exit for if 
+ </Keywords>
+</Language>
+```
 
 For more information, see the documentation.
 
