@@ -8,7 +8,7 @@ object Form1: TForm1
   ClientWidth = 346
   OnCreate = FormCreate
   OnDestroy = FormDestroy
-  LCLVersion = '1.2.0.3'
+  LCLVersion = '1.2.4.0'
   inline SynEdit1: TSynEdit
     Left = 0
     Height = 246
@@ -447,6 +447,7 @@ object Form1: TForm1
         ShortCut = 57379
       end>
     MouseActions = <>
+    MouseTextActions = <>
     MouseSelActions = <>
     Lines.Strings = (
       '//código ejemplo'

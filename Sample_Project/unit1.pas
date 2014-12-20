@@ -5,8 +5,7 @@ unit Unit1;
 interface
 
 uses
-  Classes, SysUtils, Forms, Controls, Graphics, StdCtrls, Menus, Dialogs,
-  SynEdit, SynEditHighlighter, Lazlogger,
+  SysUtils, Forms, Menus, Dialogs,  SynEdit,
   SynFacilHighlighter;
 
 type

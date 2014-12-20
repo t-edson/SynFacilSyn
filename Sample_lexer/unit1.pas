@@ -4,8 +4,8 @@ unit Unit1;
 interface
 
 uses
-  Classes, SysUtils, FileUtil, SynEdit, Forms, Controls, Graphics, Dialogs,
-  StdCtrls, FormOut, SynEditHighlighter, SynFacilHighlighter;
+  Classes, SysUtils, SynEdit, Forms, Controls, Dialogs,
+  StdCtrls, FormOut, SynEditHighlighter, SynFacilHighlighter, SynFacilBasic;
 
 type
   //Class for to access "fRange"
@@ -152,19 +152,18 @@ begin
   xLex.ClearMethodTables;           //limpìa tabla de métodos
   xLex.ClearSpecials;               //para empezar a definir tokens
   //crea tokens por contenido
-  xLex.DefTokIdentif('[$A..Za..z_]', 'A..Za..z0..9_');
-  xLex.DefTokContent('[0..9]', '0..9.', '', xLex.tkNumber);
-  if xLex.Err<>'' then ShowMessage(xLex.Err);
-  //define palabras claves
+  xLex.DefTokIdentif('[$A-Za-z_]', '[A-Za-z0-9_]*');
+  xLex.DefTokContent('[0-9]', '[0-9.]*', xLex.tkNumber);
+  //define keywords
   xLex.AddIdentSpecList('var type program begin', xLex.tkKeyword);
   xLex.AddIdentSpecList('end else elsif', xLex.tkKeyword);
   xLex.AddIdentSpecList('true false int string', xLex.tkKeyword);
-  //crea tokens delimitados
+  //create delimited tokens
   xLex.DefTokDelim('''','''', xLex.tkString);
   xLex.DefTokDelim('"','"', xLex.tkString);
   xLex.DefTokDelim('//','', xLex.tkComment);
-  xLex.DefTokDelim('/*','*/', xLex.tkComment, tdMulLin);
-  //define bloques de sintaxis
+  xLex.DefTokDelim('/\*','*/', xLex.tkComment, tdMulLin);
+  //define syntax block
   blk := xLex.AddBlock('{','}');
   blk.name:='bLlaves';
   xLex.Rebuild;

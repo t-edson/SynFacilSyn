@@ -17,13 +17,20 @@ debe pasar como Expresión regular.
 * Se cambia el modo de trabajo en el tratamiento de errores. Ahora se generan
 excepciones.
 * Se elimina el camnp "Err", que almacenaba el texto del mensaje de error.
-* Se simplifica ValidateParamStart(), usando ExtractRegExp().
+* Se simplifica ValidateParamStart(), usando ExtractRegExp(), y se le incluye la
+rutina que genera una lista de cadenas.
 * Se crea la clase padre TSynFacilSynBase, para mover propiedades y métodos
 básicos y así reducir la cantidad de código de esta unidad.
 * Se cambia de nombre a LeeAtrib() por ReadXMLParam().
 * Se cambia de nombre a ValidateParams() por CheckXMLParams().
 * Se convierte la función LoadFromFile.BuscarBloque() como método y se cambia de
 nombre a SearchBlock().
+* Se convierten a las funciones LoadFromFile.ProcXMLSection() y
+LoadFromFile.ProcXMLBlock() en métodos y se les cambia de nombre.
+* Se agrega el reconocimiento de la etiqueta <Sample> en el archivo XML, para incluir
+un texto de muestra.
+* Se modifica LoadFromFile(), para mejorar el procesamiento de tokens.
+* Se agrega soporte a LoadFromFile(), para definir tokens con expresiones regulares.
 
 En esta versión se dio un salto en cuanto a la definición de contenidos avanzados.
 Se cambia la forma como trabaja DefTokContent().
@@ -40,8 +47,8 @@ unit SynFacilHighlighter;
 interface
 uses
   Classes, SysUtils, Graphics, SynEditHighlighter, DOM, XMLRead,
-  Dialogs, Fgl, Lazlogger, SynEditHighlighterFoldBase, SynEditTypes, LCLIntf,
-  SynFacilExtra;
+  Dialogs, Fgl, Lazlogger, SynEditHighlighterFoldBase, LCLIntf,
+  SynFacilBasic;
 const
   COL_TRANSPAR = $FDFEFF;  //color transparente
 type
@@ -89,6 +96,8 @@ type
       ): boolean;
     procedure TableIdent(iden: string; var mat: TPtrATokEspec; var met: TFaProcMetTable);
     procedure FirstXMLExplor(doc: TXMLDocument);
+    function ProcXMLBlock(nodo: TDOMNode; blqPad: TFaSynBlock): boolean;
+    function ProcXMLSection(nodo: TDOMNode; blqPad: TFaSynBlock): boolean;
   public    //funciones públicas de alto nivel
 //    Err       : string;         //Mensaje de error
     LangName  : string;         //Nombre del lengauje
@@ -204,10 +213,6 @@ type
     procedure metAmp;
     procedure metC3;
   private   //procesamiento de otros elementos
-    procedure metNull;
-    procedure metSpace;
-    procedure metSymbol;
-
     procedure ProcTokenDelim(const d: TTokSpec);
     procedure ProcIdentEsp(var mat: TArrayTokSpec);
     procedure metSimbEsp;
@@ -258,7 +263,9 @@ const
     ERR_MUST_DEF_CHARS = 'Debe indicarse atributo "CharsStart=" en etiqueta <IDENTIFIERS ...>';
     ERR_MUST_DEF_CONT = 'Debe indicarse atributo "Content=" en etiqueta <IDENTIFIERS ...>';
     ERR_INVAL_LAB_BLK = 'Etiqueta "%S" no válida para etiqueta <BLOCK ...>';
+    ERR_INVAL_LAB_TOK = 'Invalid label "%s" for <TOKEN ...>';
     ERR_INVAL_LAB_SEC = 'Etiqueta "%S" no válida para etiqueta <SECTION ...>';
+    ERR_INCOMP_TOK_DEF_ = 'Definición incompleta de token: ';
     ERR_UNKNOWN_LABEL = 'Etiqueta no reconocida <%s>;
     ERR_INVAL_LBL_IDEN = 'Etiqueta "%s" no válida para etiqueta <IDENTIFIERS ...>';
     ERR_INVAL_LBL_IN_LBL = 'Etiqueta "%s" no válida para etiqueta <SYMBOLS ...>';
@@ -275,7 +282,9 @@ const
     ERR_MUST_DEF_CHARS = 'It must be indicated "CharsStart=" in label <IDENTIFIERS ...>';
     ERR_MUST_DEF_CONT = 'It must be indicated "Content=" in label <IDENTIFIERS ...>';
     ERR_INVAL_LAB_BLK = 'Invalid label "%s" for <BLOCK ...>';
+    ERR_INVAL_LAB_TOK = 'Invalid label "%s" for <TOKEN ...>';
     ERR_INVAL_LAB_SEC = 'Invalid label "%s" for <SECTION ...>';
+    ERR_INCOMP_TOK_DEF_ = 'Incomplete token definition: ';
     ERR_UNKNOWN_LABEL = 'Unknown label <%s>';
     ERR_INVAL_LBL_IDEN = 'Invalid label "%s", for label <IDENTIFIERS ...>';
     ERR_INVAL_LBL_IN_LBL = 'Invalid label "%s", for label <SYMBOLS ...>';
@@ -482,197 +491,6 @@ begin
     tok^.typDel:=TypDelim;  //solo es necesario marcarlo como que es por contenido
   end;
 end;
-procedure TSynFacilSyn.FirstXMLExplor(doc: TXMLDocument);
-{Hace la primera exploración al archivo XML, para procesar la definición de Symbolos
- e Identificadores. Si encuentra algún error, genera una excepción.
- Si no encuentra definición de Identificadores, crea una definición por defecto}
-var
-  nodo, atri   : TDOMNode;
-  i,j            : integer;
-  nombre         : string;
-  defIDENTIF     : boolean;  //bandera
-  tipTok         : TSynHighlighterAttributes;
-  tExt, tName, tCasSen: TFaXMLatrib;
-  tCharsStart, tContent, tAtrib: TFaXMLatrib;
-  tColBlk: TFaXMLatrib;
-  tTokPos: TFaXMLatrib;
-  tBackCol: TFaXMLatrib;
-  Atrib: TSynHighlighterAttributes;
-  tForeCol: TFaXMLatrib;
-  tFrameCol: TFaXMLatrib;
-  tStyBold: TFaXMLatrib;
-  tStyItal: TFaXMLatrib;
-  tStyUnder: TFaXMLatrib;
-  tStyStrike: TFaXMLatrib;
-  tStyle: TFaXMLatrib;
-  tFrameEdg: TFaXMLatrib;
-  tFrameSty: TFaXMLatrib;
-begin
-  defIDENTIF := false;
-//  defSIMBOLO := false;
-  //////////// explora atributos del lenguaje//////////
-  tExt  := ReadXMLParam(doc.DocumentElement, 'Ext');
-  tName := ReadXMLParam(doc.DocumentElement, 'Name');
-  tCasSen :=ReadXMLParam(doc.DocumentElement, 'CaseSensitive');
-  tColBlk :=ReadXMLParam(doc.DocumentElement, 'ColorBlock');
-  //carga atributos leidos
-  CheckXMLParams(doc.DocumentElement, 'Ext Name CaseSensitive ColorBlock');
-  LangName := tName.val;
-  Extensions := tExt.val;
-  CaseSensitive := tCasSen.bol;
-  case UpCase(tColBlk.val) of  //coloreado de bloque
-  'LEVEL': ColBlock := cbLevel;
-  'BLOCK': ColBlock := cbBlock;
-  else ColBlock:= cbNull;
-  end;
-
-  ////////////// explora nodos ////////////
-  for i:= 0 to doc.DocumentElement.ChildNodes.Count - 1 do begin
-     // Lee un Nodo o Registro
-     nodo := doc.DocumentElement.ChildNodes[i];
-     nombre := UpCase(nodo.NodeName);
-     if nombre = 'IDENTIFIERS' then begin
-       defIDENTIF := true;      //hay definición de identificadores
-       ////////// Lee atributos //////////
-       tCharsStart  := ReadXMLParam(nodo,'CharsStart');
-       tContent:= ReadXMLParam(nodo,'Content');
-       CheckXMLParams(nodo, 'CharsStart Content'); //valida
-       ////////// verifica los atributos indicados
-       if tCharsStart.hay and tContent.hay then  //lo normal
-         DefTokIdentif('['+ToRegExp(tCharsStart.val)+']', '['+ToRegExp(tContent.val)+']*')   //Fija caracteres
-       else if not tCharsStart.hay and not tContent.hay then  //etiqueta vacía
-         DefTokIdentif('[A-Za-z$_]', '[A-Za-z0-9_]*')  //def. por defecto
-       else if not tCharsStart.hay  then
-         raise ESynFacilSyn.Create(ERR_MUST_DEF_CHARS)
-       else if not tContent.hay  then
-         raise ESynFacilSyn.Create(ERR_MUST_DEF_CONT);
-       ////////// explora nodos hijos //////////
-       for j := 0 to nodo.ChildNodes.Count-1 do begin
-         atri := nodo.ChildNodes[j];
-         nombre := UpCase(atri.NodeName);
-         if nombre = 'TOKEN' then begin  //definición completa
-           //lee atributos
-           tAtrib:= ReadXMLParam(atri,'Attribute');
-           tTokPos:= ReadXMLParam(atri,'TokPos');  //posición de token
-           CheckXMLParams(atri, 'Attribute TokPos'); //valida
-           tipTok := GetAttribByName(tAtrib.val);
-           //crea los identificadores especiales
-           AddIdentSpecList(atri.TextContent, tipTok, tTokPos.n);
-         end else if IsAttributeName(nombre) then begin  //definición simplificada
-           //lee atributos
-           tTokPos:= ReadXMLParam(atri,'TokPos');  //posición de token
-           CheckXMLParams(atri, 'TokPos'); //valida
-           //Crea los identificadores especiales
-           AddIdentSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
-         end else begin
-           raise ESynFacilSyn.Create(Format(ERR_INVAL_LBL_IDEN, [atri.NodeName]));
-         end;
-       end;
-     end else if nombre = 'SYMBOLS' then begin
-//       defSIMBOLO := true;      //hay definición de símbolos
-       ////////// Lee atributos, pero no se usan. Es solo protocolar.
-       tCharsStart:= ReadXMLParam(nodo,'CharsStart');
-       tContent   := ReadXMLParam(nodo,'Content');
-       ////////// explora nodos hijos //////////
-       for j := 0 to nodo.ChildNodes.Count-1 do begin
-         atri := nodo.ChildNodes[j];
-         nombre := UpCase(atri.NodeName);
-         if nombre = 'TOKEN' then begin  //definición completa
-           //lee atributos
-           tAtrib := ReadXMLParam(atri,'Attribute');
-           tTokPos:= ReadXMLParam(atri,'TokPos');  //posición de token
-           CheckXMLParams(atri, 'Attribute TokPos'); //valida
-           tipTok := GetAttribByName(tAtrib.val);
-           //crea los símbolos especiales
-           AddSymbSpecList(atri.TextContent, tipTok, tTokPos.n);
-         end else if IsAttributeName(nombre) then begin  //definición simplificada
-           //lee atributos
-           tTokPos:= ReadXMLParam(atri,'TokPos');  //posición de token
-           CheckXMLParams(atri, 'TokPos'); //valida
-           //crea los símbolos especiales
-           AddSymbSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
-         end else begin
-           raise ESynFacilSyn.Create(Format(ERR_INVAL_LBL_IN_LBL, [atri.NodeName]));
-         end;
-       end;
-     end else if nombre = 'ATTRIBUTE' then begin
-       ////////// Lee atributos //////////
-       tName    := ReadXMLParam(nodo,'Name');
-       tBackCol := ReadXMLParam(nodo,'BackCol');
-       tForeCol := ReadXMLParam(nodo,'ForeCol');
-       tFrameCol:= ReadXMLParam(nodo,'FrameCol');
-       tFrameEdg:= ReadXMLParam(nodo,'FrameEdg');
-       tFrameSty:= ReadXMLParam(nodo,'FrameSty');
-       tStyBold := ReadXMLParam(nodo,'Bold');
-       tStyItal := ReadXMLParam(nodo,'Italic');
-       tStyUnder:= ReadXMLParam(nodo,'Underline');
-       tStyStrike:=ReadXMLParam(nodo,'StrikeOut');
-       tStyle   := ReadXMLParam(nodo,'Style');
-       CheckXMLParams(nodo, 'Name BackCol ForeCol FrameCol FrameEdg FrameSty '+
-                              'Bold Italic Underline StrikeOut Style');
-       ////////// cambia atributo //////////
-       if IsAttributeName(tName.val)  then begin
-         tipTok := GetAttribByName(tName.val);   //tipo de atributo
-       end else begin
-         //No existe, se crea.
-         tipTok := NewTokType(tName.val);
-       end;
-       //obtiene referencia
-       Atrib := tipTok;
-       //asigna la configuración del atributo
-       if Atrib <> nil then begin
-          if tBackCol.hay then Atrib.Background:=tBackCol.col;
-          if tForeCol.hay then Atrib.Foreground:=tForeCol.col;
-          if tFrameCol.hay then Atrib.FrameColor:=tFrameCol.col;
-          if tFrameEdg.hay then begin
-            case UpCase(tFrameEdg.val) of
-            'AROUND':Atrib.FrameEdges:=sfeAround;
-            'BOTTOM':Atrib.FrameEdges:=sfeBottom;
-            'LEFT':  Atrib.FrameEdges:=sfeLeft;
-            'NONE':  Atrib.FrameEdges:=sfeNone;
-            end;
-          end;
-          if tFrameSty.hay then begin
-            case UpCase(tFrameSty.val) of
-            'SOLID': Atrib.FrameStyle:=slsSolid;
-            'DASHED':Atrib.FrameStyle:=slsDashed;
-            'DOTTED':Atrib.FrameStyle:=slsDotted;
-            'WAVED': Atrib.FrameStyle:=slsWaved;
-            end;
-          end;
-          if tStyBold.hay then begin  //negrita
-             if tStyBold.bol then Atrib.Style:=Atrib.Style+[fsBold]
-             else Atrib.Style:=Atrib.Style-[fsBold];
-          end;
-          if tStyItal.hay then begin  //cursiva
-             if tStyItal.bol then Atrib.Style:=Atrib.Style+[fsItalic]
-             else Atrib.Style:=Atrib.Style-[fsItalic];
-          end;
-          if tStyUnder.hay then begin  //subrayado
-             if tStyUnder.bol then Atrib.Style:=Atrib.Style+[fsUnderline]
-             else Atrib.Style:=Atrib.Style-[fsUnderline];
-          end;
-          if tStyStrike.hay then begin //tachado
-             if tStyStrike.bol then Atrib.Style:=Atrib.Style+[fsStrikeOut]
-             else Atrib.Style:=Atrib.Style-[fsStrikeOut];
-          end;
-          if tStyle.hay then begin  //forma alternativa
-            Atrib.Style:=Atrib.Style-[fsBold]-[fsItalic]-[fsUnderline]-[fsStrikeOut];
-            if Pos('b', tStyle.val)<>0 then Atrib.Style:=Atrib.Style+[fsBold];
-            if Pos('i', tStyle.val)<>0 then Atrib.Style:=Atrib.Style+[fsItalic];
-            if Pos('u', tStyle.val)<>0 then Atrib.Style:=Atrib.Style+[fsUnderline];
-            if Pos('s', tStyle.val)<>0 then Atrib.Style:=Atrib.Style+[fsStrikeOut];
-          end;
-       end;
-     end;
-     //ignora las otras etiquetas, en esta pasada.
-  end;
-  //verifica configuraciones por defecto
-  if not defIDENTIF then //no se indicó etiqueta IDENTIFIERS
-    DefTokIdentif('[A-Za-z$_]', '[A-Za..z0-9_]*');  //def. por defecto
-//  if not defSIMBOLO then //no se indicó etiqueta SYMBOLS
-end;
-// ************* funciones de más alto nivel *****************
 procedure TSynFacilSyn.ClearMethodTables;
 {Limpia la tabla de métodos, usada para identificar a los tokens de la sintaxis.
  También limpia las definiciones de tokens por contenido.
@@ -884,7 +702,6 @@ begin
     ActProcRange(tok^);  //completa .pRange()
   end;
 end;
-
 procedure TSynFacilSyn.RebuildSymbols;
 {Crea entradas en la tabla de métodos para procesar los caracteres iniciales de los
  símbolos especiales. Así se asegura que se detectarán siempre.
@@ -924,153 +741,270 @@ DebugLn('---------actualizando tabla de funciones----------');
     inc(i);
   end;
 end;
+procedure TSynFacilSyn.FirstXMLExplor(doc: TXMLDocument);
+{Hace la primera exploración al archivo XML, para procesar la definición de Symbolos
+ e Identificadores. Si encuentra algún error, genera una excepción.
+ Si no encuentra definición de Identificadores, crea una definición por defecto}
+var
+  nodo, atri   : TDOMNode;
+  i,j            : integer;
+  nombre         : string;
+  defIDENTIF     : boolean;  //bandera
+  tipTok         : TSynHighlighterAttributes;
+  tExt, tName, tCasSen, tColBlk: TFaXMLatrib;
+  tCharsStart, tContent, tAtrib: TFaXMLatrib;
+  tTokPos: TFaXMLatrib;
+begin
+  defIDENTIF := false;
+//  defSIMBOLO := false;
+  //////////// explora atributos del lenguaje//////////
+  tExt  := ReadXMLParam(doc.DocumentElement, 'Ext');
+  tName := ReadXMLParam(doc.DocumentElement, 'Name');
+  tCasSen :=ReadXMLParam(doc.DocumentElement, 'CaseSensitive');
+  tColBlk :=ReadXMLParam(doc.DocumentElement, 'ColorBlock');
+  //carga atributos leidos
+  CheckXMLParams(doc.DocumentElement, 'Ext Name CaseSensitive ColorBlock');
+  LangName := tName.val;
+  Extensions := tExt.val;
+  CaseSensitive := tCasSen.bol;
+  case UpCase(tColBlk.val) of  //coloreado de bloque
+  'LEVEL': ColBlock := cbLevel;
+  'BLOCK': ColBlock := cbBlock;
+  else ColBlock:= cbNull;
+  end;
+
+  ////////////// explora nodos ////////////
+  for i:= 0 to doc.DocumentElement.ChildNodes.Count - 1 do begin
+     // Lee un Nodo o Registro
+     nodo := doc.DocumentElement.ChildNodes[i];
+     nombre := UpCase(nodo.NodeName);
+     if nombre = 'IDENTIFIERS' then begin
+       defIDENTIF := true;      //hay definición de identificadores
+       ////////// Lee parámetros //////////
+       tCharsStart  := ReadXMLParam(nodo,'CharsStart');
+       tContent:= ReadXMLParam(nodo,'Content');
+       CheckXMLParams(nodo, 'CharsStart Content'); //valida
+       ////////// verifica los atributos indicados
+       if tCharsStart.hay and tContent.hay then  //lo normal
+         DefTokIdentif(ToListRegex(tCharsStart), ToListRegex(tContent)+'*')   //Fija caracteres
+       else if not tCharsStart.hay and not tContent.hay then  //etiqueta vacía
+         DefTokIdentif('[A-Za-z$_]', '[A-Za-z0-9_]*')  //def. por defecto
+       else if not tCharsStart.hay  then
+         raise ESynFacilSyn.Create(ERR_MUST_DEF_CHARS)
+       else if not tContent.hay  then
+         raise ESynFacilSyn.Create(ERR_MUST_DEF_CONT);
+       ////////// explora nodos hijos //////////
+       for j := 0 to nodo.ChildNodes.Count-1 do begin
+         atri := nodo.ChildNodes[j];
+         nombre := UpCase(atri.NodeName);
+         if nombre = 'TOKEN' then begin  //definición completa
+           //lee atributos
+           tAtrib:= ReadXMLParam(atri,'Attribute');
+           tTokPos:= ReadXMLParam(atri,'TokPos');  //posición de token
+           CheckXMLParams(atri, 'Attribute TokPos'); //valida
+           tipTok := GetAttribByName(tAtrib.val);
+           //crea los identificadores especiales
+           AddIdentSpecList(atri.TextContent, tipTok, tTokPos.n);
+         end else if IsAttributeName(nombre) then begin  //definición simplificada
+           //lee atributos
+           tTokPos:= ReadXMLParam(atri,'TokPos');  //posición de token
+           CheckXMLParams(atri, 'TokPos'); //valida
+           //Crea los identificadores especiales
+           AddIdentSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
+         end else begin
+           raise ESynFacilSyn.Create(Format(ERR_INVAL_LBL_IDEN, [atri.NodeName]));
+         end;
+       end;
+     end else if nombre = 'SYMBOLS' then begin
+//       defSIMBOLO := true;      //hay definición de símbolos
+       ////////// Lee atributos, pero no se usan. Es solo protocolar.
+       tCharsStart:= ReadXMLParam(nodo,'CharsStart');
+       tContent   := ReadXMLParam(nodo,'Content');
+       ////////// explora nodos hijos //////////
+       for j := 0 to nodo.ChildNodes.Count-1 do begin
+         atri := nodo.ChildNodes[j];
+         nombre := UpCase(atri.NodeName);
+         if nombre = 'TOKEN' then begin  //definición completa
+           //lee atributos
+           tAtrib := ReadXMLParam(atri,'Attribute');
+           tTokPos:= ReadXMLParam(atri,'TokPos');  //posición de token
+           CheckXMLParams(atri, 'Attribute TokPos'); //valida
+           tipTok := GetAttribByName(tAtrib.val);
+           //crea los símbolos especiales
+           AddSymbSpecList(atri.TextContent, tipTok, tTokPos.n);
+         end else if IsAttributeName(nombre) then begin  //definición simplificada
+           //lee atributos
+           tTokPos:= ReadXMLParam(atri,'TokPos');  //posición de token
+           CheckXMLParams(atri, 'TokPos'); //valida
+           //crea los símbolos especiales
+           AddSymbSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
+         end else begin
+           raise ESynFacilSyn.Create(Format(ERR_INVAL_LBL_IN_LBL, [atri.NodeName]));
+         end;
+       end;
+     end else if nombre = 'SAMPLE' then begin  //Cödigo de muestra
+       fSampleSource := nodo.TextContent;  //Carga texto
+     end else if ProcXMLattribute(nodo) then begin
+       //No es necesario hacer nada
+     end;
+     //ignora las otras etiquetas, en esta pasada.
+  end;
+  //verifica configuraciones por defecto
+  if not defIDENTIF then //no se indicó etiqueta IDENTIFIERS
+    DefTokIdentif('[A-Za-z$_]', '[A-Za..z0-9_]*');  //def. por defecto
+//  if not defSIMBOLO then //no se indicó etiqueta SYMBOLS
+end;
+function TSynFacilSyn.ProcXMLBlock(nodo: TDOMNode; blqPad: TFaSynBlock): boolean;
+//Verifica si el nodo tiene la etiqueta <BLOCK>. De ser así, devuelve TRUE y lo procesa.
+//Si encuentra error, genera una excepción.
+var
+  i: integer;
+  tStart, tFolding, tName, tParent : TFaXMLatrib;
+  tBackCol, tTokPos: TFaXMLatrib;
+  blq : TFaSynBlock;
+  nodo2  : TDOMNode;
+  Success: boolean;
+  tEnd: TFaXMLatrib;
+begin
+  if UpCase(nodo.NodeName) <> 'BLOCK' then exit(false);
+  Result := true;  //encontró
+  //Lee atributos
+  tStart    := ReadXMLParam(nodo,'Start');
+  tEnd      := ReadXMLParam(nodo,'End');
+  tName     := ReadXMLParam(nodo,'Name');
+  tFolding  := ReadXMLParam(nodo,'Folding');    //Falso, si no existe
+  tParent   := ReadXMLParam(nodo,'Parent');
+  tBackCol  := ReadXMLParam(nodo,'BackCol');
+  //validaciones
+  if not tFolding.hay then tFolding.bol:=true;  //por defecto
+  if not tName.hay then tName.val:='Blk'+IntToStr(lisBlocks.Count+1);
+  CheckXMLParams(nodo, 'Start End Name Folding Parent BackCol');
+  if tParent.hay then begin //se especificó blqPad padre
+    blqPad := SearchBlock(tParent.val, Success);  //ubica blqPad
+    if not Success then raise ESynFacilSyn.Create(ERR_BLK_NO_DEFINED + tParent.val);
+  end;
+  //crea el blqoue, con el bloque padre indicado, o el que viene en el parámetro
+  blq := CreateBlock(tName.val, tFolding.bol, blqPad);
+  if tStart.hay then AddIniBlockToTok(tStart.val, 0, blq);
+  if tEnd.hay   then AddFinBlockToTok(tEnd.val, 0, blq);
+  if tBackCol.hay then begin //lee color
+    if UpCase(tBackCol.val)='TRANSPARENT' then blq.BackCol:= COL_TRANSPAR
+    else blq.BackCol:= tBackCol.col;
+  end;
+  ////////// explora nodos hijos //////////
+  for i := 0 to nodo.ChildNodes.Count-1 do begin
+    nodo2 := nodo.ChildNodes[i];
+    if UpCAse(nodo2.NodeName)='START' then begin  //definición alternativa de delimitador
+      tTokPos := ReadXMLParam(nodo2,'TokPos');
+      CheckXMLParams(nodo2, 'TokPos');
+      //agrega la referecnia del bloque al nuevo token delimitador
+      AddIniBlockToTok(trim(nodo2.TextContent), tTokPos.n, blq);
+    end else if UpCAse(nodo2.NodeName)='END' then begin  //definición alternativa de delimitador
+      tTokPos := ReadXMLParam(nodo2,'TokPos');
+      CheckXMLParams(nodo2, 'TokPos');
+      //agrega la referecnia del bloque al nuevo token delimitador
+      AddFinBlockToTok(trim(nodo2.TextContent), tTokPos.n, blq);
+    end else if ProcXMLSection(nodo2, blq) then begin  //definición de sección
+      //No es necesario procesar
+    end else if ProcXMLBlock(nodo2, blq) then begin  //definición de bloque anidado
+      //No es necesario procesar
+    end else if UpCase(nodo2.NodeName) = '#COMMENT' then begin
+      //solo para evitar que de mensaje de error
+    end else begin
+      raise ESynFacilSyn.Create(Format(ERR_INVAL_LAB_BLK,[nodo2.NodeName]));
+    end;
+  end;
+end;
+function TSynFacilSyn.ProcXMLSection(nodo: TDOMNode; blqPad: TFaSynBlock): boolean;
+//Verifica si el nodo tiene la etiqueta <SECCION>. De ser así, devuelve TRUE y lo procesa.
+//Si encuentra error, genera una excepción.
+var
+  i: integer;
+  tStart, tFolding, tName, tParent : TFaXMLatrib;
+  blq : TFaSynBlock;
+  tBackCol, tUnique: TFaXMLatrib;
+  nodo2  : TDOMNode;
+  tStartPos: TFaXMLatrib;
+  tFirstSec: TFaXMLatrib;
+  tTokenStart: TFaXMLatrib;
+  Success: boolean;
+begin
+  if UpCase(nodo.NodeName) <> 'SECTION' then exit(false);
+  Result := true;  //encontró
+  //lee atributos
+  tStart    := ReadXMLParam(nodo,'Start');
+  tTokenStart:= ReadXMLParam(nodo,'TokenStart');
+  tName     := ReadXMLParam(nodo,'Name');
+  tFolding  := ReadXMLParam(nodo,'Folding');    //Falso, si no existe
+  tParent   := ReadXMLParam(nodo,'Parent');
+  tBackCol  := ReadXMLParam(nodo,'BackCol');
+  tUnique   := ReadXMLParam(nodo,'Unique');
+  tFirstSec := ReadXMLParam(nodo,'FirstSec');
+  //validaciones
+  if not tFolding.hay then tFolding.bol:=true;  //por defecto
+  if not tName.hay then tName.val:='Sec'+IntToStr(lisBlocks.Count+1);
+  CheckXMLParams(nodo, 'Start TokenStart Name Folding Parent BackCol Unique FirstSec');
+  if tParent.hay then begin //se especificó blqPad padre
+    blqPad := SearchBlock(tParent.val, Success);  //ubica blqPad
+    if not Success then raise ESynFacilSyn.Create(ERR_BLK_NO_DEFINED + tParent.val);
+  end;
+  //crea la sección, con el bloque padre indicado, o el que viene en el parámetro
+  blq := CreateBlock(tName.val, tFolding.bol, blqPad);
+  blq.IsSection:=true;
+  if tStart.hay then begin   //configuración normal con "Start"
+    if tFirstSec.hay then begin  //hay primera sección
+      AddFirstSectToTok(tStart.val, 0, blq)
+    end else begin               //sección normal
+      AddIniSectToTok(tStart.val, 0, blq);
+    end;
+  end else if tTokenStart.hay  then begin  //configuración indicando nombre de token
+    {Se usará la misma función AddIniSectToTok(), para encontrar al token, pero
+     formalmente debería usarse una función especial para ubicar al token usnado
+     su nombre}
+    AddIniSectToTok(tTokenStart.val, 0, blq);
+  end;
+  if tBackCol.hay then begin
+    if UpCase(tBackCol.val)='TRANSPARENT' then blq.BackCol:= COL_TRANSPAR
+    else blq.BackCol:= tBackCol.col;   //lee color
+  end;
+  if tUnique.hay then blq.UniqSec:=tUnique.bol;  //lee Unique
+  ////////// explora nodos hijos //////////
+  for i := 0 to nodo.ChildNodes.Count-1 do begin
+      nodo2 := nodo.ChildNodes[i];
+      if UpCAse(nodo2.NodeName)='START' then begin  //definición alternativa de delimitador
+        tStartPos := ReadXMLParam(nodo2,'StartPos');
+        CheckXMLParams(nodo2, 'StartPos');
+        //agrega la referecnia del bloque al nuevo token delimitador
+        AddIniSectToTok(trim(nodo2.TextContent), tStartPos.n, blq);
+      end else if ProcXMLSection(nodo2, blq) then begin  //definición de sección
+        //No es necesario procesar
+      end else if ProcXMLBlock(nodo2, blq) then begin  //definición de bloque anidado
+        //No es necesario procesar
+      end else if UpCase(nodo2.NodeName) = '#COMMENT' then begin
+        //solo para evitar que de mensaje de error
+      end else begin
+        raise ESynFacilSyn.Create(Format(ERR_INVAL_LAB_SEC,[nodo2.NodeName]));
+      end;
+  end;
+end;
 procedure TSynFacilSyn.LoadFromFile(Arc: string);
 //Carga una sintaxis desde archivo
 var
   doc     : TXMLDocument;
   nodo    : TDOMNode;
-  i       : integer;
+  i, j    : integer;
   nombre  : string;
   tmp     : string;
+  p : tFaTokContent;
+  t : tFaRegExpType;
+  dStart: String;
   tipTok  : TSynHighlighterAttributes;
   tStart, tEnd, tContent, tAtrib : TFaXMLatrib;
   tRegex, tCharsStart, tMultiline, tFolding : TFaXMLatrib;
-  p : tFaTokContent;
-  t : tFaRegExpType;
-
-  function ProcSeccion(nodo: TDOMNode; blqPad: TFaSynBlock): boolean; forward;
-  function ProcBloque(nodo: TDOMNode; blqPad: TFaSynBlock): boolean;
-  //Verifica si el nodo tiene la etiqueta <BLOCK>. De ser así, devuelve TRUE y lo procesa.
-  //Si encuentra error, genera una excepción.
-  var
-    i: integer;
-    tStart, tFolding, tName, tParent : TFaXMLatrib;
-    tBackCol, tTokPos: TFaXMLatrib;
-    blq : TFaSynBlock;
-    nodo2  : TDOMNode;
-    Success: boolean;
-  begin
-    if UpCase(nodo.NodeName) <> 'BLOCK' then exit(false);
-    Result := true;  //encontró
-    //Lee atributos
-    tStart    := ReadXMLParam(nodo,'Start');
-    tEnd      := ReadXMLParam(nodo,'End');
-    tName     := ReadXMLParam(nodo,'Name');
-    tFolding  := ReadXMLParam(nodo,'Folding');    //Falso, si no existe
-    tParent   := ReadXMLParam(nodo,'Parent');
-    tBackCol  := ReadXMLParam(nodo,'BackCol');
-    //validaciones
-    if not tFolding.hay then tFolding.bol:=true;  //por defecto
-    if not tName.hay then tName.val:='Blk'+IntToStr(lisBlocks.Count+1);
-    CheckXMLParams(nodo, 'Start End Name Folding Parent BackCol');
-    if tParent.hay then begin //se especificó blqPad padre
-      blqPad := SearchBlock(tParent.val, Success);  //ubica blqPad
-      if not Success then raise ESynFacilSyn.Create(ERR_BLK_NO_DEFINED + tParent.val);
-    end;
-    //crea el blqoue, con el bloque padre indicado, o el que viene en el parámetro
-    blq := CreateBlock(tName.val, tFolding.bol, blqPad);
-    if tStart.hay then AddIniBlockToTok(tStart.val, 0, blq);
-    if tEnd.hay   then AddFinBlockToTok(tEnd.val, 0, blq);
-    if tBackCol.hay then begin //lee color
-      if UpCase(tBackCol.val)='TRANSPARENT' then blq.BackCol:= COL_TRANSPAR
-      else blq.BackCol:= tBackCol.col;
-    end;
-    ////////// explora nodos hijos //////////
-    for i := 0 to nodo.ChildNodes.Count-1 do begin
-      nodo2 := nodo.ChildNodes[i];
-      if UpCAse(nodo2.NodeName)='START' then begin  //definición alternativa de delimitador
-        tTokPos := ReadXMLParam(nodo2,'TokPos');
-        CheckXMLParams(nodo2, 'TokPos');
-        //agrega la referecnia del bloque al nuevo token delimitador
-        AddIniBlockToTok(trim(nodo2.TextContent), tTokPos.n, blq);
-      end else if UpCAse(nodo2.NodeName)='END' then begin  //definición alternativa de delimitador
-        tTokPos := ReadXMLParam(nodo2,'TokPos');
-        CheckXMLParams(nodo2, 'TokPos');
-        //agrega la referecnia del bloque al nuevo token delimitador
-        AddFinBlockToTok(trim(nodo2.TextContent), tTokPos.n, blq);
-      end else if ProcSeccion(nodo2, blq) then begin  //definición de sección
-        //No es necesario procesar
-      end else if ProcBloque(nodo2, blq) then begin  //definición de bloque anidado
-        //No es necesario procesar
-      end else if UpCase(nodo2.NodeName) = '#COMMENT' then begin
-        //solo para evitar que de mensaje de error
-      end else begin
-        raise ESynFacilSyn.Create(Format(ERR_INVAL_LAB_BLK,[nodo2.NodeName]));
-      end;
-    end;
-  end;
-  function ProcSeccion(nodo: TDOMNode; blqPad: TFaSynBlock): boolean;
-  //Verifica si el nodo tiene la etiqueta <SECCION>. De ser así, devuelve TRUE y lo procesa.
-  //Si encuentra error, genera una excepción.
-  var
-    i: integer;
-    tStart, tFolding, tName, tParent : TFaXMLatrib;
-    blq : TFaSynBlock;
-    tBackCol, tUnique: TFaXMLatrib;
-    nodo2  : TDOMNode;
-    tStartPos: TFaXMLatrib;
-    tFirstSec: TFaXMLatrib;
-    tTokenStart: TFaXMLatrib;
-    Success: boolean;
-  begin
-    if UpCase(nodo.NodeName) <> 'SECTION' then exit(false);
-    Result := true;  //encontró
-    //lee atributos
-    tStart    := ReadXMLParam(nodo,'Start');
-    tTokenStart:= ReadXMLParam(nodo,'TokenStart');
-    tName     := ReadXMLParam(nodo,'Name');
-    tFolding  := ReadXMLParam(nodo,'Folding');    //Falso, si no existe
-    tParent   := ReadXMLParam(nodo,'Parent');
-    tBackCol  := ReadXMLParam(nodo,'BackCol');
-    tUnique   := ReadXMLParam(nodo,'Unique');
-    tFirstSec := ReadXMLParam(nodo,'FirstSec');
-    //validaciones
-    if not tFolding.hay then tFolding.bol:=true;  //por defecto
-    if not tName.hay then tName.val:='Sec'+IntToStr(lisBlocks.Count+1);
-    CheckXMLParams(nodo, 'Start TokenStart Name Folding Parent BackCol Unique FirstSec');
-    if tParent.hay then begin //se especificó blqPad padre
-      blqPad := SearchBlock(tParent.val, Success);  //ubica blqPad
-      if not Success then raise ESynFacilSyn.Create(ERR_BLK_NO_DEFINED + tParent.val);
-    end;
-    //crea la sección, con el bloque padre indicado, o el que viene en el parámetro
-    blq := CreateBlock(tName.val, tFolding.bol, blqPad);
-    blq.IsSection:=true;
-    if tStart.hay then begin   //configuración normal con "Start"
-      if tFirstSec.hay then begin  //hay primera sección
-        AddFirstSectToTok(tStart.val, 0, blq)
-      end else begin               //sección normal
-        AddIniSectToTok(tStart.val, 0, blq);
-      end;
-    end else if tTokenStart.hay  then begin  //configuración indicando nombre de token
-      {Se usará la misma función AddIniSectToTok(), para encontrar al token, pero
-       formalmente debería usarse una función especial para ubicar al token usnado
-       su nombre}
-      AddIniSectToTok(tTokenStart.val, 0, blq);
-    end;
-    if tBackCol.hay then begin
-      if UpCase(tBackCol.val)='TRANSPARENT' then blq.BackCol:= COL_TRANSPAR
-      else blq.BackCol:= tBackCol.col;   //lee color
-    end;
-    if tUnique.hay then blq.UniqSec:=tUnique.bol;  //lee Unique
-    ////////// explora nodos hijos //////////
-    for i := 0 to nodo.ChildNodes.Count-1 do begin
-        nodo2 := nodo.ChildNodes[i];
-        if UpCAse(nodo2.NodeName)='START' then begin  //definición alternativa de delimitador
-          tStartPos := ReadXMLParam(nodo2,'StartPos');
-          CheckXMLParams(nodo2, 'StartPos');
-          //agrega la referecnia del bloque al nuevo token delimitador
-          AddIniSectToTok(trim(nodo2.TextContent), tStartPos.n, blq);
-        end else if ProcSeccion(nodo2, blq) then begin  //definición de sección
-          //No es necesario procesar
-        end else if ProcBloque(nodo2, blq) then begin  //definición de bloque anidado
-          //No es necesario procesar
-        end else if UpCase(nodo2.NodeName) = '#COMMENT' then begin
-          //solo para evitar que de mensaje de error
-        end else begin
-          raise ESynFacilSyn.Create(Format(ERR_INVAL_LAB_SEC,[nodo2.NodeName]));
-        end;
-    end;
-  end;
+  tMatch: TFaXMLatrib;
+  match: Boolean;
+  nodo2: TDOMNode;
+  tIfTrue,tIfFalse, tText: TFaXMLatrib;
 begin
 DebugLn('');
 DebugLn(' === Cargando archivo de sintaxis ===');
@@ -1089,38 +1023,22 @@ DebugLn(' === Cargando archivo de sintaxis ===');
        nombre := UpCase(nodo.NodeName);
        if (nombre = 'IDENTIFIERS') or (nombre = 'SYMBOLS') or
           (nombre = 'ATTRIBUTE') or (nombre = 'COMPLETION') or
-          (nombre = '#COMMENT') then begin
+          (nombre = 'SAMPLE') or(nombre = '#COMMENT') then begin
          //solo se incluye para evitar error de "etiqueta desconocida"
 //     end else if IsAttributeName(nombre)  then begin
        end else if nombre =  'KEYWORD' then begin
          //forma corta de <TOKEN ATTRIBUTE='KEYWORD'> lista </TOKEN>
          AddIdentSpecList(nodo.TextContent, tkKeyword);  //Carga Keywords
-       end else if nombre = 'COMMENT' then begin
-         //Lee atributos
-         tStart   := ReadXMLParam(nodo,'Start');
-         tEnd     := ReadXMLParam(nodo,'End');
-         tMultiline:=ReadXMLParam(nodo,'Multiline');  //Falso, si no existe
-         tFolding := ReadXMLParam(nodo,'Folding');    //Falso, si no existe
-         //Crea blqPad
-         CheckXMLParams(nodo, 'Start End Multiline Folding');
-         if tMultiline.bol then  //se asume multilínea
-           DefTokDelim(tStart.val, tEnd.val, tkComment, tdMulLin, tFolding.bol)
-         else
-           DefTokDelim(tStart.val, tEnd.val, tkComment, tdUniLin, tFolding.bol);
-       end else if nombre = 'STRING' then begin
-         //Lee atributos
-         tStart   := ReadXMLParam(nodo,'Start');
-         tEnd     := ReadXMLParam(nodo,'End');
-         tMultiline:=ReadXMLParam(nodo,'Multiline');  //Falso, si no existe
-         tFolding := ReadXMLParam(nodo,'Folding');    //Falso, si no existe
-         //Crea blqPad
-         CheckXMLParams(nodo, 'Start End Multiline Folding');
-         if tMultiline.bol then   //multilínea
-           DefTokDelim(tStart.val, tEnd.val, tkString, tdMulLin, tFolding.bol)
-         else
-           DefTokDelim(tStart.val, tEnd.val, tkString, tdUniLin, tFolding.bol);
-       end else if nombre = 'TOKEN' then begin
-         //Lee atributos
+       end else if (nombre = 'TOKEN') or
+                   (nombre = 'COMMENT') or (nombre = 'STRING') then begin
+         //Lee atributo
+         if nombre = 'TOKEN' then begin   //Es definición formal de token
+           tAtrib    := ReadXMLParam(nodo,'Attribute');
+           tipTok := GetAttribByName(tAtrib.val);
+         end else begin   //Es definición simplificada
+           tipTok := GetAttribByName(nombre)
+         end;
+         //Lee los otros parámetros
          tStart    := ReadXMLParam(nodo,'Start');
          tEnd      := ReadXMLParam(nodo,'End');
          tCharsStart:= ReadXMLParam(nodo,'CharsStart');
@@ -1128,33 +1046,60 @@ DebugLn(' === Cargando archivo de sintaxis ===');
          tRegex    := ReadXMLParam(nodo,'Regex');
          tMultiline:=ReadXMLParam(nodo,'Multiline');  //Falso, si no existe
          tFolding  := ReadXMLParam(nodo,'Folding');    //Falso, si no existe
-         tAtrib    := ReadXMLParam(nodo,'Attribute');
-         tipTok := GetAttribByName(tAtrib.val);
+         tMatch    := ReadXMLParam(nodo,'RegexMatch'); //Tipo de coincidencia
+         if (nombre = 'COMMENT') and not tEnd.hay then tEnd.hay := true; //por compatibilidad
          //verifica tipo de definición
          if tContent.hay then begin //Si hay "Content", es token por contenido
            CheckXMLParams(nodo, 'Start CharsStart Content Attribute');
-           if tCharsStart.hay then  //se define con lista de caracteres
-             tStart.val:='['+ToRegExp(tCharsStart.val)+']';
-           p := DefTokContent(tStart.val, tipTok);
+           dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador inicial
+           p := DefTokContent(dStart, tipTok);
            //define contenido
-           p.AddInstruct('['+ToRegExp(tContent.val)+']*');
+           p.AddInstruct(ToListRegex(tContent)+'*');
          end else if tRegex.hay then begin //definición de token por contenido con Regex
-           CheckXMLParams(nodo, 'Regex Attribute');
-           tmp := ExtractRegExp(tRegex.val, t);  //extrae primera expresión
-           p := DefTokContent(tmp, tipTok);
-           p.AddRegEx(tRegex.val);  //agrega la otra parte dela expresión
+           CheckXMLParams(nodo, 'Start CharsStart Regex Attribute RegexMatch');
+           match := UpCase(tMatch.val)='COMPLETE';
+           if tStart.hay or tCharsStart.hay then begin //modo con delimitador
+             dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador inicial
+             p := DefTokContent(dStart, tipTok);
+             p.AddRegEx(tRegex.val, match);  //agrega la otra parte de la expresión
+           end else begin  //modo simplificado: <token regex="" />
+             tmp := ExtractRegExp(tRegex.val, t);  //extrae primera expresión
+             p := DefTokContent(tmp, tipTok);
+             p.AddRegEx(tRegex.val, match);  //agrega la otra parte de la expresión
+           end;
          end else if tEnd.hay then begin //definición de token delimitado
            CheckXMLParams(nodo, 'Start CharsStart End Attribute Multiline Folding');
-           if tCharsStart.hay then  //se define con lista de caracteres
-             tStart.val:='['+ToRegExp(tCharsStart.val)+']';
+           dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador inicial
+           //no se espera que DefTokDelim(), genere error aquí.
            if tMultiline.bol then  //es multilínea
-             DefTokDelim(tStart.val, tEnd.val, tipTok, tdMulLin, tFolding.bol)
+             DefTokDelim(dStart, tEnd.val, tipTok, tdMulLin, tFolding.bol)
            else  //es de una sola líneas
-             DefTokDelim(tStart.val, tEnd.val, tipTok, tdUniLin, tFolding.bol);
+             DefTokDelim(dStart, tEnd.val, tipTok, tdUniLin, tFolding.bol);
+         end else begin  //definición incompleta
+           if tStart.hay or tCharsStart.hay then begin //se ha indicado delimitador inicial
+             dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador
+             p := DefTokContent(dStart, tipTok);  //crea un token por contenido
+             //Hasta aquí se creó un token por contenido. Explora sub-nodos
+             for j := 0 to nodo.ChildNodes.Count-1 do begin
+               nodo2 := nodo.ChildNodes[j];
+               if UpCAse(nodo2.NodeName)='REGEX' then begin  //instrucción
+                 tText := ReadXMLParam(nodo2,'Text');
+                 tIfTrue := ReadXMLParam(nodo2,'IfTrue');
+                 tIfFalse := ReadXMLParam(nodo2,'IfFalse');
+                 CheckXMLParams(nodo2, 'Text IfTrue IfFalse');
+                 //Agrega la instrucción
+                 p.AddInstruct(tText.val, tIfTrue.val, tIfFalse.val);
+               end else begin
+                 raise ESynFacilSyn.Create(Format(ERR_INVAL_LAB_TOK,[nodo2.NodeName]));
+               end;
+             end;
+           end else begin
+             raise ESynFacilSyn.Create(ERR_INCOMP_TOK_DEF_ + '<' + nombre + '...');
+           end;
          end;
-       end else if ProcBloque(nodo, nil) then begin  //bloques válidos en cualquier parte
+       end else if ProcXMLBlock(nodo, nil) then begin  //bloques válidos en cualquier parte
          //No es necesario hacer nada
-       end else if ProcSeccion(nodo, MainBlk) then begin //secciones en "MAIN"
+       end else if ProcXMLSection(nodo, MainBlk) then begin //secciones en "MAIN"
          //No es necesario hacer nada
        end else begin
           raise ESynFacilSyn.Create(Format(ERR_UNKNOWN_LABEL,[nombre]));
@@ -1330,28 +1275,6 @@ begin ProcIdentEsp(mC3);
 end;
 procedure TSynFacilSyn.metUnd;
 begin ProcIdentEsp(m_);
-end;
-procedure TSynFacilSyn.metNull;
-//Procesa la ocurrencia del cacracter #0
-begin
-  fTokenID := tkEol;   //Solo necesita esto para indicar que se llegó al final de la línae
-end;
-
-//********************* procesamiento de otros elementos ********************
-procedure TSynFacilSyn.metSpace;
-//Procesa caracter que es inicio de espacio
-begin
-  fTokenID := tkSpace;
-  repeat  //captura todos los que sean espacios
-    Inc(posFin);
-  until (fLine[posFin] > #32) or (posFin = tamLin);
-end;
-procedure TSynFacilSyn.metSymbol;
-begin
-  inc(posFin);
-  while (fProcTable[fLine[posFin]] = @metSymbol)
-  do inc(posFin);
-  fTokenID := tkSymbol;
 end;
 
 /////////// manejo de bloques
