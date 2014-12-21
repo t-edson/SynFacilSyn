@@ -8,12 +8,6 @@ uses
   StdCtrls, FormOut, SynEditHighlighter, SynFacilHighlighter, SynFacilBasic;
 
 type
-  //Class for to access "fRange"
-  TSynFacilSyn2 = class(TSynFacilSyn)
-  public
-    property ran : TPtrTokEspec read fRange write fRange;
-  end;
-
   { TForm1 }
   TForm1 = class(TForm)
     Button1: TButton;
@@ -33,7 +27,7 @@ type
 
 var
   Form1: TForm1;
-  xLex : TSynFacilSyn2;
+  xLex : TSynFacilSyn;
 
 implementation
 {$R *.lfm}
@@ -90,7 +84,7 @@ begin
                 '}'+LineEnding+'';
   //Explore
   xLex.ResetRange;    //para que inicie "fRange" apropiadamente
-  for lin in SynEdit1.lines do begin
+  for lin in lineas do begin
     xLex.SetLine(lin,0);    //xLex es el resaltador
     while not xLex.GetEol do begin
       ShowCurrentTok;
@@ -127,7 +121,7 @@ begin
     xLex.SetLine(lin,0);      //”xLex” es el resaltador
     while true do begin
       if xLex.GetEol then begin
-        lineas.Objects[i] := TObject(xLex.ran);
+        lineas.Objects[i] := TObject(xLex.Range);
         break;
       end;
 //      ShowCurrentTok;
@@ -136,7 +130,7 @@ begin
   end;
   ////////////Show token on line 6
   frmOut.puts('Token 1 at Line 6:');
-  xLex.ran := TPtrTokEspec(lineas.Objects[4]);  //recupera rango de la línea anterior
+  xLex.Range := TPtrTokEspec(lineas.Objects[4]);  //recupera rango de la línea anterior
   xLex.SetLine(lineas[5],0);     //asigna cadena
   ShowCurrentTok;
 
@@ -147,7 +141,7 @@ procedure TForm1.FormCreate(Sender: TObject);
 var
   blk: TFaSynBlock;
 begin
-  xLex := TSynFacilSyn2.Create(nil);   //crea lexer
+  xLex := TSynFacilSyn.Create(nil);   //crea lexer
   ///////////define syntax for the lexer
   xLex.ClearMethodTables;           //limpìa tabla de métodos
   xLex.ClearSpecials;               //para empezar a definir tokens

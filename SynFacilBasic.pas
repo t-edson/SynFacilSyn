@@ -217,11 +217,13 @@ type
     procedure CreateAttributes;  //limpia todos loa atributos
     function GetAttribByName(txt: string): TSynHighlighterAttributes;
     function IsAttributeName(txt: string): boolean;
-    protected function ProcXMLattribute(nodo: TDOMNode): boolean;
+    protected
+    function ProcXMLattribute(nodo: TDOMNode): boolean;
   end;
 
 function ExtractRegExp(var exp: string; var str: string; var listChars: string): tFaRegExpType;
 function ExtractRegExp(var exp: string; var RegexTyp: tFaRegExpType ): string;
+function ReplaceEscape(str: string): string;
 
 implementation
 const

@@ -31,6 +31,11 @@ LoadFromFile.ProcXMLBlock() en métodos y se les cambia de nombre.
 un texto de muestra.
 * Se modifica LoadFromFile(), para mejorar el procesamiento de tokens.
 * Se agrega soporte a LoadFromFile(), para definir tokens con expresiones regulares.
+* Se cambia la manera de trabajo de DefTokDelim() para uniformizarla con
+DefTokContent(). Ahora maneja sus parámetros como expresiones regulares.
+* Se crea el tipo TFaLexerState, y los métodos GetState() y SetState(), que
+antes estaba en TSYnFacilCompletion, para incluir rutinas de análisis léxico
+en esta unidad.
 
 En esta versión se dio un salto en cuanto a la definición de contenidos avanzados.
 Se cambia la forma como trabaja DefTokContent().
@@ -68,15 +73,31 @@ type
   end;
   TATokInfo = array of TFaTokInfo;
 
+  //Permite leer el estado actual del resaltador. Considera la posición actual de la
+  //exploración y el estado del rango, NO CONSIDERA el estado de los bloques de
+  //plegado. Se usa cuando se hace trabajar al resaltador como analizador léxico.
+  TFaLexerState = record
+    //propiedades fijadas al inicio de la línea y no cambian en toda la línea.
+    fLine      : PChar;         //puntero a línea de trabajo.
+    tamLin     : integer;       //tamaño de línea actual
+    //propiedades que van cambiando conforme se avanza en la exploración de la línea
+    posTok     : integer;       //para identificar el ordinal del token en una línea
+    BlkToClose : TFaSynBlock;   //bandera-variable para posponer el cierre de un bloque
+    posIni     : Integer;       //índice a inicio de token
+    posFin     : Integer;       //índice a siguiente token
+    fRange     : ^TTokSpec;    //para trabajar con tokens multilínea
+    fTokenID   : TSynHighlighterAttributes;  //Id del token actual
+  end;
+
   { TSynFacilSyn }
 
   TSynFacilSyn = class(TSynFacilSynBase)
-  protected   //variables internas
+  protected  //Variables internas
     lisBlocks  : TFaListBlocks; //lista de bloques de sintaxis
     delTok     : string;        //delimitador del bloque actual
     folTok     : boolean;       //indica si hay folding que cerrar en token delimitado
     nTokenCon  : integer;       //cantidad de tokens por contenido
-    fRange     : ^TTokSpec;    //para trabajar con tokens multilínea
+    fRange     : TPtrTokEspec;    //para trabajar con tokens multilínea
     BlkToClose : TFaSynBlock;   //bandera-variable para posponer el cierre de un bloque
     OnFirstTok : procedure of object;
     procedure SetTokContent(tc: tFaTokContent; dStart: string;
@@ -87,7 +108,7 @@ type
     function TopBlock: TFaSynBlock;
     function TopBlockOpac: TFaSynBlock;
     function SearchBlock(blk: string; var Success: boolean): TFaSynBlock;
-  protected   //Funciones de bajo nivel
+  protected  //Funciones de bajo nivel
     function CreaBuscIdeEspec(var mat: TPtrATokEspec; cad: string; var i: integer;
       TokPos: integer=0): boolean;
     function CreaBuscSymEspec(var mat: TPtrATokEspec; cad: string; var i: integer;
@@ -226,6 +247,12 @@ type
     procedure ProcRangeEndSym;
     procedure ProcRangeEndSym1;
     procedure ProcRangeEndIden;
+  private   //Utilidades para analizador léxico
+    function GetState: TFaLexerState;
+    procedure SetState(state: TFaLexerState);
+  public //Utilidades para analizador léxico
+    property Range: TPtrTokEspec read fRange; // write fRange;
+    property State: TFaLexerState read GetState write SetState;
   public     //métodos OVERRIDE
     procedure SetLine(const NewValue: String; LineNumber: Integer); override;
     procedure Next; override;
@@ -690,6 +717,7 @@ var
 begin
   if dEnd='' then dEnd := #13;  //no se permite delimitador final vacío
   ValidateParamStart(dStart, lisTmp);
+  dEnd := ReplaceEscape(dEnd);  //conveirte secuencias de escape
   VerifDelim(dEnd);
   //configura token especial
   for tmp in lisTmp do begin
@@ -1112,7 +1140,7 @@ DebugLn(' === Cargando archivo de sintaxis ===');
       //completa el mensaje
       e.Message:=ERROR_LOADING_ + Arc + #13#10 + e.Message;
       doc.Free;
-      raise
+      raise   //genera de nuevo
     end;
   end;
 end;
@@ -1626,6 +1654,38 @@ begin
   end;
   //definitívamente no se encuentra
   posFin := tamLin;  //apunta al fin de línea
+end;
+//Utilidades para analizadores léxicos
+function TSynFacilSyn.GetState: TFaLexerState;
+//Devuelve el estado actual del resaltador, pero sin considerar el estado de los bloque,
+//solo el estado de tokens y rangos.
+begin
+  //propiedades fijadas al inicio de la línea y no cambian en toda la línea.
+  Result.fLine    := fLine;
+  Result.tamLin   := tamLin;
+  //propiedades que van cambiando conforme se avanza en la exploración de la línea
+  Result.posTok   := posTok;
+  Result.BlkToClose:= BlkToClose;
+  Result.posIni   := posIni;
+  Result.posFin   := posFin;
+  Result.fRange   := fRange;
+  Result.fTokenID := fTokenID;
+end;
+procedure TSynFacilSyn.SetState(state: TFaLexerState);
+//Configura el estado actual del resaltador, pero sin considerar el estado de los bloque,
+//solo el estado de tokens y rangos.
+//Al cambiar el estado actual del resaltador, se pierde el estado que tenía.
+begin
+  //propiedades fijadas al inicio de la línea y no cambian en toda la línea.
+  fLine      := state.fLine;
+  tamLin     := state.tamLin;
+  //propiedades que van cambiando conforme se avanza en la exploración de la línea
+  posTok     := state.posTok;
+  BlkToClose := state.BlkToClose;
+  posIni     := state.posIni;
+  posFin     := state.posFin;
+  fRange     := state.fRange;
+  fTokenID   := state.fTokenID;
 end;
 
 procedure TSynFacilSyn.AddIniBlockToTok(dStart: string; TokPos: integer; blk: TFaSynBlock);
