@@ -59,6 +59,7 @@ type
   //Estructura para almacenar la descripción de los token por contenido
   tFaTokContent = class
     TokTyp    : TSynHighlighterAttributes;   //categoría de token por contenido
+    CaseSensitive: boolean;     //Usado para comparación de literales de cadena
 //    CharsToken: array[#0..#255] of ByteBool; //caracteres válidos para token por contenido
     //elementos adicionales no usados en esta versión
     Instrucs : array of tFaTokContentInst;  //Instrucciones del token por contenido
@@ -546,6 +547,7 @@ end;
 { tFaTokContent }
 procedure tFaTokContent.Clear;
 begin
+  CaseSensitive := false;   //por defecto
   nInstruc := 0;
   setLength(Instrucs,0);
 end;
@@ -717,7 +719,8 @@ begin
   tregString: begin      //Es de tipo texto literal
       n := AddItem(t, ifTrue, ifFalse)-1;  //agrega
       Instrucs[n].TokTyp := TokTyp0;
-      Instrucs[n].Text := str;
+      if CaseSensitive then Instrucs[n].Text := str
+      else Instrucs[n].Text := UpCase(str);  //ignora caja
     end;
   else
     raise ESynFacilSyn.Create(ERR_UNSUPPOR_EXP_ + expr);
@@ -1043,9 +1046,9 @@ end;
 procedure TSynFacilSynBase.metTokCont(const tc: tFaTokContent); //inline;
 //Procesa tokens por contenido
 var
-  n,i: Integer;
+  n,i : Integer;
   posFin0: Integer;
-  nf: Integer;
+  nf  : Integer;
   tam1: Integer;
 begin
   fTokenID := tc.TokTyp;   //pone tipo
@@ -1057,13 +1060,20 @@ begin
     tc.Instrucs[n].posFin := posFin;  //guarda posición al iniciar
     case tc.Instrucs[n].expTyp of
     tregString: begin  //texo literal
-        //rutina de comapración de cadenas
+        //Rutina de comparación de cadenas
         posFin0 := posFin;  //para poder restaurar
         i := 1;
         tam1 := length(tc.Instrucs[n].Text)+1;  //tamaño +1
-        while (i<tam1) and (tc.Instrucs[n].Text[i] = fLine[posFin]) do begin
-          inc(posFin);
-          inc(i);
+        if CaseSensitive then begin  //sensible a caja
+          while (i<tam1) and (tc.Instrucs[n].Text[i] = fLine[posFin]) do begin
+            inc(posFin);
+            inc(i);
+          end;
+        end else begin  //Ignora mayúcula/minúscula
+          while (i<tam1) and (tc.Instrucs[n].Text[i] = TabMayusc[fLine[posFin]]) do begin
+            inc(posFin);
+            inc(i);
+          end;
         end;
         //verifica la coincidencia
         if i = tam1 then begin //cumple
@@ -1292,7 +1302,8 @@ begin
   for c := #0 to #255 do begin
     CharsIdentif[c] := False;
     //aprovecha para crear la tabla de mayúsculas para comparaciones
-    if CaseSensitive then TabMayusc[c] := c
+    if CaseSensitive then
+      TabMayusc[c] := c
     else begin  //pasamos todo a mayúscula
       TabMayusc[c] := UpCase(c);
     end;

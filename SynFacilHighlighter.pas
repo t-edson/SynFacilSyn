@@ -506,6 +506,7 @@ var
 begin
   ValidateParamStart(dStart, lisTmp);   //Valida parámetro "dStart", y devuelve en lista.
   tc.TokTyp:= typToken;  //atributo inicial
+  tc.CaseSensitive := CaseSensitive;  //toma el mismo comportamiento de caja
   /////// Configura detección de inicio
   {Si es rango de caracteres, agrega cada caracter como símbolo especial, aunque parezca
   ineficiente. Pero de esta forma se podrán procesar tokens por contenido que empiecen
