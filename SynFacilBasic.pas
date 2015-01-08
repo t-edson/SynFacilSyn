@@ -223,7 +223,7 @@ type
   end;
 
 function ExtractRegExp(var exp: string; var str: string; var listChars: string): tFaRegExpType;
-function ExtractRegExp(var exp: string; var RegexTyp: tFaRegExpType ): string;
+function ExtractRegExpN(var exp: string; var RegexTyp: tFaRegExpType ): string;
 function ReplaceEscape(str: string): string;
 
 implementation
@@ -297,11 +297,11 @@ begin
         Result := copy(txt, 1,4);
       end;
       txt := copyEx(txt,5);
-    end else begin
-      if convert then begin    //toma caracter hexdecimal
-        //secuencia normal de dos caracteres
+    end else begin //se supone que es de tipo \A
+      //secuencia normal de dos caracteres
+      if convert then begin  //hay que convertirlo
         Result := txt[2];
-      end else begin
+      end else begin  //lo toma tal cual
         Result := copy(txt,1,2);
       end;
       txt := copyEx(txt,3);
@@ -332,7 +332,7 @@ begin
   Result := ExtractChar(txt, escaped, false);
 end;
 function ReplaceEscape(str: string): string;
-{Reemplaza las secuencias de eescape por su caracter real. Las secuencias de
+{Reemplaza las secuencias de escape por su caracter real. Las secuencias de
 escape recnocidas son:
 * Secuencia de 2 caracteres: "\#", donde # es un caracter cualquiera, excepto"x".
   Esta secuencia equivale al caracter "#".
@@ -347,6 +347,7 @@ Dentro de las expresiones regulares de esta librería, los caracteres: "[", "*",
 "\*" -> "*"
 "\?" -> "?"
 "\+" -> "+"
+"\x$$" -> caracter ASCII $$
 }
 begin
   Result := '';
@@ -380,7 +381,7 @@ procedure ValidateInterval(var cars: string);
 {Valida un conjunto de caracteres, expandiendo los intervalos de tipo "A-Z", y
 remplazando las secuencias de escape como: "\[", "\\", "\-", ...
 El caracter "-", se considera como indicador de intervalo, a menos que se encuentre
-en elprimer o ùltimocaracter de la cadena.
+en el primer o ùltimo caracter de la cadena.
 Si hay error genera una excepción.}
 var
   c, car1, car2: char;
@@ -392,7 +393,7 @@ begin
     raise ESynFacilSyn.Create(ERR_EMPTY_INTERVAL);
   car  := ExtractCharN(cars);  //Si el primer caracter es "-". lo toma literal.
   tmp := car;  //inicia cadena para acumular.
-  car1 := ExtractChar(car);    //Se asume que es inicio de intervalo. Ademas car<>''. No importa qye se pierda 'car'
+  car1 := ExtractChar(car);    //Se asume que es inicio de intervalo. Ademas car<>''. No importa que se pierda 'car'
   car := ExtractCharN(cars);   //extrae siguiente
   while car<>'' do begin
     if car = '-' then begin
@@ -432,6 +433,17 @@ var
 begin
   if exp= '' then
     raise ESynFacilSyn.Create(ERR_EMPTY_EXPRES);
+  //Reemplaza secuencias conocidas que equivalen a listas.
+  if exp = '\d' then begin
+    exp := '[0-9]' + copyEx(exp,3);
+  end else if exp = '\D' then begin
+    exp := '[^0-9]' + copyEx(exp,3);
+  end else if exp = '\w' then begin
+    exp := '[A-Za-z0-9]' + copyEx(exp,3);
+  end else if exp = '\W' then begin
+    exp := '[^A-Za-z0-9]' + copyEx(exp,3);
+  end;
+  //analiza la secuencia
   if (exp[1] = '[') and (length(exp)>1) then begin    //Es lista de caracteres
     f := PosChar(']', exp);  //Busca final, obviando "\]"
     if f=0 then
@@ -529,7 +541,7 @@ begin
     Result := tregString;
   end;
 end;
-function ExtractRegExp(var exp: string; var RegexTyp: tFaRegExpType ): string;
+function ExtractRegExpN(var exp: string; var RegexTyp: tFaRegExpType ): string;
 {Extrae parte de una expresión regular y la devuelve como cadena . Actualiza el
 tipo de expresión obtenida en "RegexTyp".
 No Reemplaza las secuencias de excape ni los intervalos, devuelve el text tal cual}
@@ -690,8 +702,10 @@ end;
 procedure tFaTokContent.AddOneInstruct(var exp: string;
                 ifTrue: string = 'next'; ifFalse: string = 'exit';
   TokTyp0: TSynHighlighterAttributes=nil);
-//Agrega una y solo instrucción al token por contenido. Si encuentra más de una
-//instrucción, genera una excepción.
+{Agrega una y solo instrucción al token por contenido. Si encuentra más de una
+instrucción, genera una excepción.
+Este es el punto de entrada único para agregar una instrucción de Regex a
+tFaTokContent}
 var
   list: String;
   str: string;
@@ -728,8 +742,8 @@ begin
 end;
 procedure tFaTokContent.AddInstruct(exp: string; ifTrue: string;
   ifFalse: string; TokTyp0: TSynHighlighterAttributes);
-//Agrega una instrucción para el procesamiento del token pro contenido.
-//Solo se dbe indicar una instrucción, de otra forma se generará un error.
+//Agrega una instrucción para el procesamiento del token por contenido.
+//Solo se debe indicar una instrucción, de otra forma se generará un error.
 var
   expr: String;
 begin
