@@ -65,7 +65,6 @@ type
     Instrucs : array of tFaTokContentInst;  //Instrucciones del token por contenido
     nInstruc : integer;      //Cantidad de instrucciones
     procedure Clear;
-//    function ValidateInterval(var cars: string): boolean;
     procedure AddInstruct(exp: string; ifTrue: string='next'; ifFalse: string='exit';
       TokTyp0: TSynHighlighterAttributes = nil);
     procedure AddRegEx(exp: string; Complete: boolean=false);
@@ -387,10 +386,19 @@ var
   c, car1, car2: char;
   car: string;
   tmp: String;
+  Invert: Boolean;
+  carsSet: set of char;
 begin
   //reemplaza intervalos
   if cars = '' then
     raise ESynFacilSyn.Create(ERR_EMPTY_INTERVAL);
+  //verifica si es lista invertida
+  Invert := false;
+  if cars[1] = '^' then begin
+    Invert := true;        //marca
+    cars := copyEx(cars,2);  //quita "^"
+  end;
+  //procesa contenido
   car  := ExtractCharN(cars);  //Si el primer caracter es "-". lo toma literal.
   tmp := car;  //inicia cadena para acumular.
   car1 := ExtractChar(car);    //Se asume que es inicio de intervalo. Ademas car<>''. No importa que se pierda 'car'
@@ -416,6 +424,16 @@ begin
   cars := ReplaceEscape(tmp);
   cars := StringReplace(cars, '%HIGH%', altos,[rfReplaceAll]);
   cars := StringReplace(cars, '%ALL%', bajos+altos,[rfReplaceAll]);
+  //Verifica si debe invertir lista
+  if Invert then begin
+    //Convierte a conjunto
+    carsSet := [];
+    for c in cars do carsSet += [c];
+    //Agrega caracteres
+    cars := '';
+    for c := #1 to #255 do  //no considera #0
+      if not (c in carsSet) then cars += c;
+  end;
 end;
 function ExtractRegExp(var exp: string; var str: string; var listChars: string): tFaRegExpType;
 {Extrae parte de una expresión regular y devuelve el tipo.
@@ -434,13 +452,13 @@ begin
   if exp= '' then
     raise ESynFacilSyn.Create(ERR_EMPTY_EXPRES);
   //Reemplaza secuencias conocidas que equivalen a listas.
-  if exp = '\d' then begin
+  if copy(exp,1,2) = '\d' then begin
     exp := '[0-9]' + copyEx(exp,3);
-  end else if exp = '\D' then begin
+  end else if copy(exp,1,2) = '\D' then begin
     exp := '[^0-9]' + copyEx(exp,3);
-  end else if exp = '\w' then begin
+  end else if copy(exp,1,2) = '\w' then begin
     exp := '[A-Za-z0-9]' + copyEx(exp,3);
-  end else if exp = '\W' then begin
+  end else if copy(exp,1,2) = '\W' then begin
     exp := '[^A-Za-z0-9]' + copyEx(exp,3);
   end;
   //analiza la secuencia
