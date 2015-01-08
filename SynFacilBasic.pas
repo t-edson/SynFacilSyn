@@ -21,10 +21,10 @@ type
   //simples. Solo incluyen literales de cadena o listas.
   tFaRegExpType = (
     tregString,   //Literal de cadena: "casa"
-    tregChars,    //Lista de caracteres: [A..Z]
-    tregChars01,  //Lista de caracteres: [A..Z]?
-    tregChars0_,  //Lista de caracteres: [A..Z]*
-    tregChars1_   //Lista de caracteres: [A..Z]+
+    tregChars,    //Lista de caracteres: [A-Z]
+    tregChars01,  //Lista de caracteres: [A-Z]?
+    tregChars0_,  //Lista de caracteres: [A-Z]*
+    tregChars1_   //Lista de caracteres: [A-Z]+
   );
 
   //Acciones a ejecutar en las comparaciones
@@ -376,78 +376,79 @@ begin
   end;
   Result := f;
 end;
-procedure ValidateInterval(var cars: string);
-{Valida un conjunto de caracteres, expandiendo los intervalos de tipo "A-Z", y
-remplazando las secuencias de escape como: "\[", "\\", "\-", ...
-El caracter "-", se considera como indicador de intervalo, a menos que se encuentre
-en el primer o ùltimo caracter de la cadena.
-Si hay error genera una excepción.}
-var
-  c, car1, car2: char;
-  car: string;
-  tmp: String;
-  Invert: Boolean;
-  carsSet: set of char;
-begin
-  //reemplaza intervalos
-  if cars = '' then
-    raise ESynFacilSyn.Create(ERR_EMPTY_INTERVAL);
-  //verifica si es lista invertida
-  Invert := false;
-  if cars[1] = '^' then begin
-    Invert := true;        //marca
-    cars := copyEx(cars,2);  //quita "^"
-  end;
-  //procesa contenido
-  car  := ExtractCharN(cars);  //Si el primer caracter es "-". lo toma literal.
-  tmp := car;  //inicia cadena para acumular.
-  car1 := ExtractChar(car);    //Se asume que es inicio de intervalo. Ademas car<>''. No importa que se pierda 'car'
-  car := ExtractCharN(cars);   //extrae siguiente
-  while car<>'' do begin
-    if car = '-' then begin
-      //es intervalo
-      car2 := ExtractChar(cars);   //caracter final
-      if car2 = #0 then begin
-        //Es intervalo incompleto, podría genera error, pero mejor asumimos que es el caracter "-"
-        tmp += '-';
-        break;  //sale por que se supone que ya no hay más caracteres
-      end;
-      //se tiene un intervalo que hay que reemplazar
-      for c := Chr(Ord(car1)+1) to car2 do  //No se incluye "car1", porque ya se agregó
-        tmp += c;
-    end else begin  //simplemente acumula
-      tmp += car;
-      car1 := ExtractChar(car);    //Se asume que es inicio de intervalo. No importa qye se pierda 'car'
-    end;
-    car := ExtractCharN(cars);  //extrae siguiente
-  end;
-  cars := ReplaceEscape(tmp);
-  cars := StringReplace(cars, '%HIGH%', altos,[rfReplaceAll]);
-  cars := StringReplace(cars, '%ALL%', bajos+altos,[rfReplaceAll]);
-  //Verifica si debe invertir lista
-  if Invert then begin
-    //Convierte a conjunto
-    carsSet := [];
-    for c in cars do carsSet += [c];
-    //Agrega caracteres
-    cars := '';
-    for c := #1 to #255 do  //no considera #0
-      if not (c in carsSet) then cars += c;
-  end;
-end;
 function ExtractRegExp(var exp: string; var str: string; var listChars: string): tFaRegExpType;
-{Extrae parte de una expresión regular y devuelve el tipo.
+{Extrae parte de una expresión regular y devuelve el tipo. Esta función se basa en
+que toda expresión regular se puede reducir a literales de cadenas o listas (con o
+sin cuantificador).
 En los casos de listas de caracteres, expande los intervalos de tipo: A..Z, reemplaza
 las secuencias de escape y devuelve la lista en "listChars".
 En el caso de que sea un literal de cadena, reemplaza las secuencias de escape y
 devuelve la cadena en "str".
 Soporta todas las formas definidas en "tFaRegExpType".
 Si encuentra error, genera una excepción.}
+  procedure ValidateInterval(var cars: string);
+  {Valida un conjunto de caracteres, expandiendo los intervalos de tipo "A-Z", y
+  remplazando las secuencias de escape como: "\[", "\\", "\-", ...
+  El caracter "-", se considera como indicador de intervalo, a menos que se encuentre
+  en el primer o ùltimo caracter de la cadena.
+  Si hay error genera una excepción.}
+  var
+    c, car1, car2: char;
+    car: string;
+    tmp: String;
+    Invert: Boolean;
+    carsSet: set of char;
+  begin
+    //reemplaza intervalos
+    if cars = '' then
+      raise ESynFacilSyn.Create(ERR_EMPTY_INTERVAL);
+    //verifica si es lista invertida
+    Invert := false;
+    if cars[1] = '^' then begin
+      Invert := true;        //marca
+      cars := copyEx(cars,2);  //quita "^"
+    end;
+    //procesa contenido
+    car  := ExtractCharN(cars);  //Si el primer caracter es "-". lo toma literal.
+    tmp := car;  //inicia cadena para acumular.
+    car1 := ExtractChar(car);    //Se asume que es inicio de intervalo. Ademas car<>''. No importa que se pierda 'car'
+    car := ExtractCharN(cars);   //extrae siguiente
+    while car<>'' do begin
+      if car = '-' then begin
+        //es intervalo
+        car2 := ExtractChar(cars);   //caracter final
+        if car2 = #0 then begin
+          //Es intervalo incompleto, podría genera error, pero mejor asumimos que es el caracter "-"
+          tmp += '-';
+          break;  //sale por que se supone que ya no hay más caracteres
+        end;
+        //se tiene un intervalo que hay que reemplazar
+        for c := Chr(Ord(car1)+1) to car2 do  //No se incluye "car1", porque ya se agregó
+          tmp += c;
+      end else begin  //simplemente acumula
+        tmp += car;
+        car1 := ExtractChar(car);    //Se asume que es inicio de intervalo. No importa qye se pierda 'car'
+      end;
+      car := ExtractCharN(cars);  //extrae siguiente
+    end;
+    cars := ReplaceEscape(tmp);
+    cars := StringReplace(cars, '%HIGH%', altos,[rfReplaceAll]);
+    cars := StringReplace(cars, '%ALL%', bajos+altos,[rfReplaceAll]);
+    //Verifica si debe invertir lista
+    if Invert then begin
+      //Convierte a conjunto
+      carsSet := [];
+      for c in cars do carsSet += [c];
+      //Agrega caracteres
+      cars := '';
+      for c := #1 to #255 do  //no considera #0
+        if not (c in carsSet) then cars += c;
+    end;
+  end;
 var
   f: Integer;
   tmp: string;
   lastAd: String;
-
 begin
   if exp= '' then
     raise ESynFacilSyn.Create(ERR_EMPTY_EXPRES);

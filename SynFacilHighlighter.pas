@@ -987,7 +987,7 @@ var
   nodo    : TDOMNode;
   i, j    : integer;
   nombre  : string;
-  tmp     : string;
+  subExp     : string;
   p : tFaTokContent;
   t : tFaRegExpType;
   dStart: String;
@@ -998,6 +998,7 @@ var
   match: Boolean;
   nodo2: TDOMNode;
   tIfTrue,tIfFalse, tText: TFaXMLatrib;
+  list: String;
 begin
 DebugLn('');
 DebugLn(' === Cargando archivo de sintaxis ===');
@@ -1056,8 +1057,15 @@ DebugLn(' === Cargando archivo de sintaxis ===');
              p := DefTokContent(dStart, tipTok);
              p.AddRegEx(tRegex.val, match);  //agrega la otra parte de la expresión
            end else begin  //modo simplificado: <token regex="" />
-             tmp := ExtractRegExpN(tRegex.val, t);  //extrae primera expresión
-             p := DefTokContent(tmp, tipTok);
+             subExp := ExtractRegExpN(tRegex.val, t);  //extrae primera expresión
+             if t = tregChars1_ then begin  //[A-Z]+
+               //Esta forma, normalmente no sería válida, pero se puede dividir
+               //en las formas [A-Z][A-Z]*, y así sería válida
+               list := copy(subExp, 1, length(subExp)-1);  //quita "+"
+               subExp := list;  //transforma
+               tRegex.val := list + '*' + tRegex.val;  //completa
+             end;
+             p := DefTokContent(subExp, tipTok);
              p.AddRegEx(tRegex.val, match);  //agrega la otra parte de la expresión
            end;
          end else if tEnd.hay then begin //definición de token delimitado
