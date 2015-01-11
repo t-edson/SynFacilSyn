@@ -457,10 +457,18 @@ begin
     exp := '[0-9]' + copyEx(exp,3);
   end else if copy(exp,1,2) = '\D' then begin
     exp := '[^0-9]' + copyEx(exp,3);
+  end else if copy(exp,1,2) = '\a' then begin
+    exp := '[A-Za-z]' + copyEx(exp,3);
   end else if copy(exp,1,2) = '\w' then begin
-    exp := '[A-Za-z0-9]' + copyEx(exp,3);
+    exp := '[A-Za-z0-9_]' + copyEx(exp,3);
   end else if copy(exp,1,2) = '\W' then begin
-    exp := '[^A-Za-z0-9]' + copyEx(exp,3);
+    exp := '[^A-Za-z0-9_]' + copyEx(exp,3);
+  end else if copy(exp,1,2) = '\s' then begin
+    exp := ' ' + copyEx(exp,3);
+  end else if copy(exp,1,2) = '\S' then begin
+    exp := '[^ ]' + copyEx(exp,3);
+  end else if copy(exp,1,2) = '\t' then begin
+    exp := '\x09' + copyEx(exp,3);
   end;
   //analiza la secuencia
   if (exp[1] = '[') and (length(exp)>1) then begin    //Es lista de caracteres
