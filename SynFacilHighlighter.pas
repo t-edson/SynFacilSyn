@@ -2,8 +2,12 @@
 * Se corrigen GetState() y SetState() para manejar más apropiadamente el estado
 del resaltador.
 * Se cambia el nombre del método ExtractRegExp() a ExtractRegExpN()
+* Se mejora la definición de tokens en la forma <Token Regex = ... >, de forma que permita
+que la expresión regular empiece con listas de tipo [A-Z]+.
+* Se corrigió una definición incorrecta en FirstXMLExplor(): con el método
+DefTokIdentif().
 
-En esta versión .
+En esta versión principalmente. se trabaja en mejorar el soporte para expresiones regulares.
 
                                     Por Tito Hinostroza  30/11/2014 - Lima Perú
 }
@@ -215,7 +219,7 @@ type
     function GetX: Integer; inline; //devuelve la posición X actual del resaltador
     function GetY: Integer; inline; //devuelve la posición Y actual del resaltador
     function GetXY: TPoint;  //devuelve la posición actual del resaltador
-    property Range: TPtrTokEspec read fRange; // write fRange;
+    property Range: TPtrTokEspec read fRange write fRange;
     property State: TFaLexerState read GetState write SetState;
   public     //métodos OVERRIDE
     procedure SetLine(const NewValue: String; LineNumber: Integer); override;
@@ -844,7 +848,7 @@ begin
   end;
   //verifica configuraciones por defecto
   if not defIDENTIF then //no se indicó etiqueta IDENTIFIERS
-    DefTokIdentif('[A-Za-z$_]', '[A-Za..z0-9_]*');  //def. por defecto
+    DefTokIdentif('[A-Za-z$_]', '[A-Za-z0-9_]*');  //def. por defecto
 //  if not defSIMBOLO then //no se indicó etiqueta SYMBOLS
 end;
 function TSynFacilSyn.ProcXMLBlock(nodo: TDOMNode; blqPad: TFaSynBlock): boolean;
@@ -1018,7 +1022,7 @@ DebugLn(' === Cargando archivo de sintaxis ===');
        if (nombre = 'IDENTIFIERS') or (nombre = 'SYMBOLS') or
           (nombre = 'ATTRIBUTE') or (nombre = 'COMPLETION') or
           (nombre = 'SAMPLE') or(nombre = '#COMMENT') then begin
-         //solo se incluye para evitar error de "etiqueta desconocida"
+         //No se hace nada. Solo se incluye para evitar error de "etiqueta desconocida"
 //     end else if IsAttributeName(nombre)  then begin
        end else if nombre =  'KEYWORD' then begin
          //forma corta de <TOKEN ATTRIBUTE='KEYWORD'> lista </TOKEN>
@@ -1062,7 +1066,7 @@ DebugLn(' === Cargando archivo de sintaxis ===');
                //Esta forma, normalmente no sería válida, pero se puede dividir
                //en las formas [A-Z][A-Z]*, y así sería válida
                list := copy(subExp, 1, length(subExp)-1);  //quita "+"
-               subExp := list;  //transforma
+               subExp := list;  //transforma en lista simple
                tRegex.val := list + '*' + tRegex.val;  //completa
              end;
              p := DefTokContent(subExp, tipTok);

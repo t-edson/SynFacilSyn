@@ -124,7 +124,6 @@ begin
         lineas.Objects[i] := TObject(xLex.Range);
         break;
       end;
-//      ShowCurrentTok;
       xLex.Next;  //pasa al siguiente
     end;
   end;
@@ -149,8 +148,7 @@ begin
   xLex.DefTokIdentif('[$A-Za-z_]', '[A-Za-z0-9_]*');
   xLex.DefTokContent('[0-9]', '[0-9.]*', xLex.tkNumber);
   //define keywords
-  xLex.AddIdentSpecList('var type program begin', xLex.tkKeyword);
-  xLex.AddIdentSpecList('end else elsif', xLex.tkKeyword);
+  xLex.AddIdentSpecList('begin end else elsif', xLex.tkKeyword);
   xLex.AddIdentSpecList('true false int string', xLex.tkKeyword);
   //create delimited tokens
   xLex.DefTokDelim('''','''', xLex.tkString);
