@@ -6,6 +6,7 @@ del resaltador.
 que la expresión regular empiece con listas de tipo [A-Z]+.
 * Se corrigió una definición incorrecta en FirstXMLExplor(): con el método
 DefTokIdentif().
+* Se agrega el procesamiento del caracter ".", para las expresiones regulares.
 
 En esta versión principalmente. se trabaja en mejorar el soporte para expresiones regulares.
 
