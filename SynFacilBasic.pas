@@ -40,9 +40,11 @@ type
     Chars    : array[#0..#255] of ByteBool; //caracteres
     Text     : string;             //cadena válida
     expTyp   : tFaRegExpType;      //tipo de expresión
-    TokTyp   : TSynHighlighterAttributes;   //tipo de token al salir
-    dMatch   : byte;   //desplazamiento en caso de coincidencia (0 = salir)
-    dMiss    : byte;   //desplazamiento en caso de no coincidencia (0 = salir)
+//    TokTyp   : TSynHighlighterAttributes;   //tipo de token al salir
+//    dMatch   : byte;   //desplazamiento en caso de coincidencia (0 = salir)
+//    dMiss    : byte;   //desplazamiento en caso de no coincidencia (0 = salir)
+    aMatch   : TSynHighlighterAttributes;  //atributo asignado en caso TRUE
+    aFail    : TSynHighlighterAttributes;  //atributo asignado en caso TRUE
     //Campos para ejecutar instrucciones, cuando No cumple
     actionFail : tFaActionOnMatch;
     destOnFail : integer;  //posición destino
@@ -65,13 +67,15 @@ type
     Instrucs : array of tFaTokContentInst;  //Instrucciones del token por contenido
     nInstruc : integer;      //Cantidad de instrucciones
     procedure Clear;
-    procedure AddInstruct(exp: string; ifTrue: string='next'; ifFalse: string='exit';
-      TokTyp0: TSynHighlighterAttributes = nil);
+    procedure AddInstruct(exp: string; ifTrue: string; ifFalse: string;
+      atMatch: TSynHighlighterAttributes=nil; atFail: TSynHighlighterAttributes=
+  nil);
     procedure AddRegEx(exp: string; Complete: boolean=false);
   private
     function AddItem(expTyp: tFaRegExpType; ifMatch, ifFail: string): integer;
-    procedure AddOneInstruct(var exp: string; ifTrue: string='next'; ifFalse: string
-      ='exit'; TokTyp0: TSynHighlighterAttributes=nil);
+    procedure AddOneInstruct(var exp: string; ifTrue: string; ifFalse: string;
+      atMatch: TSynHighlighterAttributes=nil; atFail: TSynHighlighterAttributes=
+  nil);
   end;
 
   ///////// Definiciones básicas para el resaltador ///////////
@@ -104,16 +108,17 @@ type
     typDel: TFaTypeDelim;  {indica si el token especial actual, es en realidad, el
                             delimitador inicial de un token delimitado o por contenido}
     dEnd  : string;        //delimitador final (en caso de que sea delimitador)
-    pRange: TFaProcRange;    //procedimiento para procesar el token o rango(si es multilinea)
+    pRange: TFaProcRange;  //procedimiento para procesar el token o rango(si es multilinea)
     folTok: boolean;       //indica si el token delimitado, tiene plegado
+    chrEsc: char;          //Caracter de escape de token delimitado. Si no se usa, contiene #0.
     //propiedades para manejo de bloques y plegado de código
-    bloIni : boolean;       //indica si el token es inicio de bloque de plegado
+    bloIni : boolean;      //indica si el token es inicio de bloque de plegado
     bloIniL: array of TFaSynBlock;  //lista de referencias a los bloques que abre
-    bloFin : boolean;       //indica si el token es fin de bloque de plegado
+    bloFin : boolean;      //indica si el token es fin de bloque de plegado
     bloFinL: array of TFaSynBlock;  //lista de referencias a los bloques que cierra
-    secIni : boolean;       //indica si el token es inicio de sección de bloque
+    secIni : boolean;      //indica si el token es inicio de sección de bloque
     secIniL: array of TFaSynBlock;  //lista de bloques de los que es inicio de sección
-    firstSec: TFaSynBlock;     //sección que se debe abrir al abrir el bloque
+    firstSec: TFaSynBlock; //sección que se debe abrir al abrir el bloque
   end;
 
   TArrayTokSpec = array of TTokSpec;
@@ -573,7 +578,7 @@ end;
 function ExtractRegExpN(var exp: string; var RegexTyp: tFaRegExpType ): string;
 {Extrae parte de una expresión regular y la devuelve como cadena . Actualiza el
 tipo de expresión obtenida en "RegexTyp".
-No Reemplaza las secuencias de excape ni los intervalos, devuelve el text tal cual}
+No Reemplaza las secuencias de excape ni los intervalos, devuelve el texto tal cual}
 var
   listChars, str: string;
   exp0: String;
@@ -594,7 +599,7 @@ begin
 end;
 function tFaTokContent.AddItem(expTyp: tFaRegExpType; ifMatch, ifFail: string): integer;
 //Agrega un ítem a la lista Instrucs[]. Devuelve el número de ítems.
-//Configura el comportamiento de la instrucciómn usando "ifMatch".
+//Configura el comportamiento de la instrucción usando "ifMatch".
 var
   ifMatch0, ifFail0: string;
 
@@ -728,11 +733,11 @@ begin
     end;
   end;
 end;
-procedure tFaTokContent.AddOneInstruct(var exp: string;
-                ifTrue: string = 'next'; ifFalse: string = 'exit';
-  TokTyp0: TSynHighlighterAttributes=nil);
+procedure tFaTokContent.AddOneInstruct(var exp: string; ifTrue: string; ifFalse: string;
+      atMatch: TSynHighlighterAttributes=nil; atFail: TSynHighlighterAttributes=nil);
 {Agrega una y solo instrucción al token por contenido. Si encuentra más de una
-instrucción, genera una excepción.
+instrucción, genera una excepción. Si se pone ifTrue en blnnco, se asumirá 'next',
+si se pone "ifFalse" en blanco, se se asumirá 'exit'.
 Este es el punto de entrada único para agregar una instrucción de Regex a
 tFaTokContent}
 var
@@ -754,14 +759,21 @@ begin
   tregChars1_:  //Es de tipo lista de caracteres [...]+
     begin
       n := AddItem(t, ifTrue, ifFalse)-1;  //agrega
-      Instrucs[n].TokTyp := TokTyp0;
+      if atMatch=nil then Instrucs[n].aMatch :=TokTyp  //toma atributo de la clase
+      else Instrucs[n].aMatch:= atMatch;
+      if atFail=nil then Instrucs[n].aFail := TokTyp   //toma atributo de la clase
+      else Instrucs[n].aFail:= atFail;
       //Configura caracteres de contenido
       for c := #0 to #255 do Instrucs[n].Chars[c] := False;
       for c in list do Instrucs[n].Chars[c] := True;
     end;
   tregString: begin      //Es de tipo texto literal
       n := AddItem(t, ifTrue, ifFalse)-1;  //agrega
-      Instrucs[n].TokTyp := TokTyp0;
+      if atMatch=nil then Instrucs[n].aMatch :=TokTyp  //toma atributo de la clase
+      else Instrucs[n].aMatch:= atMatch;
+      if atFail=nil then Instrucs[n].aFail := TokTyp   //toma atributo de la clase
+      else Instrucs[n].aFail:= atFail;
+      //configura cadena
       if CaseSensitive then Instrucs[n].Text := str
       else Instrucs[n].Text := UpCase(str);  //ignora caja
     end;
@@ -769,15 +781,15 @@ begin
     raise ESynFacilSyn.Create(ERR_UNSUPPOR_EXP_ + expr);
   end;
 end;
-procedure tFaTokContent.AddInstruct(exp: string; ifTrue: string;
-  ifFalse: string; TokTyp0: TSynHighlighterAttributes);
+procedure tFaTokContent.AddInstruct(exp: string; ifTrue: string; ifFalse: string;
+      atMatch: TSynHighlighterAttributes=nil; atFail: TSynHighlighterAttributes=nil);
 //Agrega una instrucción para el procesamiento del token por contenido.
 //Solo se debe indicar una instrucción, de otra forma se generará un error.
 var
   expr: String;
 begin
   expr := exp;   //guarda, porque se va a trozar
-  AddOneInstruct(exp, ifTrue, ifFalse, TokTyp0);  //si hay error genera excepción
+  AddOneInstruct(exp, ifTrue, ifFalse, atMatch, atFail);  //si hay error genera excepción
   //Si llegó aquí es porque se obtuvo una expresión válida, pero la
   //expresión continua.
   if exp<>'' then begin
@@ -804,7 +816,7 @@ begin
   end else begin
     //La coinicidencia puede ser parcial
     while exp<>'' do begin
-      AddOneInstruct(exp);  //en principio, siempre debe coger una expresión
+      AddOneInstruct(exp,'','');  //en principio, siempre debe coger una expresión
     end;
   end;
 end;
@@ -1095,8 +1107,6 @@ var
   tam1: Integer;
 begin
   fTokenID := tc.TokTyp;   //pone tipo
-//  repeat inc(posFin);
-//  until not tc.CharsToken[fLine[posFin]];
   inc(posFin);  //para pasar al siguiente caracter
   n := 0;
   while n<tc.nInstruc do begin
@@ -1120,6 +1130,7 @@ begin
         end;
         //verifica la coincidencia
         if i = tam1 then begin //cumple
+          fTokenID := tc.Instrucs[n].aMatch;  //pone atributo
           case tc.Instrucs[n].actionMatch of
           aomNext:;   //no hace nada, pasa al siguiente elemento
           aomExit: break;    //simplemente sale
@@ -1134,6 +1145,7 @@ begin
           end;
           end;
         end else begin      //no cumple
+          fTokenID := tc.Instrucs[n].aFail;  //pone atributo
           posFin := posFin0;   //restaura posición
           case tc.Instrucs[n].actionFail of
           aomNext:;   //no hace nada, pasa al siguiente elemento
@@ -1220,6 +1232,7 @@ begin
           inc(posFin);
         end;
         if posFin>posFin0 then begin   //Cumple el caracter
+          fTokenID := tc.Instrucs[n].aMatch;  //pone atributo
           case tc.Instrucs[n].actionMatch of
           aomNext:;   //no hace nada, pasa al siguiente elemento
           aomExit: break;    //simplemente sale
@@ -1234,6 +1247,7 @@ begin
           end;
           end;
         end else begin   //No cumple
+          fTokenID := tc.Instrucs[n].aFail;  //pone atributo
           case tc.Instrucs[n].actionFail of
           aomNext:;   //no hace nada, pasa al siguiente elemento
           aomExit: break;    //simplemente sale

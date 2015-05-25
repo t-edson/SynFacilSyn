@@ -39,11 +39,10 @@
         <PackageName Value="LCL"/>
       </Item2>
     </RequiredPackages>
-    <Units Count="5">
+    <Units Count="3">
       <Unit0>
         <Filename Value="project1.lpr"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="project1"/>
       </Unit0>
       <Unit1>
         <Filename Value="unit1.pas"/>
@@ -54,20 +53,9 @@
         <UnitName Value="Unit1"/>
       </Unit1>
       <Unit2>
-        <Filename Value="usintax.pas"/>
-        <IsPartOfProject Value="True"/>
-        <UnitName Value="uSintax"/>
-      </Unit2>
-      <Unit3>
-        <Filename Value="usintaxsf.pas"/>
-        <IsPartOfProject Value="True"/>
-        <UnitName Value="uSintaxSF"/>
-      </Unit3>
-      <Unit4>
         <Filename Value="synhighlighterfacil.pas"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="SynHighlighterFacil"/>
-      </Unit4>
+      </Unit2>
     </Units>
   </ProjectOptions>
   <CompilerOptions>
@@ -84,9 +72,7 @@
     <Other>
       <CompilerMessages>
         <IgnoredMessages idx5057="True"/>
-        <MsgFileName Value=""/>
       </CompilerMessages>
-      <CompilerPath Value="$(CompPath)"/>
     </Other>
   </CompilerOptions>
   <Debugging>
