@@ -1,4 +1,4 @@
-SynFacilSyn 1.1b
+SynFacilSyn 1.1
 ===============
 
 Scriptable Highlighter for SynEdit Component of Lazarus 
@@ -42,7 +42,7 @@ Features
 
 •	It can use basic Regex for the token definition.
 
-•	Includes a script language for to define complex definitions of tokens.
+•	Includes a script language for to create complex definitions of tokens.
 
 Using on a program.
 
