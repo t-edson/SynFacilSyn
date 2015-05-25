@@ -42,6 +42,8 @@ Features
 
 •	It can use basic Regex for the token definition.
 
+•	Includes a script language for to define complex definitions of tokens.
+
 Using on a program.
 
 This highlighter, is contained on two files: "SynFacilHighlighter.pas" and "SynFacilBasic.pas". You should copy them to the folder where the project is working, or on your personal units path.

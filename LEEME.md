@@ -41,6 +41,8 @@ Características
 
 •	Puede manejar expresiones regulares sencillas para la definición de tokens.
 
+•	Incluye un lenguaje de guíon para implementar definiciones complejas de tokens. 
+
 Uso dentro de un programa.
 
 Este resaltador, se compone de dos archivos que son  "SynFacilHighlighter.pas” y "SynFacilBasic.pas”. Se deben descargar estos archivos y copiarlos en la carpeta donde está el proyecto de trabajo o en la carpeta de unidades.

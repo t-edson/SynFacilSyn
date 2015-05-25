@@ -1,4 +1,4 @@
-{                               TSynFacilSyn 1.1b
+{                               TSynFacilSyn 1.1
 * Se corrigen GetState() y SetState() para manejar más apropiadamente el estado
 del resaltador.
 * Se cambia el nombre del método ExtractRegExp() a ExtractRegExpN()
@@ -19,10 +19,11 @@ archivos XML.
 
 * Se agregan los campos "aMatch" y "aFail" a tFaTokContentInst para mejorar la
 definición avanzada de tokens usando regex.
-* Se amplía la definiición avanzada de tokens por contenido, agregando lso parámetros "AtTrue"
+* Se amplía la definiición avanzada de tokens por contenido, agregando los parámetros "AtTrue"
 y "AtFalse" a la etiqueta <Regex ...>. Aún no está operativo.
 * Se modifican los parámetros de AddOneInstruct() y AddInstruct() para que acepten
 los atributos nuevos de tFaTokContentInst.
+* Se modifica metTokCont(), para que acepte el procesamiento de los nuevosparámetros de "Regex"
 
 Bug detectado: La definición:
 <Token CharsStart='"' Attribute='STRING'>
@@ -42,6 +43,11 @@ Bug detectado: La definición, similar a la anterior pero cambiando la línea 2:
   <Regex Text='.' IfTrue='move(-3)'></Regex>
 </Token>
 Tampoco funciona.
+
+Queda pendiente incluir el procesamiento de los paréntesis en las expresiones regulares,
+como una forma sencilla de definir bloques de Regex, sin tener que usar la definición
+avanzada. También se podría ver si se puede mejorar el soporte de Regex, sobre todo para el
+caso de expresiones como ".*a".
 
 En esta versión principalmente. se trabaja en mejorar el soporte para expresiones regulares.
 

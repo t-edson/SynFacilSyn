@@ -67,7 +67,7 @@ type
     Instrucs : array of tFaTokContentInst;  //Instrucciones del token por contenido
     nInstruc : integer;      //Cantidad de instrucciones
     procedure Clear;
-    procedure AddInstruct(exp: string; ifTrue: string; ifFalse: string;
+    procedure AddInstruct(exp: string; ifTrue: string=''; ifFalse: string='';
       atMatch: TSynHighlighterAttributes=nil; atFail: TSynHighlighterAttributes=
   nil);
     procedure AddRegEx(exp: string; Complete: boolean=false);
@@ -781,7 +781,7 @@ begin
     raise ESynFacilSyn.Create(ERR_UNSUPPOR_EXP_ + expr);
   end;
 end;
-procedure tFaTokContent.AddInstruct(exp: string; ifTrue: string; ifFalse: string;
+procedure tFaTokContent.AddInstruct(exp: string; ifTrue: string=''; ifFalse: string='';
       atMatch: TSynHighlighterAttributes=nil; atFail: TSynHighlighterAttributes=nil);
 //Agrega una instrucción para el procesamiento del token por contenido.
 //Solo se debe indicar una instrucción, de otra forma se generará un error.
@@ -1106,7 +1106,7 @@ var
   nf  : Integer;
   tam1: Integer;
 begin
-  fTokenID := tc.TokTyp;   //pone tipo
+  fTokenID := tc.TokTyp;   //No debería ser necesario ya que se asignará después.
   inc(posFin);  //para pasar al siguiente caracter
   n := 0;
   while n<tc.nInstruc do begin
@@ -1166,6 +1166,7 @@ begin
         //debe existir solo una vez
         if tc.Instrucs[n].Chars[fLine[posFin]] then begin
           //cumple el caracter
+          fTokenID := tc.Instrucs[n].aMatch;  //pone atributo
           inc(posFin);  //pasa a la siguiente instrucción
           //Cumple el caracter
           case tc.Instrucs[n].actionMatch of
@@ -1183,6 +1184,7 @@ begin
           end;
         end else begin
           //no se encuentra ningún caracter de la lista
+          fTokenID := tc.Instrucs[n].aFail;  //pone atributo
           case tc.Instrucs[n].actionFail of
           aomNext:;   //no hace nada, pasa al siguiente elemento
           aomExit: break;    //simplemente sale
@@ -1204,6 +1206,7 @@ begin
           inc(posFin);  //pasa a la siguiente instrucción
         end;
         //siempre cumplirá este tipo, no hay nada que verificar
+        fTokenID := tc.Instrucs[n].aMatch;  //pone atributo
         case tc.Instrucs[n].actionMatch of
         aomNext:;   //no hace nada, pasa al siguiente elemento
         aomExit: break;    //simplemente sale
@@ -1224,6 +1227,8 @@ begin
           inc(posFin);
         end;
         //siempre cumplirá este tipo, no hay nada que verificar
+        fTokenID := tc.Instrucs[n].aMatch;  //pone atributo
+        //¿No debería haber código aquí también?
       end;
     tregChars1_: begin   //conjunto de caracteres: [ ... ]+
         //debe existir una o más veces
