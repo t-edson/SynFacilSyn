@@ -617,7 +617,7 @@ var
 //    Result := copy(txt,1,p);
 //    txt := copyEx(txt, p+1);
   end;
-  function extractPar(var txt: string; var hasSign: boolean; errMsg: string): integer;
+  function extractPar(var txt: string; errMsg: string): integer;
   //Extrae un valor numérico
   var
     p, p0: Integer;
@@ -627,19 +627,17 @@ var
     if txt = '' then exit(0);
     if txt[1] = '(' then begin
       //caso esperado
-      hasSign := false;
       p := 2;  //explora
       if not (txt[2] in ['+','-','0'..'9']) then  //validación
         raise ESynFacilSyn.Create(errMsg + ifFail0);
+      sign := 1;  //signo por defecto
       if txt[2] = '+' then begin
-        hasSign := true;
         p := 3;  //siguiente caracter
         sign := 1;
         if not (txt[3] in ['0'..'9']) then
           raise ESynFacilSyn.Create(errMsg + ifFail0);
       end;
       if txt[2] = '-' then begin
-        hasSign := true;
         p := 3;  //siguiente caracter
         sign := -1;
         if not (txt[3] in ['0'..'9']) then
@@ -669,7 +667,6 @@ var
 
 var
   inst: String;
-  hasSign: boolean;
   n: Integer;
 begin
   ifMatch0 := ifMatch;  //guarda valor original
@@ -693,13 +690,13 @@ begin
       end else if inst = 'EXIT' then begin  //se pide salir
         if HavePar(ifMatch) then begin  //EXIT con parámetro
           Instrucs[n].actionMatch := aomExitpar;
-          Instrucs[n].destOnMatch := n + extractPar(ifMatch, hasSign, ERR_SYN_PAR_IFMATCH_);
+          Instrucs[n].destOnMatch := n + extractPar(ifMatch, ERR_SYN_PAR_IFMATCH_);
         end else begin   //EXIT sin parámetros
           Instrucs[n].actionMatch := aomExit;
         end;
       end else if inst = 'MOVE' then begin
         Instrucs[n].actionMatch := aomMovePar;  //Mover a una posición
-        Instrucs[n].destOnMatch := n + extractPar(ifMatch, hasSign, ERR_SYN_PAR_IFMATCH_);
+        Instrucs[n].destOnMatch := n + extractPar(ifMatch, ERR_SYN_PAR_IFMATCH_);
       end else begin
         raise ESynFacilSyn.Create(ERR_SYN_PAR_IFMATCH_ + ifMatch0);
       end;
@@ -717,13 +714,13 @@ begin
       end else if inst = 'EXIT' then begin  //se pide salir
         if HavePar(ifFail) then begin  //EXIT con parámetro
           Instrucs[n].actionFail := aomExitpar;
-          Instrucs[n].destOnFail := n + extractPar(ifFail, hasSign, ERR_SYN_PAR_IFFAIL_);
+          Instrucs[n].destOnFail := n + extractPar(ifFail, ERR_SYN_PAR_IFFAIL_);
         end else begin   //EXIT sin parámetros
           Instrucs[n].actionFail := aomExit;
         end;
       end else if inst = 'MOVE' then begin
         Instrucs[n].actionFail := aomMovePar;  //Mover a una posición
-        Instrucs[n].destOnFail := n + extractPar(ifFail, hasSign, ERR_SYN_PAR_IFFAIL_);
+        Instrucs[n].destOnFail := n + extractPar(ifFail, ERR_SYN_PAR_IFFAIL_);
       end else begin
         raise ESynFacilSyn.Create(ERR_SYN_PAR_IFFAIL_ + ifFail0);
       end;

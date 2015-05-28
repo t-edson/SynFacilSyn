@@ -20,10 +20,14 @@ archivos XML.
 * Se agregan los campos "aMatch" y "aFail" a tFaTokContentInst para mejorar la
 definición avanzada de tokens usando regex.
 * Se amplía la definiición avanzada de tokens por contenido, agregando los parámetros "AtTrue"
-y "AtFalse" a la etiqueta <Regex ...>. Aún no está operativo.
+y "AtFalse" a la etiqueta <Regex ...>. También ahora, se permiten comentarios.
 * Se modifican los parámetros de AddOneInstruct() y AddInstruct() para que acepten
 los atributos nuevos de tFaTokContentInst.
 * Se modifica metTokCont(), para que acepte el procesamiento de los nuevosparámetros de "Regex"
+
+* Se simplifica tFaTokContent.AddItem(), y se corrige un error con respecto al cálculo del
+desplazamiento para las instrucciones move().
+
 
 Bug detectado: La definición:
 <Token CharsStart='"' Attribute='STRING'>
@@ -1147,6 +1151,8 @@ DebugLn(' === Cargando archivo de sintaxis ===');
                  //Agrega la instrucción
                  p.AddInstruct(tText.val, tIfTrue.val, tIfFalse.val,
                        GetAttribByName(tAtTrue.val), GetAttribByName(tAtFalse.val));
+               end else if UpCase(nodo2.NodeName)='#COMMENT' then begin
+                 //solo lo deja pasar,para no generar error
                end else begin
                  raise ESynFacilSyn.Create(Format(ERR_INVAL_LAB_TOK,[nodo2.NodeName]));
                end;
