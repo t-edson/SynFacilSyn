@@ -56,7 +56,7 @@ caso de expresiones como ".*a".
 En esta versión principalmente. se trabaja en mejorar el soporte para expresiones regulares.
 
 
-                                    Por Tito Hinostroza  24/05/2015 - Lima Perú
+                                    Por Tito Hinostroza  26/05/2015 - Lima Perú
 }
 unit SynFacilHighlighter;
 {$mode objfpc}{$H+}
