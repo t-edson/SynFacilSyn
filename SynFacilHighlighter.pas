@@ -1,69 +1,30 @@
-{                               TSynFacilSyn 1.1
-* Se corrigen GetState() y SetState() para manejar más apropiadamente el estado
-del resaltador.
-* Se cambia el nombre del método ExtractRegExp() a ExtractRegExpN()
-* Se mejora la definición de tokens en la forma <Token Regex = ... >, de forma que permita
-que la expresión regular empiece con listas de tipo [A-Z]+.
-* Se corrigió una definición incorrecta en FirstXMLExplor(): con el método
-DefTokIdentif().
-* Se agrega el procesamiento del caracter ".", para las expresiones regulares. El procesamiento,
-sin embargo, no está implementado completamente, sino en forma básica.
-* Se agrega el campo chrEsc a TTokSpec, para implementar la funcionalidad de caracter
-de escape en los tokens delimitados.
-* Se modifica DefTokDelim(), argegándole el parámetro "chrEscape", para permitir
-definir un caracter de escape.
-* Se agrega el parámetro "Escape" para la definición de tokens delimitados en los
-archivos XML.
-* Se cambia el nombre del método ProcFinLinea() a ProcEndLine().
-* Se cambia el nombre del método ProcIdentEsp() a metIdentEsp().
-
-* Se agregan los campos "aMatch" y "aFail" a tFaTokContentInst para mejorar la
-definición avanzada de tokens usando regex.
-* Se amplía la definiición avanzada de tokens por contenido, agregando los parámetros "AtTrue"
-y "AtFalse" a la etiqueta <Regex ...>. También ahora, se permiten comentarios.
-* Se modifican los parámetros de AddOneInstruct() y AddInstruct() para que acepten
-los atributos nuevos de tFaTokContentInst.
-* Se modifica metTokCont(), para que acepte el procesamiento de los nuevosparámetros de "Regex"
-
-* Se simplifica tFaTokContent.AddItem(), y se corrige un error con respecto al cálculo del
-desplazamiento para las instrucciones move().
-
-
-Bug detectado: La definición:
-<Token CharsStart='"' Attribute='STRING'>
-  <Regex Text='[^"\\]*' ></Regex>
-  <Regex Text='"' IfTrue='exit' IfFalse='next'></Regex>
-  <Regex Text='.'></Regex>
-  <Regex Text='.' IfTrue='move(-3)'></Regex>
-</Token>
-dará error en al segunda línea, porque el método PosChar() no es capaz de encontrar el
-delimitador "]" cuando esté delante de "\".
-
-Bug detectado: La definición, similar a la anterior pero cambiando la línea 2:
-<Token CharsStart='"' Attribute='STRING'>
-  <Regex Text='[^\\"]*' ></Regex>
-  <Regex Text='"' IfTrue='exit' IfFalse='next'></Regex>
-  <Regex Text='.'></Regex>
-  <Regex Text='.' IfTrue='move(-3)'></Regex>
-</Token>
-Tampoco funciona.
+{                               TSynFacilSyn 1.11b
+* Se corrige el valor devuelto por GetY().
+* Se modificó ExtractRegExp() para corregir las falla de la versión anaterior, relacionada con
+el problema para procesar correctamente las secuencias:
+          <Regex Text='[^"\\]*' ></Regex>
+          <Regex Text='[^\\"]*' ></Regex>
+* Se corrige un error que daba cuando se incluían comentarios dentro de la etiquetas
+SYMBOLS o IDENTIFIERS, en el archivo XML.
+* Se corrige la respuesta de ProcRangeEndIden, cuando se usa CaseSensitive en TRUE.
 
 Queda pendiente incluir el procesamiento de los paréntesis en las expresiones regulares,
 como una forma sencilla de definir bloques de Regex, sin tener que usar la definición
 avanzada. También se podría ver si se puede mejorar el soporte de Regex, sobre todo para el
 caso de expresiones como ".*a".
 
-En esta versión principalmente. se trabaja en mejorar el soporte para expresiones regulares.
+Esta versión es para corregir algunos problemas que quedaron pendientes de la anterior versión.
+No se agregan nuevas funcionalidades.
 
 
-                                    Por Tito Hinostroza  26/05/2015 - Lima Perú
+                                    Por Tito Hinostroza  22/07/2015 - Lima Perú
 }
 unit SynFacilHighlighter;
 {$mode objfpc}{$H+}
 interface
 uses
   Classes, SysUtils, Graphics, SynEditHighlighter, DOM, XMLRead,
-  Dialogs, Fgl, Lazlogger, SynEditHighlighterFoldBase, LCLIntf,
+  Dialogs, Fgl, strings, Lazlogger, SynEditHighlighterFoldBase, LCLIntf,
   SynFacilBasic;
 const
   COL_TRANSPAR = $FDFEFF;  //color transparente
@@ -857,6 +818,8 @@ begin
            CheckXMLParams(atri, 'TokPos'); //valida
            //Crea los identificadores especiales
            AddIdentSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
+         end else if nombre = '#COMMENT' then begin
+           //solo para evitar que de mensaje de error
          end else begin
            raise ESynFacilSyn.Create(Format(ERR_INVAL_LBL_IDEN, [atri.NodeName]));
          end;
@@ -884,6 +847,8 @@ begin
            CheckXMLParams(atri, 'TokPos'); //valida
            //crea los símbolos especiales
            AddSymbSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
+         end else if nombre = '#COMMENT' then begin
+           //solo para evitar que de mensaje de error
          end else begin
            raise ESynFacilSyn.Create(Format(ERR_INVAL_LBL_IN_LBL, [atri.NodeName]));
          end;
@@ -1669,7 +1634,10 @@ var p: Pchar;
     c1, c2: char;
 begin
   //busca delimitador final
-  p := strpos(fLine+posFin,PChar(delTok));
+  if CaseSensitive then
+    p := strpos(fLine+posFin,PChar(delTok))
+  else
+    p := stripos(fLine+posFin,PChar(delTok));
   while p <> nil do begin   //definitivamente no se encuentra
     //verifica si es inicio de identificador
     c1:=(p-1)^;  {Retrocede. No debería haber problema en retroceder siempre, porque se
@@ -1678,7 +1646,10 @@ begin
     c2:=(p+length(delTok))^;   //apunta al final, puede ser el final de línea #0
     if (c1 in charsIniIden) or CharsIdentif[c1] or CharsIdentif[c2] then begin
       //está en medio de un identificador. No es válido.
-      p := strpos(p+length(delTok),PChar(delTok));  //busca siguiente
+      if CaseSensitive then
+        p := strpos(p+length(delTok),PChar(delTok))  //busca siguiente
+      else
+        p := stripos(p+length(delTok),PChar(delTok));  //busca siguiente
     end else begin  //es el identificador buscado
       posFin := p + length(delTok) - fLine;  //puede terminar apuntándo a #0
       fRange := nil;               //no necesario para tokens Unilínea
@@ -2094,7 +2065,7 @@ begin
 end;
 function TSynFacilSyn.GetY: Integer; inline;
 begin
-  Result:=lineIndex;  //aquí se guarda
+  Result:=lineIndex+1;  //corrige
 end;
 function TSynFacilSyn.GetXY: TPoint;
 //Devuelve las coordenadas de la posicón actual de exploración.

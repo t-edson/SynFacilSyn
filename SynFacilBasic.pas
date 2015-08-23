@@ -395,7 +395,7 @@ Si encuentra error, genera una excepción.}
   {Valida un conjunto de caracteres, expandiendo los intervalos de tipo "A-Z", y
   remplazando las secuencias de escape como: "\[", "\\", "\-", ...
   El caracter "-", se considera como indicador de intervalo, a menos que se encuentre
-  en el primer o ùltimo caracter de la cadena.
+  en el primer o ùltimo caracter de la cadena, o esté escapado.
   Si hay error genera una excepción.}
   var
     c, car1, car2: char;
@@ -407,17 +407,17 @@ Si encuentra error, genera una excepción.}
     //reemplaza intervalos
     if cars = '' then
       raise ESynFacilSyn.Create(ERR_EMPTY_INTERVAL);
-    //verifica si es lista invertida
+    //Verifica si es lista invertida
     Invert := false;
     if cars[1] = '^' then begin
       Invert := true;        //marca
       cars := copyEx(cars,2);  //quita "^"
     end;
-    //procesa contenido
-    car  := ExtractCharN(cars);  //Si el primer caracter es "-". lo toma literal.
-    tmp := car;  //inicia cadena para acumular.
-    car1 := ExtractChar(car);    //Se asume que es inicio de intervalo. Ademas car<>''. No importa que se pierda 'car'
-    car := ExtractCharN(cars);   //extrae siguiente
+    //Procesa contenido, reemplazando los caracteres escapados.
+    //Si el primer caracter es "-". lo toma literal, sin asumir error.
+    car1 := ExtractChar(cars);   //Extrae caracter convertido. Se asume que es inicio de intervalo.
+    tmp := car1;  //inicia cadena para acumular.
+    car := ExtractCharN(cars);   //Eextrae siguiente. Sin convertir porque puede ser "\-"
     while car<>'' do begin
       if car = '-' then begin
         //es intervalo
@@ -431,13 +431,12 @@ Si encuentra error, genera una excepción.}
         for c := Chr(Ord(car1)+1) to car2 do  //No se incluye "car1", porque ya se agregó
           tmp += c;
       end else begin  //simplemente acumula
-        tmp += car;
-        car1 := ExtractChar(car);    //Se asume que es inicio de intervalo. No importa qye se pierda 'car'
+        car1 := ExtractChar(car);   //Se asume que es inicio de intervalo. No importa perder "car"
+        tmp += car1;  //Es necesario, porque puede estar escapado
       end;
       car := ExtractCharN(cars);  //extrae siguiente
     end;
-    cars := ReplaceEscape(tmp);
-    cars := StringReplace(cars, '%HIGH%', altos,[rfReplaceAll]);
+    cars := StringReplace(tmp, '%HIGH%', altos,[rfReplaceAll]);
     cars := StringReplace(cars, '%ALL%', bajos+altos,[rfReplaceAll]);
     //Verifica si debe invertir lista
     if Invert then begin
@@ -451,7 +450,6 @@ Si encuentra error, genera una excepción.}
     end;
   end;
 var
-  f: Integer;
   tmp: string;
   lastAd: String;
 begin
@@ -479,12 +477,17 @@ begin
   end;
   //analiza la secuencia
   if (exp[1] = '[') and (length(exp)>1) then begin    //Es lista de caracteres
-    f := PosChar(']', exp);  //Busca final, obviando "\]"
-    if f=0 then
+    //Captura interior del intervalo.
+    exp := CopyEx(exp,2);
+    listChars := '';
+    tmp := ExtractCharN(exp);   //No convierte para no confundir "\]"
+    while (exp<>'') and (tmp<>']') do begin
+      listChars += tmp;
+      tmp := ExtractCharN(exp);  //No convierte para no confundir "\]"
+    end;
+    if (tmp<>']') then   //no se encontró ']'
       raise ESynFacilSyn.Create(ERR_EXPECTED_BRACK);
-    //El intervalo se cierra
-    listChars := copy(exp,2,f-2); //toma interior de lista
-    exp := copyEx(exp,f+1);       //extrae parte procesada
+    //la norma es tener aquí, el contenido de la lista, pero manteniendo los caracteres escapados
     ValidateInterval(listChars);  //puede simplificar "listChars". También puede generar excepción
     if exp = '' then begin   //Lista de tipo "[ ... ]"
       Result := tregChars;

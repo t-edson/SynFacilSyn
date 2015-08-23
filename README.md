@@ -1,10 +1,10 @@
-SynFacilSyn 1.1
-===============
+SynFacilSyn 1.11
+================
 
 Scriptable Highlighter for SynEdit Component of Lazarus 
 
 
-![SynFacilCompletion](http://blog.pucp.edu.pe/media/4946/20141220-synfacilsyn1.png "Título de la imagen")
+![SynFacilCompletion](http://blog.pucp.edu.pe/blog/tito/wp-content/uploads/sites/610/1969/12/synfacilsyn1.png "Título de la imagen")
 
 This highlighter is similar to the SynAnySyn of Lazarus, but it's much more faster, efficient and more configurable.
 
