@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <Package Version="4">
+    <PathDelim Value="\"/>
+    <Name Value="atsynedit_package"/>
+    <Type Value="RunAndDesignTime"/>
+    <Author Value="Alexey Torgashin"/>
+    <CompilerOptions>
+      <Version Value="11"/>
+      <PathDelim Value="\"/>
+      <SearchPaths>
+        <OtherUnitFiles Value=".;..\proc_lexer"/>
+        <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
+      </SearchPaths>
+    </CompilerOptions>
+    <Description Value="ATSynEdit"/>
+    <License Value="MPL 2.0"/>
+    <Version Major="1"/>
+    <Files Count="19">
+      <Item1>
+        <Filename Value="atsynedit_register.pas"/>
+        <HasRegisterProc Value="True"/>
+        <UnitName Value="ATSynEdit_Register"/>
+      </Item1>
+      <Item2>
+        <Filename Value="atstringproc.pas"/>
+        <UnitName Value="ATStringProc"/>
+      </Item2>
+      <Item3>
+        <Filename Value="atstringproc_textbuffer.pas"/>
+        <UnitName Value="ATStringProc_TextBuffer"/>
+      </Item3>
+      <Item4>
+        <Filename Value="atstringproc_utf8detect.pas"/>
+        <UnitName Value="atstringproc_utf8detect"/>
+      </Item4>
+      <Item5>
+        <Filename Value="atstringproc_wordjump.pas"/>
+        <UnitName Value="ATStringProc_WordJump"/>
+      </Item5>
+      <Item6>
+        <Filename Value="atstrings.pas"/>
+        <UnitName Value="ATStrings"/>
+      </Item6>
+      <Item7>
+        <Filename Value="atstrings_undo.pas"/>
+        <UnitName Value="ATStrings_Undo"/>
+      </Item7>
+      <Item8>
+        <Filename Value="atsynedit.pas"/>
+        <UnitName Value="ATSynEdit"/>
+      </Item8>
+      <Item9>
+        <Filename Value="atsynedit_adapters.pas"/>
+        <UnitName Value="ATSynEdit_Adapters"/>
+      </Item9>
+      <Item10>
+        <Filename Value="atsynedit_canvasproc.pas"/>
+        <UnitName Value="ATSynEdit_CanvasProc"/>
+      </Item10>
+      <Item11>
+        <Filename Value="atsynedit_carets.pas"/>
+        <UnitName Value="atsynedit_carets"/>
+      </Item11>
+      <Item12>
+        <Filename Value="atsynedit_commands.pas"/>
+        <UnitName Value="ATSynEdit_Commands"/>
+      </Item12>
+      <Item13>
+        <Filename Value="atsynedit_edits.pas"/>
+        <UnitName Value="ATSynEdit_Edits"/>
+      </Item13>
+      <Item14>
+        <Filename Value="atsynedit_gutter.pas"/>
+        <UnitName Value="ATSynEdit_Gutter"/>
+      </Item14>
+      <Item15>
+        <Filename Value="atsynedit_keymap.pas"/>
+        <UnitName Value="ATSynEdit_Keymap"/>
+      </Item15>
+      <Item16>
+        <Filename Value="atsynedit_keymap_init.pas"/>
+        <UnitName Value="ATSynEdit_Keymap_Init"/>
+      </Item16>
+      <Item17>
+        <Filename Value="atsynedit_package.pas"/>
+        <UnitName Value="atsynedit_package"/>
+      </Item17>
+      <Item18>
+        <Filename Value="atsynedit_ranges.pas"/>
+        <UnitName Value="ATSynEdit_Ranges"/>
+      </Item18>
+      <Item19>
+        <Filename Value="atsynedit_wrapinfo.pas"/>
+        <UnitName Value="ATSynEdit_WrapInfo"/>
+      </Item19>
+    </Files>
+    <RequiredPkgs Count="2">
+      <Item1>
+        <PackageName Value="LCL"/>
+      </Item1>
+      <Item2>
+        <PackageName Value="FCL"/>
+      </Item2>
+    </RequiredPkgs>
+    <UsageOptions>
+      <UnitPath Value="$(PkgOutDir)"/>
+    </UsageOptions>
+    <PublishOptions>
+      <Version Value="2"/>
+    </PublishOptions>
+    <CustomOptions Items="ExternHelp" Version="2">
+      <_ExternHelp Items="Count"/>
+    </CustomOptions>
+  </Package>
+</CONFIG>
