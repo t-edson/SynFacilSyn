@@ -1,0 +1,4 @@
+lib/
+backup/
+*.dbg
+demo
