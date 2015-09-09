@@ -3,7 +3,6 @@ SynFacilSyn 1.11
 
 Scriptable Highlighter for SynEdit Component of Lazarus 
 
-
 ![SynFacilCompletion](http://blog.pucp.edu.pe/blog/tito/wp-content/uploads/sites/610/1969/12/synfacilsyn1.png "Título de la imagen")
 
 This highlighter is similar to the SynAnySyn of Lazarus, but it's much more faster, efficient and more configurable.
@@ -16,9 +15,9 @@ Features
 
 •	Configurable. Can highlight words of a SynEdit control, using an external XML file, or using code.
 
-•	It's fast and Light. It's optimized on speed for to be comparable to a hard coded highlighter.
+•	It's fast and Light. It's optimized on speed to be comparable to a hard coded highlighter.
 
-•	It's easy for to configure the more common elements of a language, like identifiers, strings, numbers, and comments.
+•	It's easy to configure the more common elements of a language, like identifiers, strings, numbers, and comments.
 
 •	It's based on tokens and attributes.  Each kind of token contains a single attribute.
 
@@ -30,7 +29,7 @@ Features
 
 •	It can define new tokens using pre-defined tokens, like <<HEREDOC elements.
 
-•	Includes the property “CaseSensitive”, for to compare the Case of chars.
+•	Includes the property “CaseSensitive”, to compare the Case of chars.
 
 •	It can define blocks of code folding. Includes several options to suit most programming languages.
 
@@ -42,7 +41,7 @@ Features
 
 •	It can use basic Regex for the token definition.
 
-•	Includes a script language for to create complex definitions of tokens.
+•	Includes a script language to create complex definitions of tokens.
 
 Using on a program.
 
@@ -68,7 +67,7 @@ var
   htl.Free; 
 ```
 
-For to use the highlighter, it's necessary first, to have the syntax configurated on the XML file or by code. 
+To use the highlighter, it's necessary first, to have the syntax configurated on the XML file or by code. 
 
 One simple XML syntax file could be:
 
@@ -81,4 +80,3 @@ and echo else exit for if
 ```
 
 For more information, see the documentation.
-

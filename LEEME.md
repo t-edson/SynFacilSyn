@@ -3,7 +3,7 @@ SynFacilSyn
 
 Resaltador de sintaxis programable, para el componente  SynEdit de Lazarus.
 
-![SynFacilCompletion](http://blog.pucp.edu.pe/media/4946/20141220-synfacilsyn1.png "Título de la imagen")
+![SynFacilCompletion](http://blog.pucp.edu.pe/blog/tito/wp-content/uploads/sites/610/1969/12/synfacilsyn1.png "Título de la imagen")
 
 Este resaltador, es similar al resaltador SynAnySyn de Lazarus, pero mucho más rápido, eficiente y configurable.
 
