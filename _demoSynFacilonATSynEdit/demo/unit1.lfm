@@ -5,7 +5,6 @@ object Form1: TForm1
   Width = 690
   Caption = 'Demo'
   OnCreate = FormCreate
-  OnDestroy = FormDestroy
   Position = poScreenCenter
   LCLVersion = '1.5'
 end

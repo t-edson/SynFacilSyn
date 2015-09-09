@@ -13,8 +13,6 @@ uses
   SynFacilHighlighter;
 
 type
-  { TATAdapterHilite }
-
   { TSynFacilAdapter }
 
   TSynFacilAdapter = class(TATAdapterHilite)
@@ -45,7 +43,7 @@ uses
 constructor TSynFacilAdapter.Create(AOwner: TComponent; const AFileXml: string);
 begin
   inherited Create(AOwner);
-  hlt:= TSynFacilSyn.Create(self);
+  hlt:= TSynFacilSyn.Create(Self);
   hlt.LoadFromFile(AFileXml);
 end;
 
@@ -60,7 +58,6 @@ procedure TSynFacilAdapter.OnEditorCalcHilite(Sender: TObject;
   var AColorAfterEol: TColor);
 var
   npart, noffset: integer;
-var
   ed: TATSynEdit;
   Str: atString;
   tokType: TSynHighlighterAttributes;
