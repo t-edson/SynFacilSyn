@@ -239,7 +239,7 @@ type
     function GetDefaultAttribute(Index: integer): TSynHighlighterAttributes; override;
     function GetToken: String; override;
     function GetTokenPos: Integer; override;
-    function GetTokenKind: integer; override;
+    function GetTokenKind: ptrint; reintroduce;
     procedure ResetRange; override;
     function GetRange: Pointer; override;
     procedure SetRange(Value: Pointer); override;
@@ -2215,9 +2215,9 @@ function TSynFacilSyn.GetTokenPos: Integer;
 begin
   Result := posIni;
 end;
-function TSynFacilSyn.GetTokenKind: integer;
+function TSynFacilSyn.GetTokenKind: ptrint;
 begin
-  Result := PtrUInt(fTokenId);
+  Result := PtrInt(fTokenId);
 end;
 {Implementación de las funcionalidades de rango}
 procedure TSynFacilSyn.ResetRange;

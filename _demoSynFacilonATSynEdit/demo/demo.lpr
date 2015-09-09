@@ -7,7 +7,7 @@ uses
   cthreads,
   {$ENDIF}{$ENDIF}
   Interfaces, // this includes the LCL widgetset
-  Forms, Unit1
+  Forms, Unit1, synfacil_adapter_atsynedit
   { you can add units after this };
 
 {$R *.res}
