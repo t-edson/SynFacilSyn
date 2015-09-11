@@ -1,23 +1,23 @@
-{                               TSynFacilSyn 1.11
-* Se corrige el valor devuelto por GetY().
-* Se modificó ExtractRegExp() para corregir las falla de la versión anaterior, relacionada con
-el problema para procesar correctamente las secuencias:
-          <Regex Text='[^"\\]*' ></Regex>
-          <Regex Text='[^\\"]*' ></Regex>
-* Se corrige un error que daba cuando se incluían comentarios dentro de la etiquetas
-SYMBOLS o IDENTIFIERS, en el archivo XML.
-* Se corrige la respuesta de ProcRangeEndIden, cuando se usa CaseSensitive en TRUE.
+{                               TSynFacilSyn 1.12
+* Se actualizan las constantes de mensajes de error en español comentadas em SynFacilBasic.
+* Se corrige algunos nombres erróneos en la documentación en español y se corrige la
+traducción de algunas secciones en la documentación en Inglés.
+* Se cambia GetBlockInfoAtXY de función a procedimeinto, porque no devolvía ningún valor.
+* Se elimina la variable "Line", usada en ExploreLine(). Así se optimiza la velocidad.
+* Se optimiza ExploreLine(), para reducir las operaciones de incremento del tamaño del
+arreglo.
 
 Queda pendiente incluir el procesamiento de los paréntesis en las expresiones regulares,
 como una forma sencilla de definir bloques de Regex, sin tener que usar la definición
 avanzada. También se podría ver si se puede mejorar el soporte de Regex, sobre todo para el
 caso de expresiones como ".*a".
 
-Esta versión es para corregir algunos problemas que quedaron pendientes de la anterior versión.
-No se agregan nuevas funcionalidades.
+Esta versión es solo de cambios menores que ayudan a optimizar las opciones de completado
+y algunas corrcciones en la documentación. También se toma esta versión como una preparación
+para los cambios más garndes que se harán proteriormente.
 
 
-                                    Por Tito Hinostroza  22/07/2015 - Lima Perú
+                                    Por Tito Hinostroza  22/09/2015 - Lima Perú
 }
 unit SynFacilHighlighter;
 {$mode objfpc}{$H+}
@@ -72,7 +72,7 @@ type
     folTok     : boolean;       //indica si hay "folding" que cerrar en token delimitado actual
     chrEsc     : char;          //indica si hay caracter de escape en token delimitado actual (#0 si no hay)
     nTokenCon  : integer;       //cantidad de tokens por contenido
-    fRange     : TPtrTokEspec;    //para trabajar con tokens multilínea
+    fRange     : TPtrTokEspec;  //para trabajar con tokens multilínea
     BlkToClose : TFaSynBlock;   //bandera-variable para posponer el cierre de un bloque
     OnFirstTok : procedure of object;
     procedure SetTokContent(tc: tFaTokContent; dStart: string;
@@ -143,8 +143,8 @@ type
     function SetHighlighterAtXY(XY: TPoint): boolean;
     function ExploreLine(XY: TPoint; out toks: TATokInfo; out CurTok: integer
       ): boolean;
-    function GetBlockInfoAtXY(XY: TPoint; out blk: TFaSynBlock; out level: integer
-      ): boolean;
+    procedure GetBlockInfoAtXY(XY: TPoint; out blk: TFaSynBlock; out level: integer
+      );
     function GetBlockInfoAtXY(XY: TPoint; out blk: TFaSynBlock; out
       BlockStart: TPoint; out BlockEnd: TPoint): boolean;
   private   //procesamiento de identificadores especiales
@@ -1307,8 +1307,8 @@ begin
 end;
 
 procedure TSynFacilSyn.ProcTokenDelim(const d: TTokSpec);
-//Procesa un posible token delimitador. Debe llamarse después de que se ha reconocido
-//el token especial y el puntero apunte al siguiente token.
+{Procesa un posible token delimitador. Debe llamarse después de que se ha reconocido
+ el token especial y el puntero apunte al siguiente token.}
   procedure AbreBloqueAct(const d: TTokSpec); //inline;
   {Abre el bloque actual, verificando si está en el bloque valído}
   var i:integer;
@@ -1334,14 +1334,14 @@ procedure TSynFacilSyn.ProcTokenDelim(const d: TTokSpec);
     end;
   end;
   function AbreSeccionAct(const secIniL: array of TFaSynBlock): boolean; //inline;
-  {Verifica si el bloque más reciente del plegado, está en la lista de bloques
-   que cierra "d.secIniL". De ser así cierra el bloque y devuelve TRUE}
+  {Abre una sección si se cunplen las condiciones. De ser el caso, cierra primero una
+   posible sección previa. Si abre la sección devuelve TRUE. }
   var i:integer;
       TopBlk: TFaSynBlock;
   begin
-    TopBlk := TopBlock();  //lee bloque superior
+    TopBlk := TopBlock();  //lee bloque superior (el actual)
     if TopBlk.IsSection then begin //verifica si es bloque de sección
-      //Es bloque de sección. ¿Será de alguna de las secciones que maneja?
+      //Está en un bloque de sección. ¿Será de alguna de las secciones que maneja?
       for i:=0 to High(secIniL) do
         if TopBlk.parentBlk = secIniL[i].parentBlk then begin
           //debe cerrar primero la sección anterior, porque las secciones no se anidan
@@ -1352,7 +1352,8 @@ procedure TSynFacilSyn.ProcTokenDelim(const d: TTokSpec);
           exit(true);  //sale con TRUE
         end;
       Result := false;  //no abrió
-    end else begin   //no está en bloque de sección
+    end else begin
+      //No está en un bloque de sección, entonces debe estar en un bloque (aunque sea MainBlk)
       //verifica si corresponde abrir esta sección
       for i:=0 to High(secIniL) do
         if TopBlk = secIniL[i].parentBlk then begin  //es su bloque válido
@@ -1863,52 +1864,51 @@ function TSynFacilSyn.ExploreLine(XY: TPoint; out toks: TATokInfo;
 //La posición XY, empieza en (1,1). Si tuvo exito devuelve TRUE.
 var
   PosX, PosY: integer;
-  Line: string;
-  tam: Integer;
+  idx: Integer;
 begin
   Result := false;  //valor por defecto
   CurTok :=-1;       //valor por defecto
-  tam := 0;          //tamaño inicial
-  setlength(toks,tam);  //inicia
+  idx := 0;
+  setlength(toks,12);  //tamaño inicial
   //validaciónes
   PosY := XY.Y -1;
   if (PosY < 0) or (PosY >= CurrentLines.Count) then exit;
   PosX := XY.X;
   if (PosX <= 0) then exit;
-  Line := CurrentLines[PosY];
   //explora línea
   StartAtLineIndex(PosY);   //posiciona y hace el primer Next()
   while not GetEol do begin
     //hay token
-    setlength(toks, tam+1);  //crea espacio
-    toks[tam].TokPos:=tam;
-    toks[tam].txt := GetToken;
-    toks[tam].length:=posFin - posIni;  //tamaño del token
-    toks[tam].TokTyp:=fTokenID;
-    toks[tam].posIni:=PosIni;
-    toks[tam].IsIDentif:= (Line[PosIni+1] in charsIniIden);  //puede ser Keyword
-    toks[tam].curBlk := TopCodeFoldBlock(0);  //lee el rango
-    Inc(tam);  //actualiza tamaño
+    if idx>high(toks) then
+      setlength(toks, idx+12);  //aumenta espacio
+    toks[idx].TokPos:=idx;
+    toks[idx].txt := GetToken;
+    toks[idx].length:=posFin - posIni;  //tamaño del token
+    toks[idx].TokTyp:=fTokenID;
+    toks[idx].posIni:=PosIni;
+    toks[idx].IsIDentif:= (fLine[posIni] in charsIniIden);  //puede ser Keyword, o cualquier otro identificador
+    toks[idx].curBlk := TopCodeFoldBlock(0);  //lee el rango
+    Inc(idx);  //actualiza tamaño
 
     if (PosX > PosIni) and (PosX < posFin+1) then begin
       //encontró
-      CurTok := tam-1;  //devuelve índice del token
+      CurTok := idx-1;  //devuelve índice del token
       Result := TRUE;
     end;
     Next;
   end;
   //agrega el token final
-  setlength(toks, tam+1);  //crea espacio
-  toks[tam].TokPos:=tam;
-  toks[tam].txt := GetToken;
-  toks[tam].TokTyp:=fTokenID;
-  toks[tam].posIni:=PosIni;
-  toks[tam].curBlk := TopCodeFoldBlock(0);  //lee el rango
-  Inc(tam);  //actualiza tamaño
+  setlength(toks, idx+1);  //recorta al tamaño necesario
+  toks[idx].TokPos:=idx;
+  toks[idx].txt := GetToken;
+  toks[idx].TokTyp:=fTokenID;
+  toks[idx].posIni:=PosIni;
+  toks[idx].curBlk := TopCodeFoldBlock(0);  //lee el rango
+  Inc(idx);  //actualiza tamaño
   //verifica si lo ubicó.
   if CurTok = -1 then begin
     //No lo ubicó. Está más allá del fin de línea
-    CurTok := tam-1;  //devuelve índice del token
+    CurTok := idx-1;  //devuelve índice del token
     Result := TRUE;
   end;
 end;
@@ -2011,8 +2011,8 @@ begin
     //No lo ubicó. PosX está más allá del fin de línea. Sale con el último "pIniBlock"
   end;
 end;
-function TSynFacilSyn.GetBlockInfoAtXY(XY: TPoint; out blk: TFaSynBlock;
-                                       out level: integer): boolean;
+procedure TSynFacilSyn.GetBlockInfoAtXY(XY: TPoint; out blk: TFaSynBlock;
+                                        out level: integer);
 //Da información sobre el bloque en la posición indicada.
 begin
   SetHighlighterAtXY(XY);        //posiciona

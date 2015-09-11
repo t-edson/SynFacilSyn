@@ -18,7 +18,8 @@
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="Unit1"/>
-        <CursorPos X="3" Y="9"/>
+        <IsVisibleTab Value="True"/>
+        <CursorPos Y="4"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -87,10 +88,9 @@
       </Unit10>
       <Unit11>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
-        <CursorPos X="21"/>
-        <FoldState Value=" T4O03 T5S011 pmBmF0g TMi4221H19 p0tN01031223182B1A19]41151]SvR6108241T1811]M4]LsX21091313]H712[O4]p41]H]h TCaF8]77iOH}L T8iP2G3 pjZkC2D3 TLmW07R]?$JH2A T3o00P]XkFl20M4 picjO0E5]pJig2N2]RPlP0y]9m2nM0{56[b4kW0{;3]AYkI0F71[L4bna0H5]9gjN0t]TjAkQ08[R4fjG0D[94ZjC036 T6o701Q]HX$N019 T0oD=26]qKkSK2K[h4nCf31[94i3ac7]R1i5Y7L]90kKj45 pjLiCx22]af9Y28]8biBnLC]Q6icq3H]IakEg5D[{=5MD3G3[B4Xt8j3F piYlGN25 THpU4x3 pi1,T2y p0zD491 TF%e21V"/>
+        <CursorPos Y="14"/>
+        <FoldState Value=" T4O03 T5S011 pmBmF0g TMi4221H1 TCaF8]77iOH}L T8iP2G3 pjZkC2D]vLmW07]P3o00P]PkFl20M4 picjO0E5]hJig2N2]RPlP0y]9m2nM0{56 T6o701]-0oD=26]iKkSK2K]-ZnCf31[94i3ac7]R1i5Y7L]90kKj45 pjLiCx22]af9Y28]8biBnLC]Q6icq3H]IakEg56 THpU4x3\"/>
         <UsageCount Value="12"/>
         <Bookmarks Count="1">
           <Item0 X="14" Y="1640" ID="1"/>
