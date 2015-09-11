@@ -236,8 +236,8 @@ const
 //    ERR_START_NO_EMPTY = 'Parámetro "Start" No puede ser nulo';
 //    ERR_EXP_MUST_BE_BR = 'Expresión debe ser de tipo [lista de caracteres]';
 //    ERR_TOK_DELIM_NULL = 'Delimitador de token no puede ser nulo';
-//    ERR_NOT_USE_START
-//    ERR_PAR_START_CHARS
+//    ERR_NOT_USE_START = 'No se puede usar "Start" y "CharsStart" simultáneamente.';
+//    ERR_PAR_START_CHARS = 'Se debe definir el parámetro "Start" o "CharsStart".';
 //    ERR_TOK_DEL_IDE_ERR = 'Delimitador de token erróneo: %s (debe ser identificador)';
 //    ERR_IDEN_ALREA_DEL = 'Identificador "%s" ya es delimitador inicial.';
 //    ERR_INVAL_ATTR_LAB = 'Atributo "%s" no válido para etiqueta <%s>';
@@ -257,7 +257,12 @@ const
 
     //Mensajes de tokens por contenido
 //    ERR_EMPTY_INTERVAL = 'Error: Intervalo vacío.';
-//    ERR_DEF_INTERVAL = 'Error en definición de intervalo: %s';
+//    ERR_EMPTY_EXPRES = 'Expresión vacía.';
+//    ERR_EXPECTED_BRACK = 'Se esperaba "]".';
+//    ERR_UNSUPPOR_EXP_ = 'Expresión no soportada.';
+//    ERR_INC_ESCAPE_SEQ = 'Secuencia de escape incompleta.';
+//    ERR_SYN_PAR_IFFAIL_ = 'Error de sintaxis en parámetro "IfFail": ';
+//    ERR_SYN_PAR_IFMATCH_ = 'Error de sintaxis en parámetro "IfMarch": ';
     ERR_EMPTY_INTERVAL = 'Error: Empty Interval.';
     ERR_EMPTY_EXPRES = 'Empty expression.';
     ERR_EXPECTED_BRACK = 'Expected "]".';
