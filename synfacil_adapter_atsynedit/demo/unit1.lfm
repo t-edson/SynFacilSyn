@@ -6,5 +6,5 @@ object Form1: TForm1
   Caption = 'Demo'
   OnCreate = FormCreate
   Position = poScreenCenter
-  LCLVersion = '1.5'
+  LCLVersion = '1.4.2.0'
 end

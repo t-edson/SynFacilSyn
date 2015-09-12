@@ -5,19 +5,34 @@ unit synfacil_adapter_atsynedit;
 interface
 
 uses
-  Classes, SysUtils, Graphics,
+  Classes, SysUtils, fgl, Graphics, LazLogger,
   ATSynEdit,
   ATSynEdit_Adapters,
   ATSynEdit_CanvasProc,
+  SynEditHighlighter,
   SynFacilBasic,
   SynFacilHighlighter;
 
 type
+  {Will contain the current status in one line}
+  TSynFacilLineState = class
+    //This is a reflex of "SynFacilHighlighter.TFaLexerState"
+    posTok     : integer;
+    BlkToClose : TFaSynBlock;
+    posIni     : Integer;
+    posFin     : Integer;
+    fRange     : ^TTokSpec;
+    fTokenID   : TSynHighlighterAttributes;  //Id del token actual
+  end;
+
+  TSynFacilLineStates = specialize TFPGObjectList<TSynFacilLineState>;
+
   { TSynFacilAdapter }
 
   TSynFacilAdapter = class(TATAdapterHilite)
   private
     hlt: TSynFacilSyn;
+    states: TSynFacilLineStates;
   public
     constructor Create(AOwner: TComponent); override;
     procedure SetSyntax(const AFilename: string);
@@ -35,8 +50,7 @@ implementation
 uses
   Dialogs,
   ATStringProc,
-  Synedit,
-  SynEditHighlighter;
+  Synedit;
 
 
 { TSynFacilAdapter }
@@ -45,6 +59,7 @@ constructor TSynFacilAdapter.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   hlt:= TSynFacilSyn.Create(Self);
+  states := TSynFacilLineStates.Create(true);
 end;
 
 procedure TSynFacilAdapter.SetSyntax(const AFilename: string);
@@ -54,6 +69,7 @@ end;
 
 destructor TSynFacilAdapter.Destroy;
 begin
+  states.Destroy;
   FreeAndNil(hlt);
   inherited;
 end;
@@ -91,7 +107,11 @@ begin
 end;
 
 procedure TSynFacilAdapter.OnEditorChange(Sender: TObject);
+var
+  ed: TATSynEdit;
 begin
+  ed:= Sender as TATSynEdit;
+  DebugLn('Change ed with lines:' + IntToStr(ed.Strings.Count));
   //showmessage('onchange');
 end;
 

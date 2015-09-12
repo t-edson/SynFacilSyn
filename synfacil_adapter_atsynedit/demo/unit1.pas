@@ -44,8 +44,8 @@ begin
   ed.Align:= alClient;
   ed.OptUnprintedVisible:= false;
   ed.OptRulerVisible:= false;
-  ed.LoadFromFile(ExtractFilePath(Application.ExeName)+'unit1.pas');
   ed.AdapterHilite:= adapter;
+  ed.LoadFromFile(ExtractFilePath(Application.ExeName)+'unit1.pas');
 end;
 
 end.
