@@ -24,6 +24,8 @@ type
 var
   Form1: TForm1;
   adapter: TSynFacilAdapter;
+const
+  nTest = 10.20000;
 
 implementation
 
@@ -33,7 +35,8 @@ implementation
 
 procedure TForm1.FormCreate(Sender: TObject);
 begin
-  adapter:= TSynFacilAdapter.Create(Self, 'Pascal.xml');
+  adapter:= TSynFacilAdapter.Create(Self);
+  adapter.SetSyntax('Pascal.xml');
 
   ed:= TATSynEdit.Create(Self);
   ed.Parent:= Self;

@@ -19,7 +19,8 @@ type
   private
     hlt: TSynFacilSyn;
   public
-    constructor Create(AOwner: TComponent; const AFileXml: string);
+    constructor Create(AOwner: TComponent); override;
+    procedure SetSyntax(const AFilename: string);
     destructor Destroy; override;
     procedure OnEditorCalcHilite(Sender: TObject;
       var AParts: TATLineParts;
@@ -40,11 +41,15 @@ uses
 
 { TSynFacilAdapter }
 
-constructor TSynFacilAdapter.Create(AOwner: TComponent; const AFileXml: string);
+constructor TSynFacilAdapter.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   hlt:= TSynFacilSyn.Create(Self);
-  hlt.LoadFromFile(AFileXml);
+end;
+
+procedure TSynFacilAdapter.SetSyntax(const AFilename: string);
+begin
+  hlt.LoadFromFile(AFilename);
 end;
 
 destructor TSynFacilAdapter.Destroy;
@@ -60,36 +65,24 @@ var
   npart, noffset: integer;
   ed: TATSynEdit;
   Str: atString;
-  tokType: TSynHighlighterAttributes;
+  atr: TSynHighlighterAttributes;
 begin
   ed:= Sender as TATSynEdit;
   Str:= Copy(ed.Strings.Lines[ALineIndex], ACharIndex, ALineLen);
   hlt.SetLine(Str, ALineIndex);
   npart:= 0;
   noffset:= 0;
-  while not hlt.GetEol do begin
-    tokType := TSynHighlighterAttributes(hlt.GetTokenKind);
-    with AParts[npart] do begin
-      if tokType  = hlt.tkKeyword then begin
-        ColorBG:= clYellow;
-        ColorFont:= clgreen;
-        FontItalic:= true;
-        FontBold:= true;
-      end else if tokType  = hlt.tkComment then begin
-        ColorBG:= clNone;
-        ColorFont:= clGray;
-        FontItalic:= true;
-        FontBold:= true;
-      end else begin
-        ColorBG:= clNone;
-        ColorFont:= clBlack;
-        FontItalic:= false;
-        FontBold:= false;
-      end;
-      Offset:= noffset;
-      Len:= length(hlt.GetToken);
-      inc(noffset, len);
-    end;
+  while not hlt.GetEol do
+  begin
+    atr:= TSynHighlighterAttributes(hlt.GetTokenKind);
+    AParts[npart].ColorBG:= atr.Background;
+    if atr.Foreground<>clNone then
+      AParts[npart].ColorFont:= atr.Foreground;
+    AParts[npart].FontItalic:= fsItalic in atr.Style;
+    AParts[npart].FontBold:= fsBold in atr.Style;
+    AParts[npart].Offset:= noffset;
+    AParts[npart].Len:= length(hlt.GetToken);
+    inc(noffset, AParts[npart].Len);
     //pasa al siguiente
     hlt.Next;
     inc(npart);
@@ -99,7 +92,7 @@ end;
 
 procedure TSynFacilAdapter.OnEditorChange(Sender: TObject);
 begin
-  showmessage('change-need recalc hilite');
+  //showmessage('onchange');
 end;
 
 
