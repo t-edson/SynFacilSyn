@@ -15,33 +15,25 @@ uses
 
 type
   {Will contain the current status in one line}
-  TSynFacilLineState = class
-    //This is a reflex of "SynFacilHighlighter.TFaLexerState"
-    posTok     : integer;
-    BlkToClose : TFaSynBlock;
-    posIni     : Integer;
-    posFin     : Integer;
-    fRange     : ^TTokSpec;
-    fTokenID   : TSynHighlighterAttributes;  //Id del token actual
-  end;
-
-  TSynFacilLineStates = specialize TFPGObjectList<TSynFacilLineState>;
+  TSynFacilLineStates = TFPList;
 
   { TSynFacilAdapter }
 
   TSynFacilAdapter = class(TATAdapterHilite)
   private
-    hlt: TSynFacilSyn;
-    states: TSynFacilLineStates;
+    hlt    : TSynFacilSyn;
+    states : TSynFacilLineStates;
+    fRange : TPtrTokEspec;
   public
-    constructor Create(AOwner: TComponent); override;
     procedure SetSyntax(const AFilename: string);
-    destructor Destroy; override;
+    procedure StringsLog(Sender: TObject; ALine, ALen: integer);
     procedure OnEditorCalcHilite(Sender: TObject;
       var AParts: TATLineParts;
       ALineIndex, ACharIndex, ALineLen: integer;
       var AColorAfterEol: TColor); override;
     procedure OnEditorChange(Sender: TObject); override;
+    constructor Create(AOwner: TComponent); override;
+    destructor Destroy; override;
   end;
 
 
@@ -52,6 +44,8 @@ uses
   ATStringProc,
   Synedit;
 
+const
+  LINES_PER_STATE = 8;  //every how many lines, it will be saved the state
 
 { TSynFacilAdapter }
 
@@ -59,7 +53,7 @@ constructor TSynFacilAdapter.Create(AOwner: TComponent);
 begin
   inherited Create(AOwner);
   hlt:= TSynFacilSyn.Create(Self);
-  states := TSynFacilLineStates.Create(true);
+  states := TFPList.Create;
 end;
 
 procedure TSynFacilAdapter.SetSyntax(const AFilename: string);
@@ -99,22 +93,70 @@ begin
     AParts[npart].Offset:= noffset;
     AParts[npart].Len:= length(hlt.GetToken);
     inc(noffset, AParts[npart].Len);
-    //pasa al siguiente
     hlt.Next;
     inc(npart);
     if npart>High(AParts) then break;
   end;
 end;
 
+procedure TSynFacilAdapter.StringsLog(Sender: TObject; ALine, ALen: integer);
+begin
+  DebugLn('OnLog: ALine=' + IntToStr(ALine) + ' ALen=' + IntToSTr(Alen));
+end;
+
 procedure TSynFacilAdapter.OnEditorChange(Sender: TObject);
 var
   ed: TATSynEdit;
+  Needed: Integer;
+  firstModified: Integer;
+  scanFrom: Integer;
+  scanTo: Integer;
+  i: Integer;
+  stateFrom: Integer;
 begin
   ed:= Sender as TATSynEdit;
-  DebugLn('Change ed with lines:' + IntToStr(ed.Strings.Count));
+  //Calculate necessary lines
+  Needed := ed.Strings.Count div LINES_PER_STATE;
+  DebugLn('Change: ed with lines:' + IntToStr(ed.Strings.Count) +
+                   'Needed: '+ IntToStr(Needed));
+  //Add if there are less
+  while states.Count<Needed do
+    states.Add(nil);
+  //Remove if there are more
+  if states.Count > Needed then
+    states.Count:= Needed;
+  //Calculate the first line modified, and lines shown
+  firstModified := 0;  //??? No better information
+  stateFrom := firstModified div LINES_PER_STATE;
+  scanFrom :=  stateFrom * LINES_PER_STATE;
+  scanTo := ed.LineBottom;
+  //Set initial state
+  if scanFrom = 0 then begin
+    //first line
+    hlt.ResetRange;
+  end else begin
+    //following lines
+    hlt.Range:=states[stateFrom];
+  end;
+  DebugLn('  scanning from:' + IntToStr(scanFrom)+ ' to ' + IntToStr(scanTo));
+  //scan necessary lines
+  for i:= scanFrom to scanTo do
+  begin
+    hlt.SetLine(ed.Strings.lines[i], i);
+    while true do begin
+      if hlt.GetEol then begin
+        if i mod LINES_PER_STATE = 0 then begin
+          DebugLn('    saving state for line:' + IntToStr(i));
+//          lineas.Objects[i] := TObject(hlt.Range);
+          states[i mod LINES_PER_STATE] := hlt.Range;
+        end;
+        break;
+      end;
+      hlt.Next;
+    end;
+  end;
   //showmessage('onchange');
 end;
-
 
 end.
 
