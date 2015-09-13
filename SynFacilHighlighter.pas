@@ -1,23 +1,28 @@
-{                               TSynFacilSyn 1.12
-* Se actualizan las constantes de mensajes de error en español comentadas em SynFacilBasic.
-* Se corrige algunos nombres erróneos en la documentación en español y se corrige la
-traducción de algunas secciones en la documentación en Inglés.
-* Se cambia GetBlockInfoAtXY de función a procedimeinto, porque no devolvía ningún valor.
-* Se elimina la variable "Line", usada en ExploreLine(). Así se optimiza la velocidad.
-* Se optimiza ExploreLine(), para reducir las operaciones de incremento del tamaño del
-arreglo.
+{                               TSynFacilSyn 1.13
+* Se corrige TopCodeFoldBlock(), para que devuelva una referencia a Mainblk, cuando se
+encuentra en el nivel principal, y así hacerlo más consistente con los TopBlock().
+* Se modifica ProcTokenDelim(), para darle a los bloques la posibilidad de cerrar a una
+sección que se encuentre en el mismo nivel de jerarquía.
+* Se reordena el código de ProcTokenDelim.AbreBloqueAct() y de ProcTokenDelim.AbreSeccionAct()
+y se corrige el procesamiento de apertura de bloques y secciones en ciertas condiciones.
+* Se corrige la definición por defecto de las secciones, para que cuando no se especifique
+el bloque padre, se asuma que es válido en todos los bloques.
 
 Queda pendiente incluir el procesamiento de los paréntesis en las expresiones regulares,
 como una forma sencilla de definir bloques de Regex, sin tener que usar la definición
 avanzada. También se podría ver si se puede mejorar el soporte de Regex, sobre todo para el
 caso de expresiones como ".*a".
+También queda pendiente mejorar el tratamiento de blqoues para que se pueda definir
+correctemente una sintaxis como la de Pascal.
 
-Esta versión es solo de cambios menores que ayudan a optimizar las opciones de completado
-y algunas corrcciones en la documentación. También se toma esta versión como una preparación
-para los cambios más garndes que se harán proteriormente.
+En esta versión se hace una revisión más o menos detallada del sistema de bloques.
+Se ha ordenado y corregido notáblemente ProcTokenDelim, de modo que ahora se tiene
+un trabajo de bloques más consistente y con el ´codigo más legible. Además se define
+el comportamiento de bloques que se abren después de una sección, para que cierren la
+sección previa, algo que no era posible en la versión anterior.
 
 
-                                    Por Tito Hinostroza  22/09/2015 - Lima Perú
+                                    Por Tito Hinostroza  15/09/2015 - Lima Perú
 }
 unit SynFacilHighlighter;
 {$mode objfpc}{$H+}
@@ -78,6 +83,7 @@ type
     procedure SetTokContent(tc: tFaTokContent; dStart: string;
       TypDelim: TFaTypeDelim; typToken: TSynHighlighterAttributes);
     //Manejo de bloques
+    procedure StartBlockAndFirstSec(const blk, firstSec: TfaSynBlock);
     procedure StartBlock(ABlockType: Pointer; IncreaseLevel: Boolean);
     procedure EndBlock(DecreaseLevel: Boolean);
     function TopBlock: TFaSynBlock;
@@ -1128,7 +1134,7 @@ DebugLn(' === Cargando archivo de sintaxis ===');
          end;
        end else if ProcXMLBlock(nodo, nil) then begin  //bloques válidos en cualquier parte
          //No es necesario hacer nada
-       end else if ProcXMLSection(nodo, MainBlk) then begin //secciones en "MAIN"
+       end else if ProcXMLSection(nodo, nil) then begin //secciones en "MAIN"
          //No es necesario hacer nada
        end else begin
           raise ESynFacilSyn.Create(Format(ERR_UNKNOWN_LABEL,[nombre]));
@@ -1239,6 +1245,13 @@ begin
 //  StartCodeFoldBlock(ABlockType, IncreaseLevel);
   CodeFoldRange.Add(ABlockType, IncreaseLevel);
 end;
+procedure TSynFacilSyn.StartBlockAndFirstSec(const blk, firstSec: TfaSynBlock);
+{Abre un bloque TfaSynBlock, verifica si tiene una primera sección para abrir.}
+begin
+  CodeFoldRange.Add(blk, blk.showFold);
+  //verifica si hay primera sección para abrir
+  if firstSec <> nil then StartBlock(firstSec, firstSec.showFold);
+end;
 procedure TSynFacilSyn.EndBlock(DecreaseLevel: Boolean); inline;
 //Procedimiento geenral para cerrar un bloque en el resaltador
 begin
@@ -1252,8 +1265,6 @@ function TSynFacilSyn.TopBlock: TFaSynBlock;
 var
   Fold: TSynCustomCodeFoldBlock;
 begin
-//  Result := TFaSynBlock(TopCodeFoldBlockType);
-//  if Result = nil then Result := MainBlk;  //protección
   Fold := CodeFoldRange.Top;  //CodeFoldRange nunca denería ser NIL
   if Fold = nil then
     Result := MainBlk  //está en el primer nivel
@@ -1312,22 +1323,48 @@ procedure TSynFacilSyn.ProcTokenDelim(const d: TTokSpec);
   procedure AbreBloqueAct(const d: TTokSpec); //inline;
   {Abre el bloque actual, verificando si está en el bloque valído}
   var i:integer;
-      TopBlk: TFaSynBlock;
+      CurBlk: TFaSynBlock;
+      CurBlk_Parent: TFaSynBlock;
       bloIni: TFaSynBlock;
   begin
-    for i:=0 to High(d.bloIniL) do begin
-      bloIni := d.bloIniL[i];
-      if bloIni.parentBlk = nil then begin //se abre en cualquier parte
-        StartBlock(bloIni, bloIni.showFold);
-        //verifica si hay primera sección para abrir
-        if d.firstSec <> nil then StartBlock(d.firstSec, d.firstSec.showFold);
-        break;   //sale
-      end else begin  //se abre en un bloque específico
-        TopBlk := TopBlock();  //lee bloque superior
-        if TopBlk = bloIni.parentBlk then begin
-          StartBlock(bloIni, bloIni.showFold);
-          //verifica si hay primera sección para abrir
-          if d.firstSec <> nil then StartBlock(d.firstSec, d.firstSec.showFold);
+    CurBlk := TopBlock();  //lee bloque superior (el actual)
+    CurBlk_Parent := TopCodeFoldBlock(1);  {Lee bloque superior, en donde se ha abierto, que no
+                                            siempe coincidirá con CurBlk.parentBlk }
+    if CurBlk.IsSection then begin
+      //Estamos en un bloque de sección
+      for i:=0 to High(d.bloIniL) do begin
+        bloIni := d.bloIniL[i];
+        //verifica si se cumplen condiciones para abrir el bloque
+        if bloIni.parentBlk = nil then begin //se abre en cualquier parte
+          {Un bloque al mismo nivel de una sección, la cierra siempre}
+          EndBlock(CurBlk.showFold);  //cierra primero la sección anterior
+          StartBlockAndFirstSec(bloIni, d.firstSec);
+          break;   //sale
+        end else if bloIni.parentBlk = CurBlk  then begin
+          //Corresponde abrir el bloque dentro de esta sección
+          {No se verifica si hay sección anterior porque estamos en una sección y se sabe
+          que un sección no puede contener otras secciones.}
+          StartBlockAndFirstSec(bloIni, d.firstSec);
+          break;     //sale
+        end else if bloIni.parentBlk = CurBlk_Parent then begin
+          {No correspondía abrir en esa sección, pero se aplica al bloque padre,
+          entonces está al mismo nivel que la sección actual y debería cerrarla primero}
+          EndBlock(CurBlk.showFold);  //cierra primero la sección anterior
+          StartBlockAndFirstSec(bloIni, d.firstSec);
+          break;     //sale
+        end;
+      end;
+    end else begin
+      //Estamos dentro de un bloque común
+      for i:=0 to High(d.bloIniL) do begin
+        bloIni := d.bloIniL[i];
+        //verifica si se cumplen condiciones para abrir el bloque
+        if bloIni.parentBlk = nil then begin //se abre en cualquier parte
+          StartBlockAndFirstSec(bloIni, d.firstSec);
+          break;   //sale
+        end else if bloIni.parentBlk = CurBlk then begin
+          //Corresponde abrir en este bloque
+          StartBlockAndFirstSec(bloIni, d.firstSec);
           break;     //sale
         end;
       end;
@@ -1337,29 +1374,49 @@ procedure TSynFacilSyn.ProcTokenDelim(const d: TTokSpec);
   {Abre una sección si se cunplen las condiciones. De ser el caso, cierra primero una
    posible sección previa. Si abre la sección devuelve TRUE. }
   var i:integer;
-      TopBlk: TFaSynBlock;
+      curBlk: TFaSynBlock;
+      CurBlk_Parent: TFaSynBlock;
+      secIni: TFaSynBlock;
   begin
-    TopBlk := TopBlock();  //lee bloque superior (el actual)
-    if TopBlk.IsSection then begin //verifica si es bloque de sección
-      //Está en un bloque de sección. ¿Será de alguna de las secciones que maneja?
-      for i:=0 to High(secIniL) do
-        if TopBlk.parentBlk = secIniL[i].parentBlk then begin
+    CurBlk := TopBlock();  //lee bloque superior (el actual)
+    CurBlk_Parent := TopCodeFoldBlock(1);  {Lee bloque superior, en donde se ha abierto, que no
+                                            siempe coincidirá con CurBlk.parentBlk }
+    if curBlk.IsSection then begin //verifica si está en un bloque de sección
+      //Estamos en un bloque de sección. ¿Será de alguna de las secciones que maneja?
+      for i:=0 to High(secIniL) do begin
+        secIni := secIniL[i];
+        //verifica si se cumplen condiciones para abrir el bloque
+        if secIni.parentBlk = nil then begin //se abre en cualquier parte
+          {Una sección al mismo nivel de una sección, la cierra siempre}
+          if (secIni=curBlk) and curBlk.UniqSec then exit(false); //verificación
+          EndBlock(CurBlk.showFold);  //cierra primero la sección anterior
+          StartBlock(secIni, secIni.showFold);  //abre una nueva sección
+          exit(true);  //sale con TRUE
+        end else if secIni.parentBlk = CurBlk_Parent then begin
+          //Está en el bloque para el que se ha definido
           //debe cerrar primero la sección anterior, porque las secciones no se anidan
-          if (TopBlk=secIniL[i]) and TopBlk.UniqSec then exit(false); //verificación
-          EndBlock(TopBlk.showFold);  //cierra primero la sección anterior
-          //abre una nueva sección
-          StartBlock(secIniL[i], secIniL[i].showFold);
+          if (secIni=curBlk) and curBlk.UniqSec then exit(false); //verificación
+          EndBlock(curBlk.showFold);  //cierra primero la sección anterior
+          StartBlock(secIni, secIni.showFold);  //abre una nueva sección
           exit(true);  //sale con TRUE
         end;
+      end;
       Result := false;  //no abrió
     end else begin
       //No está en un bloque de sección, entonces debe estar en un bloque (aunque sea MainBlk)
       //verifica si corresponde abrir esta sección
-      for i:=0 to High(secIniL) do
-        if TopBlk = secIniL[i].parentBlk then begin  //es su bloque válido
-          StartBlock(secIniL[i], secIniL[i].showFold);
+      for i:=0 to High(secIniL) do begin
+        secIni := secIniL[i];
+        //verifica si se cumplen condiciones para abrir el bloque
+        if secIni.parentBlk = nil then begin //se abre en cualquier parte
+          StartBlock(secIni, secIni.showFold);
+          exit(true);  //sale con TRUE
+        end else if secIni.parentBlk = curBlk then begin
+          //Corresponde abrir en este bloque
+          StartBlock(secIni, secIni.showFold);
           exit(true);  //sale con TRUE
         end;
+      end;
       Result := false;  //no abrió
     end;
   end;
@@ -1376,7 +1433,7 @@ procedure TSynFacilSyn.ProcTokenDelim(const d: TTokSpec);
     if (TopBlk<>nil) and TopBlk.IsSection then begin //verifica si es bloque de sección
       //es sección, vemos el bloque anterior
       eraSec := TopBlk;  //guarda referencia
-      TopBlk := TFaSynBlock(TopCodeFoldBlockType(1));  //lee bloque superior
+      TopBlk := TopCodeFoldBlock(1);  //lee bloque superior
     end;
     //busca
     for i:=0 to High(bloFinL) do
@@ -1390,6 +1447,9 @@ procedure TSynFacilSyn.ProcTokenDelim(const d: TTokSpec);
       //se debe cerrar el bloque debajo de la sección
       EndBlock(eraSec.showFold);  //cierra primero la sección
   end;
+
+var
+  abrioSec: Boolean;
 begin
   case d.typDel of
   tdNull: begin       //token que no es delimitador de token
@@ -1398,11 +1458,11 @@ begin
       if d.bloFin then begin //verifica primero, si es cierre de algún bloque
         CierraBloqueAct(d.bloFinL);  //cierra primero
       end;
-      if d.secIni then begin //Verifica primero si es bloque de sección
-        if not AbreSeccionAct(d.secIniL) then  //prueba si abre como sección
-           if d.bloIni then AbreBloqueAct(d); //verifica como bloque normal
-      end else if d.bloIni then  //verifica si abre bloque
-        AbreBloqueAct(d);
+      abrioSec := false;
+      if d.secIni then //Verifica primero si es bloque de sección
+        abrioSec := AbreSeccionAct(d.secIniL);
+      if not abrioSec then  //prueba si abre como bloque
+        if d.bloIni then AbreBloqueAct(d); //verifica como bloque normal
     end;
   tdUniLin: begin  //delimitador de token de una línea.
       //Se resuelve siempre en la misma línea.
@@ -1416,11 +1476,11 @@ begin
       if d.bloFin then begin //verifica primero, si es cierre de algún bloque
         CierraBloqueAct(d.bloFinL);  //cierra primero
       end;
-      if d.secIni then begin //Verifica primero si es bloque de sección
-        if not AbreSeccionAct(d.secIniL) then  //prueba si abre como sección
-           if d.bloIni then AbreBloqueAct(d); //verifica como bloque normal
-      end else if d.bloIni then  //verifica si abre bloque
-        AbreBloqueAct(d);
+      abrioSec := false;
+      if d.secIni then //Verifica primero si es bloque de sección
+        abrioSec := AbreSeccionAct(d.secIniL);
+      if not abrioSec then  //prueba si abre como bloque
+        if d.bloIni then AbreBloqueAct(d); //verifica como bloque normal
     end;
   tdMulLin: begin  //delimitador de token multilínea
       //Se pueden resolver en la línea actual o en las siguientes líneas.
@@ -1812,6 +1872,8 @@ function TSynFacilSyn.TopCodeFoldBlock(DownIndex: Integer): TFaSynBlock;
 //Función pública para TopCodeFoldBlockType() pero no devuelve puntero.
 begin
   Result := TFaSynBlock(TopCodeFoldBlockType(DownIndex));
+  if Result = nil then   //esto solo podría pasar en el bloque principal
+    Result := MainBlk;
 end;
 function TSynFacilSyn.SetHighlighterAtXY(XY: TPoint): boolean;
 //Pone al resaltador en una posición específica del texto, como si estuviera
