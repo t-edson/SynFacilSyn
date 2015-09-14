@@ -8,7 +8,7 @@
       <Unit0>
         <Filename Value="demo.lpr"/>
         <IsPartOfProject Value="True"/>
-        <UsageCount Value="39"/>
+        <UsageCount Value="47"/>
       </Unit0>
       <Unit1>
         <Filename Value="unit1.pas"/>
@@ -17,18 +17,16 @@
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="Unit1"/>
-        <TopLine Value="25"/>
-        <CursorPos X="34" Y="51"/>
-        <UsageCount Value="39"/>
+        <CursorPos X="22" Y="49"/>
+        <UsageCount Value="47"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
       </Unit1>
       <Unit2>
         <Filename Value="..\..\synfacil_adapter_atsynedit.pas"/>
-        <IsPartOfProject Value="True"/>
         <EditorIndex Value="-1"/>
         <CursorPos Y="16"/>
-        <UsageCount Value="37"/>
+        <UsageCount Value="36"/>
       </Unit2>
       <Unit3>
         <Filename Value="..\atsynedit\atsynedit_canvasproc.pas"/>
@@ -36,14 +34,14 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="25"/>
         <CursorPos X="5" Y="40"/>
-        <UsageCount Value="8"/>
+        <UsageCount Value="7"/>
       </Unit3>
       <Unit4>
         <Filename Value="..\SynFacilSyn\SynFacilHighlighter.pas"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="57"/>
         <CursorPos X="3" Y="68"/>
-        <UsageCount Value="8"/>
+        <UsageCount Value="7"/>
       </Unit4>
       <Unit5>
         <Filename Value="..\atsynedit\atsynedit_adapters.pas"/>
@@ -51,7 +49,7 @@
         <EditorIndex Value="3"/>
         <TopLine Value="4"/>
         <CursorPos X="15" Y="20"/>
-        <UsageCount Value="18"/>
+        <UsageCount Value="22"/>
         <Loaded Value="True"/>
       </Unit5>
       <Unit6>
@@ -60,23 +58,30 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="156"/>
         <CursorPos X="14" Y="161"/>
-        <UsageCount Value="8"/>
+        <UsageCount Value="7"/>
       </Unit6>
       <Unit7>
         <Filename Value="..\..\SynFacilHighlighter.pas"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="111"/>
         <CursorPos X="15" Y="120"/>
-        <UsageCount Value="8"/>
+        <UsageCount Value="7"/>
       </Unit7>
       <Unit8>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="73"/>
-        <CursorPos Y="83"/>
-        <FoldState Value=" T0jC2DF"/>
-        <UsageCount Value="18"/>
+        <TopLine Value="191"/>
+        <CursorPos X="33" Y="212"/>
+        <FoldState Value=" T3id032 T0ldZ3}"/>
+        <ExtraEditorCount Value="1"/>
+        <ExtraEditor1>
+          <IsVisibleTab Value="True"/>
+          <WindowIndex Value="1"/>
+          <TopLine Value="53"/>
+          <CursorPos X="33" Y="159"/>
+        </ExtraEditor1>
+        <UsageCount Value="22"/>
         <Loaded Value="True"/>
       </Unit8>
       <Unit9>
@@ -85,21 +90,21 @@
         <TopLine Value="2218"/>
         <CursorPos X="3" Y="2225"/>
         <FoldState Value=" TL00KK p0\b0143B T4O03 T5S01011 TMi4221H19]atN]L31223182B1A19]41151]SvR6108241T1811]M4]LsX21091313]H712[O4]p41]H]h TCaF8 T8ig2A2 pjPjc2D]N3o00P3 pkFl20M]?icjO0E5]ZJ]iN2]RPlP0y21613]VYuT0F536]Bbna0H5]9gjN0t3]pAkQ084211741 T6o701Q]WX$N019 T0oD=26]eKkSK2K]QZnCf31[94i3ac7]R1i5Y7L]90kKj45 pjLiCx22]af9Y28]8biBnLC]Q6icq3H]IakEg5C1B14211D piXvUj3F24 THpU4x3 p0_g491 TF%e21P"/>
-        <UsageCount Value="13"/>
+        <UsageCount Value="12"/>
       </Unit9>
       <Unit10>
         <Filename Value="..\SynFacilBasic.pas"/>
         <EditorIndex Value="2"/>
         <TopLine Value="143"/>
         <CursorPos Y="160"/>
-        <UsageCount Value="14"/>
+        <UsageCount Value="18"/>
         <Loaded Value="True"/>
       </Unit10>
       <Unit11>
         <Filename Value="C:\lazarus\components\lazutils\LazLoggerIntf.inc"/>
         <EditorIndex Value="-1"/>
         <CursorPos X="11" Y="13"/>
-        <UsageCount Value="8"/>
+        <UsageCount Value="7"/>
       </Unit11>
       <Unit12>
         <Filename Value="..\atsynedit\atsynedit.pas"/>
@@ -107,7 +112,7 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="3473"/>
         <CursorPos Y="3491"/>
-        <UsageCount Value="10"/>
+        <UsageCount Value="9"/>
       </Unit12>
       <Unit13>
         <Filename Value="..\atsynedit\atstrings.pas"/>
@@ -115,7 +120,7 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="140"/>
         <CursorPos X="14" Y="157"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit13>
       <Unit14>
         <Filename Value="C:\lazarus\components\synedit\synedithighlighter.pp"/>
@@ -123,171 +128,171 @@
         <EditorIndex Value="-1"/>
         <TopLine Value="97"/>
         <CursorPos X="3" Y="114"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit14>
       <Unit15>
         <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\objpas\fgl.pp"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="449"/>
         <CursorPos X="14" Y="463"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit15>
       <Unit16>
         <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\inc\objpash.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="184"/>
         <CursorPos X="21" Y="201"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit16>
       <Unit17>
         <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\inc\objpas.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="273"/>
         <CursorPos X="12" Y="277"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit17>
       <Unit18>
         <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\objpas\classes\classesh.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="223"/>
         <CursorPos X="15" Y="241"/>
-        <UsageCount Value="10"/>
+        <UsageCount Value="9"/>
       </Unit18>
       <Unit19>
         <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\objpas\classes\lists.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="89"/>
         <CursorPos X="21" Y="98"/>
-        <UsageCount Value="9"/>
+        <UsageCount Value="8"/>
       </Unit19>
       <Unit20>
         <Filename Value="..\atsynedit\atsynedit_cmd_handler.inc"/>
         <EditorIndex Value="-1"/>
         <TopLine Value="9"/>
         <CursorPos Y="26"/>
-        <UsageCount Value="10"/>
+        <UsageCount Value="9"/>
       </Unit20>
     </Units>
     <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="159" TopLine="141"/>
+        <Caret Line="176" TopLine="160"/>
       </Position1>
       <Position2>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="158" TopLine="141"/>
+        <Caret Line="177" TopLine="160"/>
       </Position2>
       <Position3>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="159" TopLine="141"/>
+        <Caret Line="187" TopLine="160"/>
       </Position3>
       <Position4>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="158" TopLine="141"/>
+        <Caret Line="176" TopLine="160"/>
       </Position4>
       <Position5>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="159" TopLine="141"/>
+        <Caret Line="177" TopLine="160"/>
       </Position5>
       <Position6>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="158" TopLine="141"/>
+        <Caret Line="187" TopLine="160"/>
       </Position6>
       <Position7>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="159" TopLine="141"/>
+        <Caret Line="176" TopLine="160"/>
       </Position7>
       <Position8>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="158" TopLine="141"/>
+        <Caret Line="177" TopLine="160"/>
       </Position8>
       <Position9>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="161" TopLine="141"/>
+        <Caret Line="187" TopLine="160"/>
       </Position9>
       <Position10>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="165" TopLine="141"/>
+        <Caret Line="176" TopLine="160"/>
       </Position10>
       <Position11>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="113" Column="25" TopLine="99"/>
+        <Caret Line="177" TopLine="160"/>
       </Position11>
       <Position12>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="154" TopLine="143"/>
+        <Caret Line="187" TopLine="160"/>
       </Position12>
       <Position13>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="158" TopLine="143"/>
+        <Caret Line="176" TopLine="160"/>
       </Position13>
       <Position14>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="159" TopLine="143"/>
+        <Caret Line="177" TopLine="160"/>
       </Position14>
       <Position15>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="158" TopLine="143"/>
+        <Caret Line="187" TopLine="160"/>
       </Position15>
       <Position16>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="159" TopLine="143"/>
+        <Caret Line="176" TopLine="160"/>
       </Position16>
       <Position17>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="158" TopLine="143"/>
+        <Caret Line="177" TopLine="160"/>
       </Position17>
       <Position18>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="159" TopLine="143"/>
+        <Caret Line="187" TopLine="160"/>
       </Position18>
       <Position19>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="158" TopLine="143"/>
+        <Caret Line="176" TopLine="160"/>
       </Position19>
       <Position20>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="159" TopLine="143"/>
+        <Caret Line="177" TopLine="160"/>
       </Position20>
       <Position21>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="158" TopLine="143"/>
+        <Caret Line="178" TopLine="160"/>
       </Position21>
       <Position22>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="165" Column="21" TopLine="149"/>
+        <Caret Line="179" TopLine="160"/>
       </Position22>
       <Position23>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="178" Column="16" TopLine="149"/>
+        <Caret Line="181" TopLine="160"/>
       </Position23>
       <Position24>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="165" Column="16" TopLine="149"/>
+        <Caret Line="180" TopLine="160"/>
       </Position24>
       <Position25>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="164" Column="5" TopLine="149"/>
+        <Caret Line="181" TopLine="160"/>
       </Position25>
       <Position26>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="113" Column="12" TopLine="138"/>
+        <Caret Line="180" TopLine="160"/>
       </Position26>
       <Position27>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="165" TopLine="138"/>
+        <Caret Line="181" TopLine="160"/>
       </Position27>
       <Position28>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="178" Column="33" TopLine="148"/>
+        <Caret Line="180" TopLine="160"/>
       </Position28>
       <Position29>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="16" Column="5"/>
+        <Caret Line="182" TopLine="160"/>
       </Position29>
       <Position30>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="90" Column="22" TopLine="77"/>
+        <Caret Line="183" TopLine="160"/>
       </Position30>
     </JumpHistory>
   </ProjectSession>
