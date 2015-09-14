@@ -27,11 +27,13 @@ type
     fRange : TPtrTokEspec;
     firstModified: Integer;
     UpdatedToIdx: integer; //the top index of states[] that have valid value for range.
-    LastCalc: integer;  //last line painted
+    LastCalc: integer;     //last line painted
+    Scrolled: boolean;     //flag
     procedure SetStartRangeForLine(ed: TATSynEdit; lin: integer);
   public
     procedure SetSyntax(const AFilename: string);
     procedure StringsLog(Sender: TObject; ALine, ALen: integer);
+    procedure edScroll(Sender: TObject);
     procedure OnEditorCalcHilite(Sender: TObject;
       var AParts: TATLineParts;
       ALineIndex, ACharIndex, ALineLen: integer;
@@ -77,6 +79,7 @@ begin
   hlt:= TSynFacilSyn.Create(Self);
   states := TFPList.Create;
   UpdatedToIdx := 0;   //updated to before of first line
+  Scrolled := false;
 end;
 
 procedure TSynFacilAdapter.SetSyntax(const AFilename: string);
@@ -96,6 +99,12 @@ begin
   if (Aline>=0) and (Aline<firstModified) then firstModified := ALine;
 //  DebugLn('OnLog: ALine=' + IntToStr(ALine) + ' ALen=' + IntToSTr(Alen));
 end;
+procedure TSynFacilAdapter.edScroll(Sender: TObject);
+begin
+  Scrolled := true;
+//  DebugLn('OnScroll');
+end;
+
 
 procedure TSynFacilAdapter.OnEditorCalcHilite(Sender: TObject;
   var AParts: TATLineParts; ALineIndex, ACharIndex, ALineLen: integer;
@@ -107,7 +116,7 @@ var
   atr: TSynHighlighterAttributes;
 begin
   ed:= Sender as TATSynEdit;
-  if ALineIndex<=LastCalc then begin
+  if (ALineIndex<=LastCalc) or Scrolled then begin
     //first line painted
     DebugLn('-OnEditorCalcHilite: requiring range for Start of line ' + IntToStr(ALineIndex+1));
     SetStartRangeForLine(ed, ALineIndex);
@@ -132,6 +141,7 @@ begin
     if npart>High(AParts) then break;
   end;
   LastCalc := ALineIndex;
+  Scrolled := false;
 end;
 
 procedure TSynFacilAdapter.SetStartRangeForLine(ed: TATSynEdit; lin: integer);
@@ -197,8 +207,8 @@ begin
   ed:= Sender as TATSynEdit;
   //Calculate necessary space in state[].
   NeededIdx := ed.Strings.Count div LINES_PER_STATE + 1;
-  DebugLn('EditorChange: ed with lines:' + IntToStr(ed.Strings.Count) +
-                   ' Needed: '+ IntToStr(NeededIdx));
+//  DebugLn('EditorChange: ed with lines:' + IntToStr(ed.Strings.Count) +
+//                   ' Needed: '+ IntToStr(NeededIdx));
   //Add if there are less
   while states.Count<NeededIdx do begin
     states.Add(nil);

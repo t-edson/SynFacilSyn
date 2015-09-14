@@ -13,7 +13,6 @@ type
   { TForm1 }
 
   TForm1 = class(TForm)
-    procedure edStringsLog(Sender: TObject; ALine, ALen: integer);
     procedure FormCreate(Sender: TObject);
   private
     { private declarations }
@@ -34,10 +33,6 @@ implementation
 
 { TForm1 }
 
-procedure TForm1.edStringsLog(Sender: TObject; ALine, ALen: integer);
-begin
-  adapter.StringsLog(Sender, ALine, ALen);
-end;
 
 procedure TForm1.FormCreate(Sender: TObject);
 begin
@@ -51,7 +46,8 @@ begin
   ed.OptUnprintedVisible:= false;
   ed.OptRulerVisible:= false;
   ed.AdapterHilite:= adapter;
-  ed.Strings.OnLog:=@edStringsLog;
+  ed.Strings.OnLog:=@adapter.StringsLog;
+  ed.OnScroll:=@adapter.edScroll;
   ed.LoadFromFile(ExtractFilePath(Application.ExeName)+'unit1.pas');
 end;
 
