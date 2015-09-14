@@ -120,6 +120,10 @@ begin
     //first line painted
     DebugLn('-OnEditorCalcHilite: requiring range for Start of line ' + IntToStr(ALineIndex+1));
     SetStartRangeForLine(ed, ALineIndex);
+    {It's only needed to have the state of the previous line to be painted, because
+    according to how ATSynEdit works, it will call to OnEditorCalcHilite(), sequentially
+    from the first line, until the last visible line on the screen. The white lines doesn't
+    call to OnEditorCalcHilite().}
   end;
   Str:= Copy(ed.Strings.Lines[ALineIndex], ACharIndex, ALineLen);
   hlt.SetLine(Str, ALineIndex);
@@ -229,7 +233,7 @@ begin
   DebugLn('EditorChange: UpdatedToIdx=' + IntToStr(UpdatedToIdx));
 
   //showmessage('onchange');
-  firstModified := MaxInt;  //clean flag}
+  firstModified := MaxInt;  //clean flag
 end;
 
 end.
