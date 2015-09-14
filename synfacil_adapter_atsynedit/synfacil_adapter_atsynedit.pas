@@ -6,7 +6,7 @@ unit synfacil_adapter_atsynedit;
 interface
 
 uses
-  Classes, SysUtils, fgl, Graphics, LazLogger,
+  Classes, SysUtils, Graphics, LazLogger,
   ATSynEdit,
   ATSynEdit_Adapters,
   ATSynEdit_CanvasProc,
@@ -24,7 +24,6 @@ type
   private
     hlt    : TSynFacilSyn;
     states : TSynFacilLineStates;
-    fRange : TPtrTokEspec;
     firstModified: Integer;
     UpdatedToIdx: integer; //the top index of states[] that have valid value for range.
     LastCalc: integer;     //last line painted
@@ -118,7 +117,7 @@ begin
   ed:= Sender as TATSynEdit;
   if (ALineIndex<=LastCalc) or Scrolled then begin
     //first line painted
-    DebugLn('-OnEditorCalcHilite: requiring range for Start of line ' + IntToStr(ALineIndex+1));
+//    DebugLn('-OnEditorCalcHilite: requiring range for Start of line ' + IntToStr(ALineIndex+1));
     SetStartRangeForLine(ed, ALineIndex);
     {It's only needed to have the state of the previous line to be painted, because
     according to how ATSynEdit works, it will call to OnEditorCalcHilite(), sequentially
@@ -184,11 +183,11 @@ begin
         if hlt.GetEol then begin
           if (i+1) mod LINES_PER_STATE = 0 then begin
             ist := (i+1) div LINES_PER_STATE;
-            DebugLn('  Updating state for line:' + IntToStr(i+1) +
-                    ' in states[' + IntToStr(ist) + ']');
+//            DebugLn('  Updating state for line:' + IntToStr(i+1) +
+//                    ' in states[' + IntToStr(ist) + ']');
             if ist>states.Count-1 then begin
               //This must not happen, but happens
-              DebugLn('  Event OnEditorChange not fired yet.');
+//              DebugLn('  Event OnEditorChange not fired yet.');
               exit;
             end;
             states[ist] := hlt.Range;
@@ -230,7 +229,7 @@ begin
   //firstModified := 0;
   UpdatedToIdx0:=firstModified div LINES_PER_STATE;
   if UpdatedToIdx0<UpdatedToIdx then UpdatedToIdx := UpdatedToIdx0;
-  DebugLn('EditorChange: UpdatedToIdx=' + IntToStr(UpdatedToIdx));
+//  DebugLn('EditorChange: UpdatedToIdx=' + IntToStr(UpdatedToIdx));
 
   //showmessage('onchange');
   firstModified := MaxInt;  //clean flag
