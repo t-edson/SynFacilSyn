@@ -8,7 +8,7 @@
       <Unit0>
         <Filename Value="demo.lpr"/>
         <IsPartOfProject Value="True"/>
-        <UsageCount Value="47"/>
+        <UsageCount Value="49"/>
       </Unit0>
       <Unit1>
         <Filename Value="unit1.pas"/>
@@ -18,7 +18,7 @@
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="Unit1"/>
         <CursorPos X="22" Y="49"/>
-        <UsageCount Value="47"/>
+        <UsageCount Value="49"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
       </Unit1>
@@ -49,7 +49,7 @@
         <EditorIndex Value="3"/>
         <TopLine Value="4"/>
         <CursorPos X="15" Y="20"/>
-        <UsageCount Value="22"/>
+        <UsageCount Value="23"/>
         <Loaded Value="True"/>
       </Unit5>
       <Unit6>
@@ -71,17 +71,17 @@
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="191"/>
-        <CursorPos X="33" Y="212"/>
-        <FoldState Value=" T3id032 T0ldZ3}"/>
+        <TopLine Value="97"/>
+        <CursorPos Y="112"/>
+        <FoldState Value=" T3ic031 T0lcZ3,"/>
         <ExtraEditorCount Value="1"/>
         <ExtraEditor1>
           <IsVisibleTab Value="True"/>
           <WindowIndex Value="1"/>
-          <TopLine Value="53"/>
-          <CursorPos X="33" Y="159"/>
+          <TopLine Value="52"/>
+          <CursorPos X="33" Y="153"/>
         </ExtraEditor1>
-        <UsageCount Value="22"/>
+        <UsageCount Value="23"/>
         <Loaded Value="True"/>
       </Unit8>
       <Unit9>
@@ -97,7 +97,7 @@
         <EditorIndex Value="2"/>
         <TopLine Value="143"/>
         <CursorPos Y="160"/>
-        <UsageCount Value="18"/>
+        <UsageCount Value="19"/>
         <Loaded Value="True"/>
       </Unit10>
       <Unit11>
@@ -176,123 +176,123 @@
     <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="176" TopLine="160"/>
+        <Caret Line="115" TopLine="100"/>
       </Position1>
       <Position2>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="177" TopLine="160"/>
+        <Caret Line="116" TopLine="100"/>
       </Position2>
       <Position3>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="187" TopLine="160"/>
+        <Caret Line="118" TopLine="100"/>
       </Position3>
       <Position4>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="176" TopLine="160"/>
+        <Caret Line="119" TopLine="100"/>
       </Position4>
       <Position5>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="177" TopLine="160"/>
+        <Caret Line="151" TopLine="149"/>
       </Position5>
       <Position6>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="187" TopLine="160"/>
+        <Caret Line="152" TopLine="146"/>
       </Position6>
       <Position7>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="176" TopLine="160"/>
+        <Caret Line="157" TopLine="146"/>
       </Position7>
       <Position8>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="177" TopLine="160"/>
+        <Caret Line="158" TopLine="146"/>
       </Position8>
       <Position9>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="187" TopLine="160"/>
+        <Caret Line="172" TopLine="148"/>
       </Position9>
       <Position10>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="176" TopLine="160"/>
+        <Caret Line="173" TopLine="161"/>
       </Position10>
       <Position11>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="177" TopLine="160"/>
+        <Caret Line="178" TopLine="161"/>
       </Position11>
       <Position12>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="187" TopLine="160"/>
+        <Caret Line="180" TopLine="161"/>
       </Position12>
       <Position13>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="176" TopLine="160"/>
+        <Caret Line="179" TopLine="161"/>
       </Position13>
       <Position14>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="177" TopLine="160"/>
+        <Caret Line="180" TopLine="161"/>
       </Position14>
       <Position15>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="187" TopLine="160"/>
+        <Caret Line="179" TopLine="161"/>
       </Position15>
       <Position16>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="176" TopLine="160"/>
+        <Caret Line="180" TopLine="161"/>
       </Position16>
       <Position17>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="177" TopLine="160"/>
+        <Caret Line="179" TopLine="161"/>
       </Position17>
       <Position18>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="187" TopLine="160"/>
+        <Caret Line="181" TopLine="161"/>
       </Position18>
       <Position19>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="176" TopLine="160"/>
+        <Caret Line="136" Column="14" TopLine="194"/>
       </Position19>
       <Position20>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="177" TopLine="160"/>
+        <Caret Line="101" Column="39" TopLine="73"/>
       </Position20>
       <Position21>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="178" TopLine="160"/>
+        <Caret Line="32" Column="26" TopLine="17"/>
       </Position21>
       <Position22>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="179" TopLine="160"/>
+        <Caret Line="101" Column="39" TopLine="64"/>
       </Position22>
       <Position23>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="181" TopLine="160"/>
+        <Caret Line="32" Column="26" TopLine="17"/>
       </Position23>
       <Position24>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="180" TopLine="160"/>
+        <Caret Line="101" TopLine="64"/>
       </Position24>
       <Position25>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="181" TopLine="160"/>
+        <Caret Line="32" TopLine="17"/>
       </Position25>
       <Position26>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="180" TopLine="160"/>
+        <Caret Line="116" Column="32" TopLine="142"/>
       </Position26>
       <Position27>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="181" TopLine="160"/>
+        <Caret Line="192" TopLine="177"/>
       </Position27>
       <Position28>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="180" TopLine="160"/>
+        <Caret Line="221" TopLine="182"/>
       </Position28>
       <Position29>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="182" TopLine="160"/>
+        <Caret Line="192" TopLine="101"/>
       </Position29>
       <Position30>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <Caret Line="183" TopLine="160"/>
+        <Caret Line="185" TopLine="178"/>
       </Position30>
     </JumpHistory>
   </ProjectSession>
