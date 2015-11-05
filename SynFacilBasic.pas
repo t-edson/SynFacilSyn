@@ -966,7 +966,8 @@ function TSynFacilSynBase.CreaBuscTokEspec(var mat: TArrayTokSpec; cad: string;
 {Busca o crea el token especial indicado en "cad". Si ya existe, devuelve TRUE y
  actualiza "i" con su posición. Si no existe. Crea el token especial y devuelve la
  referencia en "i". Se le debe indicar la tabla a buscar en "mat"}
-var r:TTokSpec;
+var
+  r:TTokSpec;
 begin
   if not CaseSensitive then cad:= UpCase(cad);  //cambia caja si es necesario
   if BuscTokEspec(mat, cad, i, TokPos) then exit(true);  //ya existe, devuelve en "i"
@@ -978,6 +979,7 @@ begin
   r.dEnd:='';         //sin delimitador final
   r.pRange:=nil;      //sin función de rango
   r.folTok:=false;    //sin plegado de token
+  r.chrEsc := #0;       //sin caracter de escape
   r.openBlk:=false;    //sin plegado de bloque
   r.closeBlk:=false;    //sin plegado de bloque
   r.OpenSec:=false;    //no es sección de bloque

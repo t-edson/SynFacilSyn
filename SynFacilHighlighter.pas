@@ -1,14 +1,6 @@
-{                               TSynFacilSyn 1.14
-* Se cambia el nombre de algunos campos (referidos a bloques) de tipo TTokSpec, para
-hacerlos más asociados a su función.
-* Se simplifica algo de código de ProcTokenDelim, y se hacen algunas modificaciones
-del código para ordenarlo y hacerlo más legible. Se cambia el nombre de varios
-elementos.
-* Se cambia de nombre a BlkToClose por ClosethisBlk.
-* Se agrega el parámetro "CloseParent" a la sintaxis del XML, para poder forzar a
-cerrar un bloque padre cuando se cierra un bloque hijo.
-* Se crean los eventos OnBeforeClose() y OnBeforeOpen(), para controlar externamente,
-la apertura y cierre de los bloques.
+{                               TSynFacilSyn 1.15b
+* Se convierten varios métodos privados en campos protegidos, para permitir
+acceder a ellos, desde clases derivadas.
 
 Queda pendiente incluir el procesamiento de los paréntesis en las expresiones regulares,
 como una forma sencilla de definir bloques de Regex, sin tener que usar la definición
@@ -217,7 +209,7 @@ type
     procedure metPer;
     procedure metAmp;
     procedure metC3;
-  private   //procesamiento de otros elementos
+  protected   //procesamiento de otros elementos
     procedure ProcTokenDelim(const d: TTokSpec);
     procedure metIdentEsp(var mat: TArrayTokSpec);
     procedure metSimbEsp;
