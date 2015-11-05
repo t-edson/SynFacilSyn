@@ -2,6 +2,7 @@
 * Se convierten varios métodos privados en campos protegidos, para permitir
 acceder a ellos, desde clases derivadas.
 
+
 Queda pendiente incluir el procesamiento de los paréntesis en las expresiones regulares,
 como una forma sencilla de definir bloques de Regex, sin tener que usar la definición
 avanzada. También se podría ver si se puede mejorar el soporte de Regex, sobre todo para el
@@ -701,7 +702,12 @@ begin
   VerifDelim(dEnd);
   //configura token especial
   for tmp in lisTmp do begin
-    CreaBuscEspec(tok, tmp, 0); //busca o crea
+    if (tmp<>')') and (tmp[1]='^') then begin
+      tmp := copy(tmp,2,length(tmp));
+      CreaBuscEspec(tok, tmp, 1); //busca o crea
+    end else begin
+      CreaBuscEspec(tok, tmp, 0); //busca o crea
+    end;
     //actualiza sus campos. Cambia, si ya existía
     tok^.dEnd  :=dEnd;
     tok^.typDel:=tipDel;
