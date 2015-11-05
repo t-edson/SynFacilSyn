@@ -40,9 +40,6 @@ type
     Chars    : array[#0..#255] of ByteBool; //caracteres
     Text     : string;             //cadena válida
     expTyp   : tFaRegExpType;      //tipo de expresión
-//    TokTyp   : TSynHighlighterAttributes;   //tipo de token al salir
-//    dMatch   : byte;   //desplazamiento en caso de coincidencia (0 = salir)
-//    dMiss    : byte;   //desplazamiento en caso de no coincidencia (0 = salir)
     aMatch   : TSynHighlighterAttributes;  //atributo asignado en caso TRUE
     aFail    : TSynHighlighterAttributes;  //atributo asignado en caso TRUE
     //Campos para ejecutar instrucciones, cuando No cumple
@@ -112,14 +109,16 @@ type
     folTok: boolean;       //indica si el token delimitado, tiene plegado
     chrEsc: char;          //Caracter de escape de token delimitado. Si no se usa, contiene #0.
     //propiedades para manejo de bloques y plegado de código
-    bloIni : boolean;      //indica si el token es inicio de bloque de plegado
-    bloIniL: array of TFaSynBlock;  //lista de referencias a los bloques que abre
-    bloFin : boolean;      //indica si el token es fin de bloque de plegado
-    bloFinL: array of TFaSynBlock;  //lista de referencias a los bloques que cierra
-    secIni : boolean;      //indica si el token es inicio de sección de bloque
-    secIniL: array of TFaSynBlock;  //lista de bloques de los que es inicio de sección
-    firstSec: TFaSynBlock; //sección que se debe abrir al abrir el bloque
+    openBlk   : boolean;      //indica si el token es inicio de bloque de plegado
+    BlksToOpen: array of TFaSynBlock;  //lista de referencias a los bloques que abre
+    closeBlk  : boolean;      //indica si el token es fin de bloque de plegado
+    BlksToClose: array of TFaSynBlock; //lista de referencias a los bloques que cierra
+    OpenSec   : boolean;      //indica si el token es inicio de sección de bloque
+    SecsToOpen: array of TFaSynBlock;  //lista de bloques de los que es inicio de sección
+    firstSec  : TFaSynBlock; //sección que se debe abrir al abrir el bloque
   end;
+
+  TEvBlockOnOpen = procedure(blk: TFaSynBlock; var Cancel: boolean = false) of object;
 
   TArrayTokSpec = array of TTokSpec;
   //clase para manejar la definición de bloques de sintaxis
@@ -131,6 +130,9 @@ type
     BackCol     : TColor;    //color de fondo de un bloque
     IsSection   : boolean;   //indica si es un bloque de tipo sección
     UniqSec     : boolean;   //índica que es sección única
+    CloseParent : boolean;   //indica que debe cerrar al blqoue padre al cerrarse
+    OnBeforeOpen      : TEvBlockOnOpen;  //evento de apertura de bloque
+    OnBeforeClose     : TEvBlockOnOpen;  //evento de cierre de bloque
   end;
 
   TPtrATokEspec = ^TArrayTokSpec;     //puntero a tabla
@@ -976,9 +978,9 @@ begin
   r.dEnd:='';         //sin delimitador final
   r.pRange:=nil;      //sin función de rango
   r.folTok:=false;    //sin plegado de token
-  r.bloIni:=false;    //sin plegado de bloque
-  r.bloFin:=false;    //sin plegado de bloque
-  r.secIni:=false;    //no es sección de bloque
+  r.openBlk:=false;    //sin plegado de bloque
+  r.closeBlk:=false;    //sin plegado de bloque
+  r.OpenSec:=false;    //no es sección de bloque
   r.firstSec:=nil;     //inicialmente no abre ningún bloque
 
   i := High(mat)+1;   //siguiente posición
