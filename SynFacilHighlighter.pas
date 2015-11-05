@@ -706,6 +706,8 @@ begin
       tmp := copy(tmp,2,length(tmp));
       CreaBuscEspec(tok, tmp, 1); //busca o crea
     end else begin
+      if copy(tmp,1,2) = '\^' then  //caracter escapado
+        tmp := '^' + copy(tmp,3,length(tmp));
       CreaBuscEspec(tok, tmp, 0); //busca o crea
     end;
     //actualiza sus campos. Cambia, si ya existía
