@@ -702,7 +702,7 @@ begin
   VerifDelim(dEnd);
   //configura token especial
   for tmp in lisTmp do begin
-    if (tmp<>')') and (tmp[1]='^') then begin
+    if (tmp<>'') and (tmp[1]='^') then begin
       tmp := copy(tmp,2,length(tmp));
       CreaBuscEspec(tok, tmp, 1); //busca o crea
     end else begin
