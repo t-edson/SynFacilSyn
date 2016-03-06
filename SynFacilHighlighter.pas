@@ -1,7 +1,10 @@
 {                               TSynFacilSyn 1.15b
 * Se convierten varios métodos privados en campos protegidos, para permitir
 acceder a ellos, desde clases derivadas.
-
+* Se ha modificado DefTokDelim(), para aceptar el caracter "^" al inicio, como
+el caracter Regex, que indica que el delimtador debe estar al inicio de la línea.
+* Elimina el parámetro opcional de TEvBlockOnOpen, para que se pueda compilar con FPC 3.0.
+* Se modifica DefTokDelim, para que se pueda compilar con FPC 3.0.
 
 Queda pendiente incluir el procesamiento de los paréntesis en las expresiones regulares,
 como una forma sencilla de definir bloques de Regex, sin tener que usar la definición
@@ -670,7 +673,7 @@ procedure TSynFacilSyn.DefTokDelim(dStart, dEnd: string; tokTyp: TSynHighlighter
 genera una excepción}
 var
   tok  : TPtrTokEspec;
-  tmp: String;
+  tmp, tmpnew: String;
   procedure ActProcRange(var r: TTokSpec);
   //Configura el puntero pRange() para la función apropiada de acuerdo al delimitador final.
   begin
@@ -703,12 +706,15 @@ begin
   //configura token especial
   for tmp in lisTmp do begin
     if (tmp<>'') and (tmp[1]='^') then begin
-      tmp := copy(tmp,2,length(tmp));
-      CreaBuscEspec(tok, tmp, 1); //busca o crea
+      tmpnew := copy(tmp,2,length(tmp));
+      CreaBuscEspec(tok, tmpnew, 1); //busca o crea
     end else begin
-      if copy(tmp,1,2) = '\^' then  //caracter escapado
-        tmp := '^' + copy(tmp,3,length(tmp));
-      CreaBuscEspec(tok, tmp, 0); //busca o crea
+      if copy(tmp,1,2) = '\^' then begin  //caracter escapado
+        tmpnew := '^' + copy(tmp,3,length(tmp));
+        CreaBuscEspec(tok, tmpnew, 0); //busca o crea
+      end else begin
+        CreaBuscEspec(tok, tmp, 0); //busca o crea
+      end;
     end;
     //actualiza sus campos. Cambia, si ya existía
     tok^.dEnd  :=dEnd;

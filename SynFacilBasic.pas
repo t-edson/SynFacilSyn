@@ -118,7 +118,7 @@ type
     firstSec  : TFaSynBlock; //sección que se debe abrir al abrir el bloque
   end;
 
-  TEvBlockOnOpen = procedure(blk: TFaSynBlock; var Cancel: boolean = false) of object;
+  TEvBlockOnOpen = procedure(blk: TFaSynBlock; var Cancel: boolean) of object;
 
   TArrayTokSpec = array of TTokSpec;
   //clase para manejar la definición de bloques de sintaxis
