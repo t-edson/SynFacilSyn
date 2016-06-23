@@ -41,7 +41,7 @@ var
 begin
   Token := xLex.GetToken; //lee el token
   TokenType := xLex.GetTokenKind;  //lee atributo
-  tmp := TSynHighlighterAttributes(TokenType).Name;
+  tmp := TSynHighlighterAttributes(UIntPtr(TokenType)).Name;
   if xLex.TopCodeFoldBlock = nil then blk := 'nil    '
   else blk := xLex.TopCodeFoldBlock.name;
   frmOut.puts( tmp + space(12-length(tmp))+ '('+ blk +'): ' +
