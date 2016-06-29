@@ -35,7 +35,13 @@
   <Comment Start="{" End="}" Multiline="true" Folding="true"></Comment>
 
   <Section Name="unit" Start="unit"></Section>
-  <Section Name="interface" Start="interface"></Section>
+  <Section Name="interface" Start="interface">
+    <Block Name="Record" Start="Record" End="End" ></Block>
+    <Block Name="Class" Start="Class" End="end" >
+      <Section Start="private"> </Section>
+      <Section Start="public"> </Section>
+    </Block>
+  </Section>
   <Section Name="implementation" Start="implementation">
     <Block Name="Proc" Start="procedure" End="end" BackCol="#D0F5FF">
       <Block Name="ProcParam" Start="(" End=")" Folding="false" BackCol="transparent"></Block>
@@ -48,14 +54,8 @@
       <Section Start="begin" BackCol="#F5DA81" Unique="true"> </Section>
     </Block>
   </Section>
-
   <Section Name="unit-type" Start="type" Parent="unit"></Section>
 
-  <Block Name="Record" Start="Record" End="End" ></Block>
-  <Block Name="Class" Start="Class" End="end" >
-    <Section Start="private"> </Section>
-    <Section Start="public"> </Section>
-  </Block>
   <Block Name="BeginEnd"  Start="Begin" End= "End" BackCol="#B0FFE0">
   </Block>
   <Block>

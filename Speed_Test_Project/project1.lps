@@ -18,6 +18,7 @@
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="Unit1"/>
+        <IsVisibleTab Value="True"/>
         <CursorPos X="21" Y="10"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
@@ -63,10 +64,8 @@
       </Unit7>
       <Unit8>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
-        <CursorPos Y="24"/>
-        <FoldState Value=" T4V03 T5Z01011 TMiB221H19 p0tQ]L31223182B1A19]4115]RsSF10F]HC2O]FuP020811]U4]L313]A712[I5A]K13[r4e02151 TCi0F8]88j92A2 pjPjc2D3 TLmg07K]h.d01O T3oA0P]xkFl20M4 picjO0E5]pJig2N2]RPlP0:]9m2nR0{515347]fbtQ0L5[94jM0K7]oWkI0s3]9AkP086]RfjG0D01B]KHka0C T6oH01L]RX*701F T0oN=26]XKkSK2K]QZnCf31[94i3ac7 pj1i5Y7M]92kPj45 pjLiCx22]af9Y28]8biBnLC]Q6icq3E3114446D]QYrdS6H]9aoBMJF]9Zk1B2526 THpe4x3]J1@U2y p0zK491 TF'821W"/>
+        <CursorPos X="5" Y="24"/>
         <UsageCount Value="28"/>
         <Bookmarks Count="2">
           <Item0 Y="270" ID="2"/>
