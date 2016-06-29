@@ -18,6 +18,7 @@
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="Unit1"/>
+        <IsVisibleTab Value="True"/>
         <CursorPos Y="10"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
@@ -87,7 +88,6 @@
       </Unit10>
       <Unit11>
         <Filename Value="..\SynFacilHighlighter.pas"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
         <CursorPos Y="25"/>
         <UsageCount Value="12"/>
