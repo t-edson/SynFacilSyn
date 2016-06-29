@@ -1,4 +1,4 @@
-{                               SynFacilRegex
+{                               SynFacilBasic
 Unidad con rutinas básicas de SynFacilSyn.
 Incluye la definición de la clase base: TSynFacilSynBase, que es la clase padre
 de TSYnFacilSyn.
@@ -1029,11 +1029,11 @@ begin
   Result.n:=0;         //si no encuentra devuelve 0
   for i:= 0 to n.Attributes.Length-1 do begin
     atri := n.Attributes.Item[i];
-    if UpCase(atri.NodeName) = UpCase(nomb) then begin
+    if UpCase(AnsiString(atri.NodeName)) = UpCase(nomb) then begin
       Result.hay := true;          //marca bandera
-      Result.val := atri.NodeValue;  //lee valor
+      Result.val := AnsiString(atri.NodeValue);  //lee valor
       Result.bol := UpCase(atri.NodeValue) = 'TRUE';  //lee valor booleano
-      cad := trim(atri.NodeValue);  //valor sin espacios
+      cad := trim(AnsiString(atri.NodeValue));  //valor sin espacios
       //lee número
       if (cad<>'') and (cad[1] in ['0'..'9']) then  //puede ser número
         EsEntero(cad,Result.n); //convierte
@@ -1091,7 +1091,7 @@ begin
   //Realiza la verificación
   for i:= 0 to n.Attributes.Length-1 do begin
     atri := n.Attributes.Item[i];
-    nombre := UpCase(atri.NodeName);
+    nombre := UpCase(AnsiString(atri.NodeName));
     //verifica existencia
     hay := false;
     for j:= 0 to lisTmp.Count -1 do begin

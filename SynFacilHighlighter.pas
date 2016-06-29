@@ -1,10 +1,6 @@
-{                               TSynFacilSyn 1.15b
-* Se convierten varios métodos privados en campos protegidos, para permitir
-acceder a ellos, desde clases derivadas.
-* Se ha modificado DefTokDelim(), para aceptar el caracter "^" al inicio, como
-el caracter Regex, que indica que el delimtador debe estar al inicio de la línea.
-* Elimina el parámetro opcional de TEvBlockOnOpen, para que se pueda compilar con FPC 3.0.
-* Se modifica DefTokDelim, para que se pueda compilar con FPC 3.0.
+{                               TSynFacilSyn 1.16
+* Se incluye las funciones de conversión de WideString a AnsiString, apra evitar los
+mensajes de advertencia.
 
 Queda pendiente incluir el procesamiento de los paréntesis en las expresiones regulares,
 como una forma sencilla de definir bloques de Regex, sin tener que usar la definición
@@ -800,7 +796,7 @@ begin
   for i:= 0 to doc.DocumentElement.ChildNodes.Count - 1 do begin
      // Lee un Nodo o Registro
      nodo := doc.DocumentElement.ChildNodes[i];
-     nombre := UpCase(nodo.NodeName);
+     nombre := UpCase(AnsiString(nodo.NodeName));
      if nombre = 'IDENTIFIERS' then begin
        defIDENTIF := true;      //hay definición de identificadores
        ////////// Lee parámetros //////////
@@ -819,7 +815,7 @@ begin
        ////////// explora nodos hijos //////////
        for j := 0 to nodo.ChildNodes.Count-1 do begin
          atri := nodo.ChildNodes[j];
-         nombre := UpCase(atri.NodeName);
+         nombre := UpCase(AnsiString(atri.NodeName));
          if nombre = 'TOKEN' then begin  //definición completa
            //lee atributos
            tAtrib:= ReadXMLParam(atri,'Attribute');
@@ -827,13 +823,13 @@ begin
            CheckXMLParams(atri, 'Attribute TokPos'); //valida
            tipTok := GetAttribByName(tAtrib.val);
            //crea los identificadores especiales
-           AddIdentSpecList(atri.TextContent, tipTok, tTokPos.n);
+           AddIdentSpecList(AnsiString(atri.TextContent), tipTok, tTokPos.n);
          end else if IsAttributeName(nombre) then begin  //definición simplificada
            //lee atributos
            tTokPos:= ReadXMLParam(atri,'TokPos');  //posición de token
            CheckXMLParams(atri, 'TokPos'); //valida
            //Crea los identificadores especiales
-           AddIdentSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
+           AddIdentSpecList(AnsiString(atri.TextContent), GetAttribByName(nombre), tTokPos.n);
          end else if nombre = '#COMMENT' then begin
            //solo para evitar que de mensaje de error
          end else begin
@@ -848,7 +844,7 @@ begin
        ////////// explora nodos hijos //////////
        for j := 0 to nodo.ChildNodes.Count-1 do begin
          atri := nodo.ChildNodes[j];
-         nombre := UpCase(atri.NodeName);
+         nombre := UpCase(AnsiString(atri.NodeName));
          if nombre = 'TOKEN' then begin  //definición completa
            //lee atributos
            tAtrib := ReadXMLParam(atri,'Attribute');
@@ -856,13 +852,13 @@ begin
            CheckXMLParams(atri, 'Attribute TokPos'); //valida
            tipTok := GetAttribByName(tAtrib.val);
            //crea los símbolos especiales
-           AddSymbSpecList(atri.TextContent, tipTok, tTokPos.n);
+           AddSymbSpecList(AnsiString(atri.TextContent), tipTok, tTokPos.n);
          end else if IsAttributeName(nombre) then begin  //definición simplificada
            //lee atributos
            tTokPos:= ReadXMLParam(atri,'TokPos');  //posición de token
            CheckXMLParams(atri, 'TokPos'); //valida
            //crea los símbolos especiales
-           AddSymbSpecList(atri.TextContent, GetAttribByName(nombre), tTokPos.n);
+           AddSymbSpecList(AnsiString(atri.TextContent), GetAttribByName(nombre), tTokPos.n);
          end else if nombre = '#COMMENT' then begin
            //solo para evitar que de mensaje de error
          end else begin
@@ -870,7 +866,7 @@ begin
          end;
        end;
      end else if nombre = 'SAMPLE' then begin  //Cödigo de muestra
-       fSampleSource := nodo.TextContent;  //Carga texto
+       fSampleSource := AnsiString(nodo.TextContent);  //Carga texto
      end else if ProcXMLattribute(nodo) then begin
        //No es necesario hacer nada
      end;
@@ -930,12 +926,12 @@ begin
       tTokPos := ReadXMLParam(nodo2,'TokPos');
       CheckXMLParams(nodo2, 'TokPos');
       //agrega la referecnia del bloque al nuevo token delimitador
-      AddIniBlockToTok(trim(nodo2.TextContent), tTokPos.n, blq);
+      AddIniBlockToTok(trim(AnsiString(nodo2.TextContent)), tTokPos.n, blq);
     end else if UpCAse(nodo2.NodeName)='END' then begin  //definición alternativa de delimitador
       tTokPos := ReadXMLParam(nodo2,'TokPos');
       CheckXMLParams(nodo2, 'TokPos');
       //agrega la referecnia del bloque al nuevo token delimitador
-      AddFinBlockToTok(trim(nodo2.TextContent), tTokPos.n, blq);
+      AddFinBlockToTok(trim(AnsiString(nodo2.TextContent)), tTokPos.n, blq);
     end else if ProcXMLSection(nodo2, blq) then begin  //definición de sección
       //No es necesario procesar
     end else if ProcXMLBlock(nodo2, blq) then begin  //definición de bloque anidado
@@ -1007,7 +1003,7 @@ begin
         tStartPos := ReadXMLParam(nodo2,'StartPos');
         CheckXMLParams(nodo2, 'StartPos');
         //agrega la referecnia del bloque al nuevo token delimitador
-        AddIniSectToTok(trim(nodo2.TextContent), tStartPos.n, blq);
+        AddIniSectToTok(trim(AnsiString(nodo2.TextContent)), tStartPos.n, blq);
       end else if ProcXMLSection(nodo2, blq) then begin  //definición de sección
         //No es necesario procesar
       end else if ProcXMLBlock(nodo2, blq) then begin  //definición de bloque anidado
@@ -1055,7 +1051,7 @@ DebugLn(' === Cargando archivo de sintaxis ===');
     for i:= 0 to doc.DocumentElement.ChildNodes.Count - 1 do begin
        // Lee un Nodo o Registro
        nodo := doc.DocumentElement.ChildNodes[i];
-       nombre := UpCase(nodo.NodeName);
+       nombre := UpCase(AnsiString(nodo.NodeName));
        if (nombre = 'IDENTIFIERS') or (nombre = 'SYMBOLS') or
           (nombre = 'ATTRIBUTE') or (nombre = 'COMPLETION') or
           (nombre = 'SAMPLE') or(nombre = '#COMMENT') then begin
@@ -1063,7 +1059,7 @@ DebugLn(' === Cargando archivo de sintaxis ===');
 //     end else if IsAttributeName(nombre)  then begin
        end else if nombre =  'KEYWORD' then begin
          //forma corta de <TOKEN ATTRIBUTE='KEYWORD'> lista </TOKEN>
-         AddIdentSpecList(nodo.TextContent, tkKeyword);  //Carga Keywords
+         AddIdentSpecList(AnsiString(nodo.TextContent), tkKeyword);  //Carga Keywords
        end else if (nombre = 'TOKEN') or
                    (nombre = 'COMMENT') or (nombre = 'STRING') then begin
          //Lee atributo
