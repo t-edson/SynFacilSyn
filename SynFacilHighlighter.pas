@@ -1,19 +1,12 @@
 {                               TSynFacilSyn 1.16
-* Se incluye las funciones de conversión de WideString a AnsiString, apra evitar los
+* Se incluye las funciones de conversión de WideString a AnsiString, para evitar los
 mensajes de advertencia.
+* Se hace público el método SearchBlock().
 
 Queda pendiente incluir el procesamiento de los paréntesis en las expresiones regulares,
 como una forma sencilla de definir bloques de Regex, sin tener que usar la definición
 avanzada. También se podría ver si se puede mejorar el soporte de Regex, sobre todo para el
 caso de expresiones como ".*a".
-
-En esta versión se continúa con el reordenamiento de las rutinas de procesamiento de
-bloques, apuntando a mejorar la legibilidad. Para ello se ha tenido que cambiar
-el nombre de diversas variables y métodos.
-También se ha incluido el parámetro "CloseParent", que ayuda en la definición de
-bloques de lenguajes similares al Pascal.
-Es de notar que en esta versión aparecen eventos para detectar la apertura y cierre de
-los bloques.
 
 
                                     Por Tito Hinostroza  15/09/2015 - Lima Perú
@@ -84,7 +77,6 @@ type
     procedure EndBlockFa(const blk: TfaSynBlock);
     function TopBlock: TFaSynBlock;
     function TopBlockOpac: TFaSynBlock;
-    function SearchBlock(blk: string; var Success: boolean): TFaSynBlock;
   protected  //Funciones de bajo nivel
     function CreaBuscIdeEspec(var mat: TPtrATokEspec; cad: string; var i: integer;
       TokPos: integer=0): boolean;
@@ -135,6 +127,7 @@ type
     function AddFirstSection(dStart: string; showFold: boolean=true;
       parentBlk: TFaSynBlock=nil): TFaSynBlock;
     //Funciones para obtener información de bloques
+    function SearchBlock(blk: string; var Success: boolean): TFaSynBlock;
     function NestedBlocks: Integer;
     function NestedBlocksBegin(LineNumber: integer): Integer;
     function SearchBeginBlock(level: integer; PosY: integer): integer;
