@@ -111,7 +111,9 @@ type
     procedure DefTokDelim(dStart, dEnd: string; tokTyp: TSynHighlighterAttributes;
       tipDel: TFaTypeDelim=tdUniLin; havFolding: boolean=false; chrEscape: char=#0);
     procedure RebuildSymbols;
-    procedure LoadFromFile(Arc: string); virtual;     //Para cargar sintaxis
+    procedure LoadFromStream(Stream: TStream); virtual;                                    //load highlighter from a stream
+    procedure LoadFromResourceName(Instance: THandle; const ResName: String); virtual; //load highlighter from a resource
+    procedure LoadFromFile(const Filename: string); virtual;                                      //Para cargar sintaxis
     procedure Rebuild; virtual;
 
     procedure AddIniBlockToTok(dStart: string; TokPos: integer; blk: TFaSynBlock);
@@ -251,6 +253,10 @@ type
   end;
 
 implementation
+
+uses
+  Resource;
+
 const
 {
     ERR_IDENTIF_EMPTY = 'Identificador vacío.';
@@ -753,6 +759,168 @@ DebugLn('---------actualizando tabla de funciones----------');
     inc(i);
   end;
 end;
+
+procedure TSynFacilSyn.LoadFromStream(Stream: TStream);
+//Carga una sintaxis desde archivo
+var
+  doc     : TXMLDocument;
+  nodo    : TDOMNode;
+  i, j    : integer;
+  nombre  : string;
+  subExp     : string;
+  p : tFaTokContent;
+  t : tFaRegExpType;
+  dStart: String;
+  tipTok  : TSynHighlighterAttributes;
+  tStart, tEnd, tContent, tAtrib : TFaXMLatrib;
+  tRegex, tCharsStart, tMultiline, tFolding : TFaXMLatrib;
+  tMatch: TFaXMLatrib;
+  match: Boolean;
+  nodo2: TDOMNode;
+  tIfTrue,tIfFalse, tText: TFaXMLatrib;
+  list: String;
+  tEscape,tAtTrue,tAtFalse: TFaXMLatrib;
+  chrEscape: Char;
+begin
+DebugLn('');
+DebugLn(' === Cargando archivo de sintaxis ===');
+  ClearSpecials;     //limpia tablas de identif. y simbolos especiales
+  CreateAttributes;  //Limpia todos los atributos y crea los predefinidos.
+  ClearMethodTables; //Limpia tabla de caracter inicial, y los bloques
+  try
+    ReadXMLFile(doc, Stream);  //carga archivo de lenguaje
+    ////////Primera exploración para capturar elementos básicos de la sintaxis/////////
+    FirstXMLExplor(doc);  //Hace la primera exploración. Puede generar excepción.
+    ///////////Segunda exploración para capturar elementos complementarios///////////
+    //inicia exploración
+    for i:= 0 to doc.DocumentElement.ChildNodes.Count - 1 do begin
+       // Lee un Nodo o Registro
+       nodo := doc.DocumentElement.ChildNodes[i];
+       nombre := UpCase(AnsiString(nodo.NodeName));
+       if (nombre = 'IDENTIFIERS') or (nombre = 'SYMBOLS') or
+          (nombre = 'ATTRIBUTE') or (nombre = 'COMPLETION') or
+          (nombre = 'SAMPLE') or(nombre = '#COMMENT') then begin
+         //No se hace nada. Solo se incluye para evitar error de "etiqueta desconocida"
+//     end else if IsAttributeName(nombre)  then begin
+       end else if nombre =  'KEYWORD' then begin
+         //forma corta de <TOKEN ATTRIBUTE='KEYWORD'> lista </TOKEN>
+         AddIdentSpecList(AnsiString(nodo.TextContent), tkKeyword);  //Carga Keywords
+       end else if (nombre = 'TOKEN') or
+                   (nombre = 'COMMENT') or (nombre = 'STRING') then begin
+         //Lee atributo
+         if nombre = 'TOKEN' then begin   //Es definición formal de token
+           tAtrib    := ReadXMLParam(nodo,'Attribute');
+           tipTok := GetAttribByName(tAtrib.val);
+         end else begin   //Es definición simplificada
+           tipTok := GetAttribByName(nombre)
+         end;
+         //Lee los otros parámetros
+         tStart    := ReadXMLParam(nodo,'Start');
+         tEnd      := ReadXMLParam(nodo,'End');
+         tCharsStart:= ReadXMLParam(nodo,'CharsStart');
+         tContent  := ReadXMLParam(nodo,'Content');
+         tRegex    := ReadXMLParam(nodo,'Regex');
+         tMultiline:=ReadXMLParam(nodo,'Multiline');  //Falso, si no existe
+         tFolding  := ReadXMLParam(nodo,'Folding');    //Falso, si no existe
+         tMatch    := ReadXMLParam(nodo,'RegexMatch'); //Tipo de coincidencia
+         tEscape   := ReadXMLParam(nodo,'Escape'); //
+         if (nombre = 'COMMENT') and not tEnd.hay then tEnd.hay := true; //por compatibilidad
+         //verifica tipo de definición
+         if tContent.hay then begin //Si hay "Content", es token por contenido
+           CheckXMLParams(nodo, 'Start CharsStart Content Attribute');
+           dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador inicial
+           p := DefTokContent(dStart, tipTok);
+           //define contenido
+           p.AddInstruct(ToListRegex(tContent)+'*','','');
+         end else if tRegex.hay then begin //definición de token por contenido con Regex
+           CheckXMLParams(nodo, 'Start CharsStart Regex Attribute RegexMatch');
+           match := UpCase(tMatch.val)='COMPLETE';
+           if tStart.hay or tCharsStart.hay then begin //modo con delimitador
+             dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador inicial
+             p := DefTokContent(dStart, tipTok);
+             p.AddRegEx(tRegex.val, match);  //agrega la otra parte de la expresión
+           end else begin  //modo simplificado: <token regex="" />
+             subExp := ExtractRegExpN(tRegex.val, t);  //extrae primera expresión
+             if t = tregChars1_ then begin  //[A-Z]+
+               //Esta forma, normalmente no sería válida, pero se puede dividir
+               //en las formas [A-Z][A-Z]*, y así sería válida
+               list := copy(subExp, 1, length(subExp)-1);  //quita "+"
+               subExp := list;  //transforma en lista simple
+               tRegex.val := list + '*' + tRegex.val;  //completa
+             end;
+             p := DefTokContent(subExp, tipTok);
+             p.AddRegEx(tRegex.val, match);  //agrega la otra parte de la expresión
+           end;
+         end else if tEnd.hay then begin //definición de token delimitado
+           CheckXMLParams(nodo, 'Start CharsStart End Attribute Multiline Folding Escape');
+           dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador inicial
+           if (tEscape.hay) and (tEscape.val<>'') then chrEscape:= tEscape.val[1]
+           else chrEscape := #0;
+           //no se espera que DefTokDelim(), genere error aquí.
+           if tMultiline.bol then  //es multilínea
+             DefTokDelim(dStart, tEnd.val, tipTok, tdMulLin, tFolding.bol, chrEscape)
+           else  //es de una sola líneas
+             DefTokDelim(dStart, tEnd.val, tipTok, tdUniLin, tFolding.bol, chrEscape);
+         end else begin  //definición incompleta
+           if tStart.hay or tCharsStart.hay then begin //se ha indicado delimitador inicial
+             dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador
+             p := DefTokContent(dStart, tipTok);  //crea un token por contenido
+             //Hasta aquí se creó un token por contenido. Explora sub-nodos
+             for j := 0 to nodo.ChildNodes.Count-1 do begin
+               nodo2 := nodo.ChildNodes[j];
+               if UpCAse(nodo2.NodeName)='REGEX' then begin  //instrucción
+                 tText   := ReadXMLParam(nodo2,'Text');
+                 tIfTrue := ReadXMLParam(nodo2,'IfTrue');
+                 tIfFalse:= ReadXMLParam(nodo2,'IfFalse');
+                 tAtTrue := ReadXMLParam(nodo2,'AtTrue');
+                 tAtFalse:= ReadXMLParam(nodo2,'AtFalse');
+                 CheckXMLParams(nodo2, 'Text IfTrue IfFalse AtTrue AtFalse');
+                 //Agrega la instrucción
+                 p.AddInstruct(tText.val, tIfTrue.val, tIfFalse.val,
+                       GetAttribByName(tAtTrue.val), GetAttribByName(tAtFalse.val));
+               end else if UpCase(nodo2.NodeName)='#COMMENT' then begin
+                 //solo lo deja pasar,para no generar error
+               end else begin
+                 raise ESynFacilSyn.Create(Format(ERR_INVAL_LAB_TOK,[nodo2.NodeName]));
+               end;
+             end;
+           end else begin
+             raise ESynFacilSyn.Create(ERR_INCOMP_TOK_DEF_ + '<' + nombre + '...');
+           end;
+         end;
+       end else if ProcXMLBlock(nodo, nil) then begin  //bloques válidos en cualquier parte
+         //No es necesario hacer nada
+       end else if ProcXMLSection(nodo, nil) then begin //secciones en "MAIN"
+         //No es necesario hacer nada
+       end else begin
+          raise ESynFacilSyn.Create(Format(ERR_UNKNOWN_LABEL,[nombre]));
+       end;
+    end;
+    Rebuild;  //prepara al resaltador
+    doc.Free;  //libera
+  except
+    on e: Exception do begin
+      //completa el mensaje
+      e.Message:=ERROR_LOADING_ + 'stream' + #13#10 + e.Message;
+      doc.Free;
+      raise   //genera de nuevo
+    end;
+  end;
+end;
+
+procedure TSynFacilSyn.LoadFromResourceName(Instance: THandle; const ResName: String);
+var
+  rs: TResourceStream;
+begin
+  rs := TResourceStream.Create(Instance, ResName, PChar(RT_RCDATA));
+  try
+    rs.Position := 0;
+    LoadFromStream(rs);
+  finally
+    rs.Free;
+  end;
+end;
+
 procedure TSynFacilSyn.FirstXMLExplor(doc: TXMLDocument);
 {Hace la primera exploración al archivo XML, para procesar la definición de Symbolos
  e Identificadores. Si encuentra algún error, genera una excepción.
@@ -1008,153 +1176,26 @@ begin
       end;
   end;
 end;
-procedure TSynFacilSyn.LoadFromFile(Arc: string);
-//Carga una sintaxis desde archivo
+
+procedure TSynFacilSyn.LoadFromFile(const Filename: string);
 var
-  doc     : TXMLDocument;
-  nodo    : TDOMNode;
-  i, j    : integer;
-  nombre  : string;
-  subExp     : string;
-  p : tFaTokContent;
-  t : tFaRegExpType;
-  dStart: String;
-  tipTok  : TSynHighlighterAttributes;
-  tStart, tEnd, tContent, tAtrib : TFaXMLatrib;
-  tRegex, tCharsStart, tMultiline, tFolding : TFaXMLatrib;
-  tMatch: TFaXMLatrib;
-  match: Boolean;
-  nodo2: TDOMNode;
-  tIfTrue,tIfFalse, tText: TFaXMLatrib;
-  list: String;
-  tEscape,tAtTrue,tAtFalse: TFaXMLatrib;
-  chrEscape: Char;
+  fs: TFileStream;
 begin
-DebugLn('');
-DebugLn(' === Cargando archivo de sintaxis ===');
-  ClearSpecials;     //limpia tablas de identif. y simbolos especiales
-  CreateAttributes;  //Limpia todos los atributos y crea los predefinidos.
-  ClearMethodTables; //Limpia tabla de caracter inicial, y los bloques
   try
-    ReadXMLFile(doc, Arc);  //carga archivo de lenguaje
-    ////////Primera exploración para capturar elementos básicos de la sintaxis/////////
-    FirstXMLExplor(doc);  //Hace la primera exploración. Puede generar excepción.
-    ///////////Segunda exploración para capturar elementos complementarios///////////
-    //inicia exploración
-    for i:= 0 to doc.DocumentElement.ChildNodes.Count - 1 do begin
-       // Lee un Nodo o Registro
-       nodo := doc.DocumentElement.ChildNodes[i];
-       nombre := UpCase(AnsiString(nodo.NodeName));
-       if (nombre = 'IDENTIFIERS') or (nombre = 'SYMBOLS') or
-          (nombre = 'ATTRIBUTE') or (nombre = 'COMPLETION') or
-          (nombre = 'SAMPLE') or(nombre = '#COMMENT') then begin
-         //No se hace nada. Solo se incluye para evitar error de "etiqueta desconocida"
-//     end else if IsAttributeName(nombre)  then begin
-       end else if nombre =  'KEYWORD' then begin
-         //forma corta de <TOKEN ATTRIBUTE='KEYWORD'> lista </TOKEN>
-         AddIdentSpecList(AnsiString(nodo.TextContent), tkKeyword);  //Carga Keywords
-       end else if (nombre = 'TOKEN') or
-                   (nombre = 'COMMENT') or (nombre = 'STRING') then begin
-         //Lee atributo
-         if nombre = 'TOKEN' then begin   //Es definición formal de token
-           tAtrib    := ReadXMLParam(nodo,'Attribute');
-           tipTok := GetAttribByName(tAtrib.val);
-         end else begin   //Es definición simplificada
-           tipTok := GetAttribByName(nombre)
-         end;
-         //Lee los otros parámetros
-         tStart    := ReadXMLParam(nodo,'Start');
-         tEnd      := ReadXMLParam(nodo,'End');
-         tCharsStart:= ReadXMLParam(nodo,'CharsStart');
-         tContent  := ReadXMLParam(nodo,'Content');
-         tRegex    := ReadXMLParam(nodo,'Regex');
-         tMultiline:=ReadXMLParam(nodo,'Multiline');  //Falso, si no existe
-         tFolding  := ReadXMLParam(nodo,'Folding');    //Falso, si no existe
-         tMatch    := ReadXMLParam(nodo,'RegexMatch'); //Tipo de coincidencia
-         tEscape   := ReadXMLParam(nodo,'Escape'); //
-         if (nombre = 'COMMENT') and not tEnd.hay then tEnd.hay := true; //por compatibilidad
-         //verifica tipo de definición
-         if tContent.hay then begin //Si hay "Content", es token por contenido
-           CheckXMLParams(nodo, 'Start CharsStart Content Attribute');
-           dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador inicial
-           p := DefTokContent(dStart, tipTok);
-           //define contenido
-           p.AddInstruct(ToListRegex(tContent)+'*','','');
-         end else if tRegex.hay then begin //definición de token por contenido con Regex
-           CheckXMLParams(nodo, 'Start CharsStart Regex Attribute RegexMatch');
-           match := UpCase(tMatch.val)='COMPLETE';
-           if tStart.hay or tCharsStart.hay then begin //modo con delimitador
-             dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador inicial
-             p := DefTokContent(dStart, tipTok);
-             p.AddRegEx(tRegex.val, match);  //agrega la otra parte de la expresión
-           end else begin  //modo simplificado: <token regex="" />
-             subExp := ExtractRegExpN(tRegex.val, t);  //extrae primera expresión
-             if t = tregChars1_ then begin  //[A-Z]+
-               //Esta forma, normalmente no sería válida, pero se puede dividir
-               //en las formas [A-Z][A-Z]*, y así sería válida
-               list := copy(subExp, 1, length(subExp)-1);  //quita "+"
-               subExp := list;  //transforma en lista simple
-               tRegex.val := list + '*' + tRegex.val;  //completa
-             end;
-             p := DefTokContent(subExp, tipTok);
-             p.AddRegEx(tRegex.val, match);  //agrega la otra parte de la expresión
-           end;
-         end else if tEnd.hay then begin //definición de token delimitado
-           CheckXMLParams(nodo, 'Start CharsStart End Attribute Multiline Folding Escape');
-           dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador inicial
-           if (tEscape.hay) and (tEscape.val<>'') then chrEscape:= tEscape.val[1]
-           else chrEscape := #0;
-           //no se espera que DefTokDelim(), genere error aquí.
-           if tMultiline.bol then  //es multilínea
-             DefTokDelim(dStart, tEnd.val, tipTok, tdMulLin, tFolding.bol, chrEscape)
-           else  //es de una sola líneas
-             DefTokDelim(dStart, tEnd.val, tipTok, tdUniLin, tFolding.bol, chrEscape);
-         end else begin  //definición incompleta
-           if tStart.hay or tCharsStart.hay then begin //se ha indicado delimitador inicial
-             dStart := dStartRegex(tStart, tCharsStart);  //extrae delimitador
-             p := DefTokContent(dStart, tipTok);  //crea un token por contenido
-             //Hasta aquí se creó un token por contenido. Explora sub-nodos
-             for j := 0 to nodo.ChildNodes.Count-1 do begin
-               nodo2 := nodo.ChildNodes[j];
-               if UpCAse(nodo2.NodeName)='REGEX' then begin  //instrucción
-                 tText   := ReadXMLParam(nodo2,'Text');
-                 tIfTrue := ReadXMLParam(nodo2,'IfTrue');
-                 tIfFalse:= ReadXMLParam(nodo2,'IfFalse');
-                 tAtTrue := ReadXMLParam(nodo2,'AtTrue');
-                 tAtFalse:= ReadXMLParam(nodo2,'AtFalse');
-                 CheckXMLParams(nodo2, 'Text IfTrue IfFalse AtTrue AtFalse');
-                 //Agrega la instrucción
-                 p.AddInstruct(tText.val, tIfTrue.val, tIfFalse.val,
-                       GetAttribByName(tAtTrue.val), GetAttribByName(tAtFalse.val));
-               end else if UpCase(nodo2.NodeName)='#COMMENT' then begin
-                 //solo lo deja pasar,para no generar error
-               end else begin
-                 raise ESynFacilSyn.Create(Format(ERR_INVAL_LAB_TOK,[nodo2.NodeName]));
-               end;
-             end;
-           end else begin
-             raise ESynFacilSyn.Create(ERR_INCOMP_TOK_DEF_ + '<' + nombre + '...');
-           end;
-         end;
-       end else if ProcXMLBlock(nodo, nil) then begin  //bloques válidos en cualquier parte
-         //No es necesario hacer nada
-       end else if ProcXMLSection(nodo, nil) then begin //secciones en "MAIN"
-         //No es necesario hacer nada
-       end else begin
-          raise ESynFacilSyn.Create(Format(ERR_UNKNOWN_LABEL,[nombre]));
-       end;
-    end;
-    Rebuild;  //prepara al resaltador
-    doc.Free;  //libera
+    fs := TFileStream.Create(Filename, fmOpenRead);
+    fs.Position := 0;
+
+    LoadFromStream(fs);
   except
     on e: Exception do begin
       //completa el mensaje
-      e.Message:=ERROR_LOADING_ + Arc + #13#10 + e.Message;
-      doc.Free;
+      e.Message:=ERROR_LOADING_ + Filename + #13#10 + e.Message;
+      fs.Free;
       raise   //genera de nuevo
     end;
   end;
 end;
+
 procedure TSynFacilSyn.Rebuild;
 {Configura los tokens delimitados de acuerdo a la sintaxis definida actualmente, de
  forma que se optimice el procesamiento.
