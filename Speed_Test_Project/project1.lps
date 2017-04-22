@@ -19,7 +19,8 @@
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="Unit1"/>
         <IsVisibleTab Value="True"/>
-        <CursorPos X="21" Y="10"/>
+        <TopLine Value="146"/>
+        <CursorPos Y="165"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -65,7 +66,7 @@
       <Unit8>
         <Filename Value="..\SynFacilHighlighter.pas"/>
         <EditorIndex Value="1"/>
-        <CursorPos X="5" Y="24"/>
+        <CursorPos Y="24"/>
         <UsageCount Value="28"/>
         <Bookmarks Count="2">
           <Item0 Y="270" ID="2"/>
@@ -227,6 +228,15 @@
     </JumpHistory>
   </ProjectSession>
   <Debugging>
+    <BreakPoints Count="1">
+      <Item1>
+        <Kind Value="bpkSource"/>
+        <WatchScope Value="wpsLocal"/>
+        <WatchKind Value="wpkWrite"/>
+        <Source Value="unit1.pas"/>
+        <Line Value="165"/>
+      </Item1>
+    </BreakPoints>
     <Watches Count="1">
       <Item1>
         <Expression Value="fProcTable"/>

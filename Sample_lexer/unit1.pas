@@ -4,8 +4,8 @@ unit Unit1;
 interface
 
 uses
-  Classes, SysUtils, SynEdit, Forms, Controls, Dialogs,
-  StdCtrls, FormOut, SynEditHighlighter, SynFacilHighlighter, SynFacilBasic;
+  Classes, SysUtils, SynEdit, Forms, Controls, Dialogs, StdCtrls, Graphics,
+  FormOut, SynEditHighlighter, SynFacilHighlighter, SynFacilBasic;
 
 type
   { TForm1 }
@@ -159,6 +159,8 @@ begin
   blk := xLex.AddBlock('{','}');
   blk.name:='bLlaves';
   xLex.Rebuild;
+  xLex.tkIdentif.Foreground:= clGreen;
+  SynEdit1.Highlighter := xLex;
 end;
 procedure TForm1.FormDestroy(Sender: TObject);
 begin
