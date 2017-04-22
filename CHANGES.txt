@@ -1,0 +1,5 @@
+1.17
+====
+New methods added: 
+    procedure LoadFromStream(Stream: TStream); virtual;                                    //load highlighter from a stream
+    procedure LoadFromResourceName(Instance: THandle; const ResName: String); virtual; //load highlighter from a resource

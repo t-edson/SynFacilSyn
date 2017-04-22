@@ -1,7 +1,5 @@
 {                               TSynFacilSyn 1.16
-* Se incluye las funciones de conversión de WideString a AnsiString, para evitar los
-mensajes de advertencia.
-* Se hace público el método SearchBlock().
+Unidad principal de SynfacilSyn.
 
 Queda pendiente incluir el procesamiento de los paréntesis en las expresiones regulares,
 como una forma sencilla de definir bloques de Regex, sin tener que usar la definición
@@ -1186,6 +1184,7 @@ begin
     fs.Position := 0;
 
     LoadFromStream(fs);
+    fs.Free;
   except
     on e: Exception do begin
       //completa el mensaje
