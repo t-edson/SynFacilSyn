@@ -1,3 +1,19 @@
+1.18
+====
+Se cambia el campo fTokenID, para que sea de tipo "integer", en lugar de 
+TSynHighlighterAttributes. Esto es para evitar en problema actual de que 
+TSynCustomHighlighter.GetTokenKind(), retorna un entero de 32 bits y puede fallar en 
+retornar un puntero, en las versiones de 64 bits.
+Se crea el arreglo TSynFacilSynBase.Attrib[] para usarlo como contenedor de las referencias
+a los atributos.
+Se modifica NewTokType() para devolver el Id del nuevo tipo de token.
+
+Se crea el método TSynFacilSynbase.GetAttribIDByName()
+Se cambian los parámetros de algunos me´todos de VAR a OUT.
+Se modifica TSynFacilSynBase.CreateAttributes;
+Se agrega la directiva {$IFDEF DebugMode}, para mostrar mensajes.
+
+
 1.17
 ====
 New methods added: 

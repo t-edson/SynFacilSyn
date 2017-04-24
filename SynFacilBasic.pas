@@ -12,7 +12,7 @@ unit SynFacilBasic;
 interface
 uses
   SysUtils, Classes, SynEditHighlighter, strutils, Graphics, DOM, LCLIntf,
-  SynEditHighlighterFoldBase, SynEditTypes;
+  LCLProc, SynEditHighlighterFoldBase, SynEditTypes;
 
 type
   ///////// Definiciones para manejo de tokens por contenido ///////////
@@ -40,8 +40,8 @@ type
     Chars    : array[#0..#255] of ByteBool; //caracteres
     Text     : string;             //cadena válida
     expTyp   : tFaRegExpType;      //tipo de expresión
-    aMatch   : TSynHighlighterAttributes;  //atributo asignado en caso TRUE
-    aFail    : TSynHighlighterAttributes;  //atributo asignado en caso TRUE
+    aMatch   : integer;  //atributo asignado en caso TRUE
+    aFail    : integer;  //atributo asignado en caso TRUE
     //Campos para ejecutar instrucciones, cuando No cumple
     actionFail : tFaActionOnMatch;
     destOnFail : integer;  //posición destino
@@ -57,22 +57,18 @@ type
   { tFaTokContent }
   //Estructura para almacenar la descripción de los token por contenido
   tFaTokContent = class
-    TokTyp    : TSynHighlighterAttributes;   //categoría de token por contenido
+    TokTyp   : integer;        //tipo de token por contenido
     CaseSensitive: boolean;     //Usado para comparación de literales de cadena
-//    CharsToken: array[#0..#255] of ByteBool; //caracteres válidos para token por contenido
-    //elementos adicionales no usados en esta versión
     Instrucs : array of tFaTokContentInst;  //Instrucciones del token por contenido
     nInstruc : integer;      //Cantidad de instrucciones
     procedure Clear;
-    procedure AddInstruct(exp: string; ifTrue: string=''; ifFalse: string='';
-      atMatch: TSynHighlighterAttributes=nil; atFail: TSynHighlighterAttributes=
-  nil);
+    procedure AddInstruct(exp: string; ifTrue: string = ''; ifFalse: string = '';
+      atMatch: integer = - 1; atFail: integer = - 1);
     procedure AddRegEx(exp: string; Complete: boolean=false);
   private
     function AddItem(expTyp: tFaRegExpType; ifMatch, ifFail: string): integer;
     procedure AddOneInstruct(var exp: string; ifTrue: string; ifFalse: string;
-      atMatch: TSynHighlighterAttributes=nil; atFail: TSynHighlighterAttributes=
-  nil);
+      atMatch: integer = -1; atFail: integer = -1);
   end;
 
   ///////// Definiciones básicas para el resaltador ///////////
@@ -101,7 +97,7 @@ type
     txt   : string;        //palabra clave (puede cambiar la caja y no incluir el primer caracter)
     orig  : string;        //palabra clave tal cual se indica
     TokPos: integer;       //posición del token dentro de la línea
-    tTok  : TSynHighlighterAttributes;  //tipo de token
+    tTok  : integer;       //tipo de token
     typDel: TFaTypeDelim;  {indica si el token especial actual, es en realidad, el
                             delimitador inicial de un token delimitado o por contenido}
     dEnd  : string;        //delimitador final (en caso de que sea delimitador)
@@ -153,13 +149,13 @@ type
   protected
     fLine      : PChar;         //Puntero a línea de trabajo
     tamLin     : integer;       //Tamaño de línea actual
-    fAtriTable : array[#0..#255] of TSynHighlighterAttributes;   //tabla de atributos de tokens
     fProcTable : array[#0..#255] of TFaProcMetTable;   //tabla de métodos
+    fAtriTable : array[#0..#255] of integer;   //tabla de atributos de tokens
     posIni     : Integer;       //índice a inicio de token
     posFin     : Integer;       //índice a siguiente token
     fStringLen : Integer;       //Tamaño del token actual
     fToIdent   : PChar;         //Puntero a identificador
-    fTokenID   : TSynHighlighterAttributes;  //Id del token actual
+    fTokenID   : integer;      //Id del token actual
     charIni    : char;          //caracter al que apunta fLine[posFin]
     posTok     : integer;       //para identificar el ordinal del token en una línea
 
@@ -183,16 +179,16 @@ type
     mSym0       :  TArrayTokSpec;   //tabla temporal para símbolos especiales.
     TabMayusc   : array[#0..#255] of Char;     //Tabla para conversiones rápidas a mayúscula
   protected  //funciones básicas
-    function BuscTokEspec(var mat: TArrayTokSpec; cad: string; var n: integer;
-      TokPos: integer=0): boolean;
+    function BuscTokEspec(var mat: TArrayTokSpec; cad: string; out n: integer;
+      TokPos: integer = 0): boolean;
     function ToListRegex(list: TFaXMLatrib): string;
     function dStartRegex(tStart, tCharsStart: TFaXMLatrib): string;
     procedure VerifDelim(delim: string);
     procedure ValidAsigDelim(delAct, delNue: TFaTypeDelim; delim: string);
     procedure ValidateParamStart(Start: string; var ListElem: TStringList);
     function KeyComp(var r: TTokSpec): Boolean;
-    function CreaBuscTokEspec(var mat: TArrayTokSpec; cad: string;
-      var i: integer; TokPos: integer=0): boolean;
+    function CreaBuscTokEspec(var mat: TArrayTokSpec; cad: string; out i: integer;
+      TokPos: integer = 0): boolean;
     //procesamiento de XML
     procedure CheckXMLParams(n: TDOMNode; listAtrib: string);
     function ReadXMLParam(n: TDOMNode; nomb: string): TFaXMLatrib;
@@ -211,25 +207,42 @@ type
   public     //Funciones públicas
     procedure DefTokIdentif(dStart, Content: string );
   public     //Atributos y sus propiedades de acceso
-    //ID para los atributos predefinidos
-    tkEol     : TSynHighlighterAttributes;  //id para los tokens salto de línea
-    tkSymbol  : TSynHighlighterAttributes;  //id para los símbolos
-    tkSpace   : TSynHighlighterAttributes;  //id para los espacios
-    tkIdentif : TSynHighlighterAttributes;  //id para los identificadores
-    tkNumber  : TSynHighlighterAttributes;  //id para los números
-    tkKeyword : TSynHighlighterAttributes;  //id para las palabras claves
-    tkString  : TSynHighlighterAttributes;  //id para las cadenas
-    tkComment : TSynHighlighterAttributes;  //id para los comentarios
-    function NewTokType(TypeName: string): TSynHighlighterAttributes;
+    //Atributos predefinidos
+    tkEol     : TSynHighlighterAttributes;
+    tkSymbol  : TSynHighlighterAttributes;
+    tkSpace   : TSynHighlighterAttributes;
+    tkIdentif : TSynHighlighterAttributes;
+    tkNumber  : TSynHighlighterAttributes;
+    tkKeyword : TSynHighlighterAttributes;
+    tkString  : TSynHighlighterAttributes;
+    tkComment : TSynHighlighterAttributes;
+    //ID para los tokens
+    tnEol     : integer;  //id para los tokens salto de línea
+    tnSymbol  : integer;  //id para los símbolos
+    tnSpace   : integer;  //id para los espacios
+    tnIdentif : integer;  //id para los identificadores
+    tnNumber  : integer;  //id para los números
+    tnKeyword : integer;  //id para las palabras claves
+    tnString  : integer;  //id para las cadenas
+    tnComment : integer;  //id para los comentarios
+    {Se crea el contenedor adicional Attrib[], para los atributos, porque aunque ya se
+    tiene Attribute[] en TSynCustomHighlighter, este está ordenado pro defecto y no
+    ayuda en ubicar a los attributos por su índice}
+    Attrib: array of TSynHighlighterAttributes;
+    function NewTokType(TypeName: string; out TokID: integer
+      ): TSynHighlighterAttributes;
     procedure CreateAttributes;  //limpia todos loa atributos
     function GetAttribByName(txt: string): TSynHighlighterAttributes;
+    function GetAttribIDByName(txt: string): integer;
     function IsAttributeName(txt: string): boolean;
     protected
     function ProcXMLattribute(nodo: TDOMNode): boolean;
+  public //Inicializacoón
+    constructor Create(AOwner: TComponent); override;
   end;
 
 function ExtractRegExp(var exp: string; var str: string; var listChars: string): tFaRegExpType;
-function ExtractRegExpN(var exp: string; var RegexTyp: tFaRegExpType ): string;
+function ExtractRegExpN(var exp: string; out RegexTyp: tFaRegExpType ): string;
 function ReplaceEscape(str: string): string;
 
 implementation
@@ -283,7 +296,7 @@ begin
   Result := copy(txt, p, length(txt));
 end;
 //Funciones para el manejo de expresiones regulares
-function ExtractChar(var txt: string; var escaped: boolean; convert: boolean): string;
+function ExtractChar(var txt: string; out escaped: boolean; convert: boolean): string;
 //Extrae un caracter de una expresión regular. Si el caracter es escapado, devuelve
 //TRUE en "escaped"
 //Si covert = TRUE, reemplaza el caracter compuesto por uno solo.
@@ -585,7 +598,7 @@ begin
     Result := tregString;
   end;
 end;
-function ExtractRegExpN(var exp: string; var RegexTyp: tFaRegExpType ): string;
+function ExtractRegExpN(var exp: string; out RegexTyp: tFaRegExpType): string;
 {Extrae parte de una expresión regular y la devuelve como cadena . Actualiza el
 tipo de expresión obtenida en "RegexTyp".
 No Reemplaza las secuencias de excape ni los intervalos, devuelve el texto tal cual}
@@ -741,7 +754,7 @@ begin
   end;
 end;
 procedure tFaTokContent.AddOneInstruct(var exp: string; ifTrue: string; ifFalse: string;
-      atMatch: TSynHighlighterAttributes=nil; atFail: TSynHighlighterAttributes=nil);
+      atMatch: integer=-1; atFail: integer=-1);
 {Agrega una y solo instrucción al token por contenido. Si encuentra más de una
 instrucción, genera una excepción. Si se pone ifTrue en blnnco, se asumirá 'next',
 si se pone "ifFalse" en blanco, se se asumirá 'exit'.
@@ -766,9 +779,9 @@ begin
   tregChars1_:  //Es de tipo lista de caracteres [...]+
     begin
       n := AddItem(t, ifTrue, ifFalse)-1;  //agrega
-      if atMatch=nil then Instrucs[n].aMatch :=TokTyp  //toma atributo de la clase
+      if atMatch=-1 then Instrucs[n].aMatch :=TokTyp  //toma atributo de la clase
       else Instrucs[n].aMatch:= atMatch;
-      if atFail=nil then Instrucs[n].aFail := TokTyp   //toma atributo de la clase
+      if atFail=-1 then Instrucs[n].aFail := TokTyp   //toma atributo de la clase
       else Instrucs[n].aFail:= atFail;
       //Configura caracteres de contenido
       for c := #0 to #255 do Instrucs[n].Chars[c] := False;
@@ -776,9 +789,9 @@ begin
     end;
   tregString: begin      //Es de tipo texto literal
       n := AddItem(t, ifTrue, ifFalse)-1;  //agrega
-      if atMatch=nil then Instrucs[n].aMatch :=TokTyp  //toma atributo de la clase
+      if atMatch=-1 then Instrucs[n].aMatch :=TokTyp  //toma atributo de la clase
       else Instrucs[n].aMatch:= atMatch;
-      if atFail=nil then Instrucs[n].aFail := TokTyp   //toma atributo de la clase
+      if atFail=-1 then Instrucs[n].aFail := TokTyp   //toma atributo de la clase
       else Instrucs[n].aFail:= atFail;
       //configura cadena
       if CaseSensitive then Instrucs[n].Text := str
@@ -789,7 +802,7 @@ begin
   end;
 end;
 procedure tFaTokContent.AddInstruct(exp: string; ifTrue: string=''; ifFalse: string='';
-      atMatch: TSynHighlighterAttributes=nil; atFail: TSynHighlighterAttributes=nil);
+      atMatch: integer=-1; atFail: integer=-1);
 //Agrega una instrucción para el procesamiento del token por contenido.
 //Solo se debe indicar una instrucción, de otra forma se generará un error.
 var
@@ -835,21 +848,25 @@ begin
 end;
 //funciones básicas
 function TSynFacilSynBase.BuscTokEspec(var mat: TArrayTokSpec; cad: string;
-                         var n: integer; TokPos: integer = 0): boolean;
+                         out n: integer; TokPos: integer = 0): boolean;
 //Busca una cadena en una matriz TArrayTokSpec. Si la ubica devuelve el índice en "n".
 var i : integer;
 begin
   Result := false;
   if TokPos = 0 then begin //búsqueda normal
-    for i := 0 to High(mat) do
+    for i := 0 to High(mat) do begin
       if mat[i].txt = cad then begin
-        n:= i; exit(true);
-      end
+        n:= i;
+        exit(true);
+      end;
+    end;
   end else begin  //búsqueda con TokPos
-      for i := 0 to High(mat) do
-        if (mat[i].txt = cad) and (TokPos = mat[i].TokPos) then begin
-          n:= i; exit(true);
-        end
+    for i := 0 to High(mat) do begin
+      if (mat[i].txt = cad) and (TokPos = mat[i].TokPos) then begin
+        n:= i;
+        exit(true);
+      end;
+    end;
   end;
 end;
 function TSynFacilSynBase.ToListRegex(list: TFaXMLatrib): string;
@@ -962,7 +979,7 @@ begin
     Result := False;
 end;
 function TSynFacilSynBase.CreaBuscTokEspec(var mat: TArrayTokSpec; cad: string;
-                                       var i:integer; TokPos: integer = 0): boolean;
+                                       out i:integer; TokPos: integer = 0): boolean;
 {Busca o crea el token especial indicado en "cad". Si ya existe, devuelve TRUE y
  actualiza "i" con su posición. Si no existe. Crea el token especial y devuelve la
  referencia en "i". Se le debe indicar la tabla a buscar en "mat"}
@@ -974,7 +991,7 @@ begin
   //no existe, hay que crearlo. Aquí se definen las propiedades por defecto
   r.txt:=cad;         //se asigna el nombre
   r.TokPos:=TokPos;   //se asigna ordinal del token
-  r.tTok:=nil;        //sin tipo asignado
+  r.tTok:=-1;        //sin tipo asignado
   r.typDel:=tdNull;   //no es delimitador
   r.dEnd:='';         //sin delimitador final
   r.pRange:=nil;      //sin función de rango
@@ -998,7 +1015,7 @@ var i: integer;
     cad: string;
     atri: TDOMNode;
     r,g,b: integer;
-  function EsEntero(txt: string; var num: integer): boolean;
+  function EsEntero(txt: string; out num: integer): boolean;
   //convierte un texto en un número entero. Si es numérico devuelve TRUE
   var i: integer;
   begin
@@ -1010,7 +1027,7 @@ var i: integer;
     //todos los dígitos son numéricos
     num := StrToInt(txt);
   end;
-  function EsHexa(txt: string; var num: integer): boolean;
+  function EsHexa(txt: string; out num: integer): boolean;
   //Convierte un texto en un número entero. Si es numérico devuelve TRUE
   var i: integer;
   begin
@@ -1304,7 +1321,7 @@ begin
   inc(posFin);  {debe incrementarse, para pasar a comparar los caracteres siguientes,
                  o de otra forma puede quedarse en un lazo infinito}
   while CharsIdentif[fLine[posFin]] do inc(posFin);
-  fTokenID := tkIdentif;  //identificador común
+  fTokenID := tnIdentif;  //identificador común
 end;
 procedure TSynFacilSynBase.metIdentUTF8;
 //Procesa el identificador actual. considerando que empieza con un caracter UTF8 (dos bytes)
@@ -1314,17 +1331,17 @@ begin
   inc(posFin);  {debe incrementarse, para pasar a comparar los caracteres siguientes,
                  o de otra forma puede quedarse en un lazo infinito}
   while CharsIdentif[fLine[posFin]] do inc(posFin);
-  fTokenID := tkIdentif;  //identificador común
+  fTokenID := tnIdentif;  //identificador común
 end;
 procedure TSynFacilSynBase.metNull;
 //Procesa la ocurrencia del cacracter #0
 begin
-  fTokenID := tkEol;   //Solo necesita esto para indicar que se llegó al final de la línae
+  fTokenID := tnEol;   //Solo necesita esto para indicar que se llegó al final de la línae
 end;
 procedure TSynFacilSynBase.metSpace;
 //Procesa caracter que es inicio de espacio
 begin
-  fTokenID := tkSpace;
+  fTokenID := tnSpace;
   repeat  //captura todos los que sean espacios
     Inc(posFin);
   until (fLine[posFin] > #32) or (posFin = tamLin);
@@ -1334,7 +1351,7 @@ begin
   inc(posFin);
   while (fProcTable[fLine[posFin]] = @metSymbol)
   do inc(posFin);
-  fTokenID := tkSymbol;
+  fTokenID := tnSymbol;
 end;
 //Funciones públicas
 procedure TSynFacilSynBase.DefTokIdentif(dStart, Content: string );
@@ -1383,57 +1400,76 @@ begin
   for c in listChars do CharsIdentif[c] := True;
 end;
 //Manejo de atributos
-function TSynFacilSynBase.NewTokType(TypeName: string): TSynHighlighterAttributes;
-//Crea un nuevo atributo y lo agrega al resaltador.
-//No hay funciones para eliminar atributs creados.
+function TSynFacilSynBase.NewTokType(TypeName: string; out tokID: integer): TSynHighlighterAttributes;
+{Crea un nuevo atributo y lo agrega al resaltador. Este debe ser el único punto de
+entrada, para crear atributos en SynFacilSyn. En tokID, se devuelve el ID del nuevo tipo.
+No hay funciones para eliminar atributs creados.}
+var
+  n: Integer;
 begin
   Result := TSynHighlighterAttributes.Create(TypeName);
-  AddAttribute(Result);   //lo registra
+  n := High(Attrib)+1;   //tamaño
+  setlength(Attrib, n + 1);  //incrementa tamaño
+  Attrib[n] := Result;  //guarda la referencia
+  tokID := n;           //devuelve ID
+  AddAttribute(Result);   //lo registra en el resaltador
 end;
 procedure TSynFacilSynBase.CreateAttributes;
 //CRea los atributos por defecto
 begin
   //Elimina todos los atributos creados, los fijos y los del usuario.
   FreeHighlighterAttributes;
+  setlength(Attrib, 0);  //limpia
   { Crea los atributos que siempre existirán. }
-  tkEol     := NewTokType('Eol');      //atributo de nulos
-  tkSymbol  := NewTokType('Symbol');   //atributo de símbolos
-  tkSpace   := NewTokType('Space');    //atributo de espacios.
-  tkIdentif := NewTokType('Identifier'); //Atributo para identificadores.
-  tkNumber  := NewTokType('Number');   //atributo de números
+  tkEol     := NewTokType('Eol', tnEol);      //atributo de nulos
+  tkSymbol  := NewTokType('Symbol', tnSymbol);   //atributo de símbolos
+  tkSpace   := NewTokType('Space', tnSpace);    //atributo de espacios.
+  tkIdentif := NewTokType('Identifier', tnIdentif); //Atributo para identificadores.
+  tkNumber  := NewTokType('Number', tnNumber);   //atributo de números
   tkNumber.Foreground := clFuchsia;
-  tkKeyword := NewTokType('Key');      //atribuuto de palabras claves
-//  tkKeyword.Style := [fsBold];
+  tkKeyword := NewTokType('Keyword',tnKeyword);      //atribuuto de palabras claves
   tkKeyword.Foreground:=clGreen;
-  tkString  := NewTokType('String');   //atributo de cadenas
+  tkString  := NewTokType('String', tnString);   //atributo de cadenas
   tkString.Foreground := clBlue;
-  tkComment := NewTokType('Comment');  //atributo de comentarios
+  tkComment := NewTokType('Comment', tnComment);  //atributo de comentarios
   tkComment.Style := [fsItalic];
   tkComment.Foreground := clGray;
 end;
 function TSynFacilSynBase.GetAttribByName(txt: string): TSynHighlighterAttributes;
-//Devuelve el identificador de un atributo, recibiendo su nombre. Si no lo encuentra
-//devuelve NIL.
+{Devuelve la referencia de un atributo, recibiendo su nombre. Si no lo encuentra
+devuelve NIL.}
 var
   i: Integer;
 begin
-  Result := nil;     //por defecto es null
   txt := UpCase(txt);   //ignora la caja
-  if txt = 'EOL'        then Result := tkEol else
-  if txt = 'SYMBOL'     then Result := tkSymbol else
-  if txt = 'SPACE'      then Result := tkSpace else
-  if txt = 'IDENTIFIER' then Result := tkIdentif else
-  if txt = 'NUMBER'     then Result := tkNumber else
-  if txt = 'KEYWORD'    then Result := tkKeyword else
-  if txt = 'STRING'     then Result := tkString else
-  if txt = 'COMMENT'    then Result := tkComment
-  else begin
-    for i:=0 to AttrCount-1 do begin
-        if Upcase(Attribute[i].Name) = txt then
-          Result := Attribute[i];  //devuleve índice
+  //También lo puede buscar en Attrib[]
+  for i:=0 to AttrCount-1 do begin
+    if Upcase(Attribute[i].Name) = txt then begin
+        Result := Attribute[i];  //devuelve índice
+        exit;
     end;
   end;
+  //No se encontró
+  exit(nil);
 end;
+function TSynFacilSynBase.GetAttribIDByName(txt: string): integer;
+{Devuelve el identificador de un atributo, recibiendo su nombre. Si no lo encuentra
+devuelve -1.}
+var
+  i: Integer;
+begin
+  txt := UpCase(txt);   //ignora la caja
+  //Se tiene que buscar en Attrib[], proque allí están con los índices cprrectos
+  for i:=0 to AttrCount-1 do begin
+    if Upcase(Attrib[i].Name) = txt then begin
+        Result := i;  //devuelve índice
+        exit;
+    end;
+  end;
+  //No se encontró
+  exit(-1);
+end;
+
 function TSynFacilSynBase.IsAttributeName(txt: string): boolean;
 //Verifica si una cadena corresponde al nombre de un atributo.
 begin
@@ -1461,6 +1497,7 @@ var
   tStyle: TFaXMLatrib;
   tipTok: TSynHighlighterAttributes;
   Atrib: TSynHighlighterAttributes;
+  tokId: integer;
 begin
   if UpCase(nodo.NodeName) <> 'ATTRIBUTE' then exit(false);
   Result := true;  //encontró
@@ -1483,7 +1520,7 @@ begin
     tipTok := GetAttribByName(tName.val);   //tipo de atributo
   end else begin
     //No existe, se crea.
-    tipTok := NewTokType(tName.val);
+    tipTok := NewTokType(tName.val, tokId);
   end;
   //obtiene referencia
   Atrib := tipTok;
@@ -1532,6 +1569,11 @@ begin
        if Pos('s', tStyle.val)<>0 then Atrib.Style:=Atrib.Style+[fsStrikeOut];
      end;
   end;
+end;
+constructor TSynFacilSynBase.Create(AOwner: TComponent);
+begin
+  inherited Create(AOwner);
+  setlength(Attrib, 0);
 end;
 
 var

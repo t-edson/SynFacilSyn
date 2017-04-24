@@ -8,7 +8,7 @@ object Form1: TForm1
   ClientWidth = 346
   OnCreate = FormCreate
   OnDestroy = FormDestroy
-  LCLVersion = '1.6.0.4'
+  LCLVersion = '1.6.2.0'
   inline SynEdit1: TSynEdit
     Left = 0
     Height = 246
