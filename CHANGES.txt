@@ -7,6 +7,7 @@ retornar un puntero, en las versiones de 64 bits.
 Se crea el arreglo TSynFacilSynBase.Attrib[] para usarlo como contenedor de las referencias
 a los atributos.
 Se modifica NewTokType() para devolver el Id del nuevo tipo de token.
+SE crea una nueva versión de NewTokType().
 
 Se crea el método TSynFacilSynbase.GetAttribIDByName()
 Se cambian los parámetros de algunos me´todos de VAR a OUT.

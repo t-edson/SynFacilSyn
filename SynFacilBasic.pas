@@ -229,8 +229,10 @@ type
     tiene Attribute[] en TSynCustomHighlighter, este está ordenado pro defecto y no
     ayuda en ubicar a los attributos por su índice}
     Attrib: array of TSynHighlighterAttributes;
-    function NewTokType(TypeName: string; out TokID: integer
+    function NewTokAttrib(TypeName: string; out TokID: integer
       ): TSynHighlighterAttributes;
+    function NewTokType(TypeName: string; out TokAttrib: TSynHighlighterAttributes
+      ): integer;
     function NewTokType(TypeName: string): integer;
     procedure CreateAttributes;  //limpia todos loa atributos
     function GetAttribByName(txt: string): TSynHighlighterAttributes;
@@ -1401,7 +1403,7 @@ begin
   for c in listChars do CharsIdentif[c] := True;
 end;
 //Manejo de atributos
-function TSynFacilSynBase.NewTokType(TypeName: string; out TokID: integer
+function TSynFacilSynBase.NewTokAttrib(TypeName: string; out TokID: integer
   ): TSynHighlighterAttributes;
 {Crea un nuevo atributo y lo agrega al resaltador. Este debe ser el único punto de
 entrada, para crear atributos en SynFacilSyn. En tokID, se devuelve el ID del nuevo tipo.
@@ -1416,10 +1418,17 @@ begin
   tokID := n;           //devuelve ID
   AddAttribute(Result);   //lo registra en el resaltador
 end;
+function TSynFacilSynBase.NewTokType(TypeName: string; out
+  TokAttrib: TSynHighlighterAttributes): integer;
+{Crea un nuevo tipo de token, y devuelve la referencia al atributo en "TokAttrib".}
+begin
+  TokAttrib := NewTokAttrib(TypeName, Result);
+end;
+
 function TSynFacilSynBase.NewTokType(TypeName: string): integer;
 {Versión simplificada de NewTokType, que devuelve directamente el ID del token}
 begin
-  NewTokType(TypeName, Result);
+  NewTokAttrib(TypeName, Result);
 end;
 
 procedure TSynFacilSynBase.CreateAttributes;
@@ -1429,17 +1438,17 @@ begin
   FreeHighlighterAttributes;
   setlength(Attrib, 0);  //limpia
   { Crea los atributos que siempre existirán. }
-  tkEol     := NewTokType('Eol', tnEol);      //atributo de nulos
-  tkSymbol  := NewTokType('Symbol', tnSymbol);   //atributo de símbolos
-  tkSpace   := NewTokType('Space', tnSpace);    //atributo de espacios.
-  tkIdentif := NewTokType('Identifier', tnIdentif); //Atributo para identificadores.
-  tkNumber  := NewTokType('Number', tnNumber);   //atributo de números
+  tkEol     := NewTokAttrib('Eol', tnEol);      //atributo de nulos
+  tkSymbol  := NewTokAttrib('Symbol', tnSymbol);   //atributo de símbolos
+  tkSpace   := NewTokAttrib('Space', tnSpace);    //atributo de espacios.
+  tkIdentif := NewTokAttrib('Identifier', tnIdentif); //Atributo para identificadores.
+  tkNumber  := NewTokAttrib('Number', tnNumber);   //atributo de números
   tkNumber.Foreground := clFuchsia;
-  tkKeyword := NewTokType('Keyword',tnKeyword);      //atribuuto de palabras claves
+  tkKeyword := NewTokAttrib('Keyword',tnKeyword);      //atribuuto de palabras claves
   tkKeyword.Foreground:=clGreen;
-  tkString  := NewTokType('String', tnString);   //atributo de cadenas
+  tkString  := NewTokAttrib('String', tnString);   //atributo de cadenas
   tkString.Foreground := clBlue;
-  tkComment := NewTokType('Comment', tnComment);  //atributo de comentarios
+  tkComment := NewTokAttrib('Comment', tnComment);  //atributo de comentarios
   tkComment.Style := [fsItalic];
   tkComment.Foreground := clGray;
 end;
@@ -1528,7 +1537,7 @@ begin
     tipTok := GetAttribByName(tName.val);   //tipo de atributo
   end else begin
     //No existe, se crea.
-    tipTok := NewTokType(tName.val, tokId);
+    tipTok := NewTokAttrib(tName.val, tokId);
   end;
   //obtiene referencia
   Atrib := tipTok;
