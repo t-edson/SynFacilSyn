@@ -231,6 +231,7 @@ type
     Attrib: array of TSynHighlighterAttributes;
     function NewTokType(TypeName: string; out TokID: integer
       ): TSynHighlighterAttributes;
+    function NewTokType(TypeName: string): integer;
     procedure CreateAttributes;  //limpia todos loa atributos
     function GetAttribByName(txt: string): TSynHighlighterAttributes;
     function GetAttribIDByName(txt: string): integer;
@@ -1400,7 +1401,8 @@ begin
   for c in listChars do CharsIdentif[c] := True;
 end;
 //Manejo de atributos
-function TSynFacilSynBase.NewTokType(TypeName: string; out tokID: integer): TSynHighlighterAttributes;
+function TSynFacilSynBase.NewTokType(TypeName: string; out TokID: integer
+  ): TSynHighlighterAttributes;
 {Crea un nuevo atributo y lo agrega al resaltador. Este debe ser el único punto de
 entrada, para crear atributos en SynFacilSyn. En tokID, se devuelve el ID del nuevo tipo.
 No hay funciones para eliminar atributs creados.}
@@ -1414,6 +1416,12 @@ begin
   tokID := n;           //devuelve ID
   AddAttribute(Result);   //lo registra en el resaltador
 end;
+function TSynFacilSynBase.NewTokType(TypeName: string): integer;
+{Versión simplificada de NewTokType, que devuelve directamente el ID del token}
+begin
+  NewTokType(TypeName, Result);
+end;
+
 procedure TSynFacilSynBase.CreateAttributes;
 //CRea los atributos por defecto
 begin
