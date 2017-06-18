@@ -1485,11 +1485,22 @@ procedure TSynFacilSyn.ProcTokenDelim(const d: TTokSpec);
           exit(true);  //sale con TRUE
         end else if SecToOpen.parentBlk = CurBlk_Parent then begin
           //Está en el bloque para el que se ha definido
-          //debe cerrar primero la sección anterior, porque las secciones no se anidan
+          //Debe cerrar primero la sección anterior, porque está al mismo nivel
           if (SecToOpen=curBlk) and curBlk.UniqSec then exit(false); //verificación
           EndBlockFa(curBlk);  //cierra primero la sección anterior
           StartBlockFa(SecToOpen);  //abre una nueva sección
           exit(true);  //sale con TRUE
+        end else if SecToOpen.parentBlk = CurBlk_Parent.parentBlk then begin
+          //Está en el bloque para el que se ha definido, pero hay abierta otra sección
+          //Debe cerrar primero la sección anterior, y la anterior.
+//          if (SecToOpen=curBlk) and curBlk.UniqSec then exit(false); //verificación
+          EndBlockFa(curBlk);  //cierra primero la sub-sección anterior
+          EndBlockFa(curBlk);  //cierra primero la sección anterior
+          StartBlockFa(SecToOpen);  //abre una nueva sección
+          exit(true);  //sale con TRUE
+        end else if SecToOpen.parentBlk = CurBlk then begin
+          //Está en el bloque que se ha definido como padre
+          StartBlockFa(SecToOpen);  //abre una nueva sección dentro de la sección
         end;
       end;
       Result := false;  //no abrió
@@ -1522,11 +1533,11 @@ procedure TSynFacilSyn.ProcTokenDelim(const d: TTokSpec);
     //verifica si estamos en medio de una sección
     if CurBlk.IsSection then begin //verifica si es bloque de sección
       {Es sección, el bloque actual debe ser el bloque padre, porque por definición
-      los tokens no cierran secciones (a menos que abran bloqus).}
+      los tokens no cierran secciones (a menos que abran bloques).}
       CurBlk_Parent := TopCodeFoldBlock(1);  //lee bloque superior
       for BlkToClose in BlksToClose do begin
         if BlkToClose = CurBlk_Parent  then begin  //coincide
-          //Antes de cerrar el blqoeu padre, debe cerrar la sección actual
+          //Antes de cerrar el blqoque padre, debe cerrar la sección actual
           EndBlockFa(CurBlk);  //cierra primero la sección
 //            EndBlockFa(CurBlk_Parent.showFold)  //cierra bloque
           CloseThisBlk := BlkToClose; //marca para cerrar en el siguuiente token

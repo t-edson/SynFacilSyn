@@ -1,3 +1,9 @@
+1.20
+====
+Se incluye la posibilidad de anidar secciones dentro de otras secciones, pero solo para
+un nivel.
+
+
 1.18
 ====
 Se cambia el campo fTokenID, para que sea de tipo "integer", en lugar de 
