@@ -60,9 +60,15 @@ begin
   Result:= [cResultState];
 end;
 
-function TATSynEdit.DoCommand_ToggleMinimap: TATCommandResults;
+function TATSynEdit.DoCommand_ToggleMiniMap: TATCommandResults;
 begin
   OptMinimapVisible:= not OptMinimapVisible;
+  Result:= [cResultState];
+end;
+
+function TATSynEdit.DoCommand_ToggleMicroMap: TATCommandResults;
+begin
+  OptMicromapVisible:= not OptMicromapVisible;
   Result:= [cResultState];
 end;
 
@@ -82,6 +88,53 @@ function TATSynEdit.DoCommand_SizeChange(AIncrease: boolean): TATCommandResults;
 begin
   DoSizeChange(AIncrease);
   Result:= [cResultState];
+end;
+
+
+function TATSynEdit.DoCommand_FoldUnfoldAll(ADoFold: boolean): TATCommandResults;
+var
+  R: TATSynRange;
+  NeedFixCaret: boolean;
+  i: integer;
+begin
+  if ADoFold then
+  begin
+    for i:= 0 to Fold.Count-1 do
+    begin
+      R:= Fold[i];
+      if R.IsSimple then Continue;
+      R.Folded:= false;
+      DoRangeFold(R);
+    end;
+
+    NeedFixCaret:= false;
+    for i:= 0 to Carets.Count-1 do
+      if IsLineFolded(Carets[i].PosY) then
+      begin
+        NeedFixCaret:= true;
+        Break;
+      end;
+    if NeedFixCaret then
+      DoCaretSingle(0, 0);
+  end
+  else
+  begin
+    for i:= 0 to Fold.Count-1 do
+    begin
+      R:= Fold[i];
+      if R.Folded then
+        DoRangeUnfold(R);
+    end;
+  end;
+
+  Result:= [cResultCaretTop, cResultScroll, cResultFoldChange];
+end;
+
+
+function TATSynEdit.DoCommand_FoldLevel(ALevel: integer): TATCommandResults;
+begin
+  DoFoldForLevel(ALevel);
+  Result:= [cResultCaretAny, cResultScroll, cResultFoldChange];
 end;
 
 

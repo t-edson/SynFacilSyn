@@ -1,5 +1,49 @@
 {$ifdef nn}begin end;{$endif}
 
+function SConvertAnsiToUtf8(const SA: string): UTF8String;
+begin
+  {$ifdef windows}
+  case Windows.GetACP of
+    1250: Result:= CP1250ToUTF8(SA);
+    1251: Result:= CP1251ToUTF8(SA);
+    1252: Result:= CP1252ToUTF8(SA);
+    1253: Result:= CP1253ToUTF8(SA);
+    1254: Result:= CP1254ToUTF8(SA);
+    1255: Result:= CP1255ToUTF8(SA);
+    1256: Result:= CP1256ToUTF8(SA);
+    1257: Result:= CP1257ToUTF8(SA);
+    1258: Result:= CP1258ToUTF8(SA);
+    437: Result:= CP437ToUTF8(SA);
+    else Result:= CP1250ToUTF8(SA);
+  end;
+  {$else}
+  Result:= CP1250ToUTF8(SA);
+  {$endif}
+end;
+
+function SConvertUtf8ToAnsi(const S: UTF8String): string;
+begin
+  {$ifdef windows}
+  case Windows.GetACP of
+    1250: Result:= UTF8ToCP1250(S);
+    1251: Result:= UTF8ToCP1251(S);
+    1252: Result:= UTF8ToCP1252(S);
+    1253: Result:= UTF8ToCP1253(S);
+    1254: Result:= UTF8ToCP1254(S);
+    1255: Result:= UTF8ToCP1255(S);
+    1256: Result:= UTF8ToCP1256(S);
+    1257: Result:= UTF8ToCP1257(S);
+    1258: Result:= UTF8ToCP1258(S);
+    437: Result:= UTF8ToCP437(S);
+    else Result:= UTF8ToCP1250(S);
+  end;
+  {$else}
+  Result:= UTF8ToCP1250(S);
+  {$endif}
+end;
+
+
+
 function IsStreamWithSignature(Stream: TStream; const Sign: AnsiString): boolean;
 var
   Buf: AnsiString;
@@ -41,15 +85,26 @@ procedure DoDetectStreamEncoding(Stream: TStream;
   out Enc: TATFileEncoding;
   out SignLen: integer;
   out EncWithBom: boolean;
-  BufSizeKb: integer);
+  BufSizeKb: integer;
+  DefaultIsUtf8: boolean);
 begin
-  Enc:= cEncAnsi;
-  EncWithBom:= true;
+  if DefaultIsUtf8 then
+  begin
+    Enc:= cEncUTF8;
+    EncWithBom:= false;
+  end
+  else
+  begin
+    Enc:= cEncAnsi;
+    EncWithBom:= false;
+  end;
+
   SignLen:= 0;
 
   if IsStreamWithSignature(Stream, cSignUTF8) then
   begin
     Enc:= cEncUTF8;
+    EncWithBom:= true;
     SignLen:= Length(cSignUTF8);
     Exit
   end;
@@ -57,6 +112,7 @@ begin
   if IsStreamWithSignature(Stream, cSignWideLE) then
   begin
     Enc:= cEncWideLE;
+    EncWithBom:= true;
     SignLen:= Length(cSignWideLE);
     Exit
   end;
@@ -64,6 +120,7 @@ begin
   if IsStreamWithSignature(Stream, cSignWideBE) then
   begin
     Enc:= cEncWideBE;
+    EncWithBom:= true;
     SignLen:= Length(cSignWideBE);
     Exit
   end;
@@ -80,7 +137,10 @@ end;
 procedure TATStrings.LoadFromString(const AText: atString);
 var
   MS: TMemoryStream;
+  Str: atString;
+  i: integer;
 begin
+  if ReadOnly then exit;
   Clear;
   if AText='' then
   begin
@@ -88,18 +148,31 @@ begin
     Exit;
   end;
 
-  MS:= TMemoryStream.Create;
-  try
-    MS.Write(AText[1], Length(AText)*SizeOf(atChar));
-    MS.Position:= 0;
+  if OneLine then
+  begin
+    Str:= AText;
+    SDeleteFromEol(Str);
+    LineAddEx(Str, cEndNone);
+  end
+  else
+  begin
+    MS:= TMemoryStream.Create;
+    try
+      MS.Write(AText[1], Length(AText)*SizeOf(atChar));
+      MS.Position:= 0;
 
-    Encoding:= cEncWideLE;
-    EncodingDetect:= false;
-    LoadFromStream(MS);
-    ActionAddFakeLineIfNeeded;
-  finally
-    FreeAndNil(MS);
+      Encoding:= cEncWideLE;
+      EncodingDetect:= false;
+      LoadFromStream(MS);
+      ActionAddFakeLineIfNeeded;
+    finally
+      FreeAndNil(MS);
+    end;
   end;
+
+  Modified:= true;
+  for i:= 0 to Count-1 do
+    SetLineState(i, cLineStateAdded);
 end;
 
 procedure TATStrings.DoLoadFromStream(Stream: TStream);
@@ -133,7 +206,8 @@ var
 var
   NStart, NEnd, Len: integer;
   SA: AnsiString;
-  SW: UnicodeString;
+  SUtf8: UTF8String;
+  SWide: UnicodeString;
   LineEnd: TATLineEnds;
   bWithBom, bEncoded: boolean;
   NPercents: integer;
@@ -143,7 +217,9 @@ begin
   Len:= 0;
   if FEncodingDetect then
   begin
-    DoDetectStreamEncoding(Stream, FEncoding, Len, bWithBom, FEncodingDetectBufSizeKb);
+    DoDetectStreamEncoding(Stream, FEncoding, Len, bWithBom,
+      FEncodingDetectBufSizeKb,
+      FEncodingDetectDefaultUtf8);
     case FEncoding of
       cEncUTF8: SaveSignUtf8:= bWithBom;
       cEncWideBE,
@@ -165,12 +241,12 @@ begin
       NEnd:= _FindNextEol(NStart);
       Len:= NEnd-NStart;
 
-      if Stream.Size>=cMinSizeForProgress then
+      if Stream.Size>=FProgressMinSize then
       begin
         NPercents:= Int64(NEnd)*100 div Stream.Size;
-        if Abs(NPercents-FProgress)>=cMinIncForProgress then
+        if Abs(NPercents-FProgressValue)>=FProgressMinIncrement then
         begin
-          FProgress:= NPercents;
+          FProgressValue:= NPercents;
           if Assigned(FOnProgress) then
             FOnProgress(Self);
         end;
@@ -199,7 +275,7 @@ begin
         Inc(NEnd, CharSize);
 
       if Len=0 then
-        LineAddRaw('', LineEnd)
+        LineAddRaw_UTF8_NoUndo('', LineEnd)
       else
       begin
         case FEncoding of
@@ -209,21 +285,12 @@ begin
               SetLength(SA, Len);
               Move(Buf[NStart], SA[1], Len);
 
-              //if codepage set, convert string->utf8->UnicodeString
-              //else just string->UnicodeString
               if FEncodingCodepage='' then
-                SW:= SA
+                SUtf8:= SConvertAnsiToUTF8(SA)
               else
-              begin
-                {$ifdef laz15}
-                SA:= ConvertEncodingToUTF8(SA, FEncodingCodepage, bEncoded);
-                {$else}
-                SA:= ConvertEncoding(SA, FEncodingCodepage, '');
-                {$endif}
-                SW:= UTF8Decode(SA);
-              end;
+                SUtf8:= ConvertEncodingToUTF8(SA, FEncodingCodepage, bEncoded);
 
-              LineAddRaw(SW, LineEnd);
+              LineAddRaw_UTF8_NoUndo(SUtf8, LineEnd);
             end;
 
           cEncUTF8:
@@ -231,19 +298,18 @@ begin
               SA:= '';
               SetLength(SA, Len);
               Move(Buf[NStart], SA[1], Len);
-              SW:= UTF8Decode(SA);
-              LineAddRaw(SW, LineEnd);
+              LineAddRaw_UTF8_NoUndo(SA, LineEnd);
             end;
 
           cEncWideLE,
           cEncWideBE:
             begin
-              SW:= '';
-              SetLength(SW, Len div 2);
-              Move(Buf[NStart], SW[1], Len);
+              SWide:= '';
+              SetLength(SWide, Len div 2);
+              Move(Buf[NStart], SWide[1], Len);
               if FEncoding=cEncWideBE then
-                SW:= SSwapEndian(SW);
-              LineAddRaw(SW, LineEnd);
+                SWide:= SSwapEndian(SWide);
+              LineAddRaw_UTF8_NoUndo(UTF8Encode(SWide), LineEnd);
             end;
 
           else
@@ -268,12 +334,17 @@ begin
 end;
 
 
-procedure TATStrings.LoadFromFile(const Filename: string);
+procedure TATStrings.LoadFromFile(const AFilename: string);
 var
   fs: TFileStreamUtf8;
+  //NSize: Int64;
 begin
-  fs:= TFileStreamUtf8.Create(Filename, fmOpenRead);
+  //NSize:= FileUtil.FileSize(AFilename);
+
+  fs:= TFileStreamUtf8.Create(AFilename, fmOpenRead or fmShareDenyNone);
   try
+    //if fs.Size<NSize then
+    //  raise Exception.Create('Cannot open file. Opened content size reported less than disk file size. File is write-only?');
     LoadFromStream(fs);
   finally
     FreeAndNil(fs);
@@ -286,8 +357,8 @@ begin
   ActionAddFakeLineIfNeeded;
   DoClearLineStates(false);
   DoClearUndo;
-  FModified:= false;
-  FProgress:= 0;
+  Modified:= false;
+  FProgressValue:= 0;
 end;
 
 

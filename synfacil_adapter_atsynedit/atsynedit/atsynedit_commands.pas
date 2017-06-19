@@ -1,3 +1,7 @@
+{
+Copyright (C) Alexey Torgashin, uvviewsoft.com
+License: MPL 2.0 or LGPL
+}
 unit ATSynEdit_Commands;
 
 {$mode objfpc}{$H+}
@@ -41,6 +45,10 @@ const
   cCommand_ColSelectDown  = 111;
   cCommand_ColSelectLeft  = 112;
   cCommand_ColSelectRight = 113;
+  cCommand_ColSelectToLineBegin = 114;
+  cCommand_ColSelectToLineEnd = 115;
+  cCommand_ColSelectPageUp = 116;
+  cCommand_ColSelectPageDown = 117;
 
   cCommand_TextInsert = 150;
   cCommand_TextInsertTabChar = 151;
@@ -50,8 +58,8 @@ const
   cCommand_KeyTab = 155;
 
   cCommand_TextDeleteSelection = 170;
-  cCommand_TextDeleteLine = 171 or cCmdSelReset;
-  cCommand_TextDuplicateLine = 172 or cCmdSelReset;
+  cCommand_TextDeleteLine = 171;
+  cCommand_TextDuplicateLine = 172;
   cCommand_TextDeleteToLineBegin = 173 or cCmdSelReset;
   cCommand_TextDeleteToLineEnd = 174 or cCmdSelReset;
   cCommand_TextDeleteToTextEnd = 175 or cCmdSelReset;
@@ -110,6 +118,7 @@ const
   cCommand_ToggleFolding = 308;
   cCommand_ToggleRuler = 309;
   cCommand_ToggleMinimap = 310;
+  cCommand_ToggleMicromap = 311;
 
   cCommand_ClipboardPaste = 1000;
   cCommand_ClipboardPaste_Select = 1001;
@@ -120,20 +129,42 @@ const
   cCommand_ClipboardCopyAdd = 1007;
   cCommand_ClipboardCut = 1008;
 
+  //use PrimarySelection (has meaning on gtk2)
+  cCommand_ClipboardAltPaste = 1010;
+  cCommand_ClipboardAltPaste_Select = 1011;
+  cCommand_ClipboardAltPaste_KeepCaret = 1012;
+  cCommand_ClipboardAltPaste_Column = 1013 or cCmdSelReset;
+  cCommand_ClipboardAltPaste_ColumnKeepCaret = 1014 or cCmdSelReset;
+  //use SecondarySelection (has meaning on gtk2)
+  cCommand_ClipboardAltAltPaste = 1015;
+
   cCommand_TextCaseLower = 1020;
   cCommand_TextCaseUpper = 1021;
   cCommand_TextCaseTitle = 1022;
   cCommand_TextCaseInvert = 1023;
   cCommand_TextCaseSentence = 1024;
 
+  cCommand_TextTrimSpacesLeft = 1026;
+  cCommand_TextTrimSpacesRight = 1027;
+  cCommand_TextTrimSpacesAll = 1028;
+
+  cCommand_UnfoldAll = 1029;
   cCommand_FoldAll = 1030;
-  cCommand_UnfoldAll = 1031;
+  cCommand_FoldLevel1 = 1031;
+  cCommand_FoldLevel2 = 1032;
+  cCommand_FoldLevel3 = 1033;
+  cCommand_FoldLevel4 = 1034;
+  cCommand_FoldLevel5 = 1035;
+  cCommand_FoldLevel6 = 1036;
+  cCommand_FoldLevel7 = 1037;
+  cCommand_FoldLevel8 = 1038;
+  cCommand_FoldLevel9 = 1039;
 
   cCommand_Cancel = 2001;
   cCommand_RepeatTextCommand = 2002;
   cCommand_ZoomIn = 2003;
   cCommand_ZoomOut = 2004;
-  cCommand_RecentsPopup = 2005;
+  cCommand_ComboboxRecentsMenu = 2005;
 
   cCommand_CaretsExtendDownLine = 2010;
   cCommand_CaretsExtendDownPage = 2011;

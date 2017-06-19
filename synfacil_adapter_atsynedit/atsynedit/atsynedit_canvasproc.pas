@@ -1,21 +1,24 @@
+{
+Copyright (C) Alexey Torgashin, uvviewsoft.com
+License: MPL 2.0 or LGPL
+}
 unit ATSynEdit_CanvasProc;
 
 {$mode objfpc}{$H+}
 
-//{$define invert_pixels} //test Mac caret blinking
-{$ifdef darwin}
-  {$define invert_pixels}
-{$endif}
-
 interface
 
 uses
+  {$ifdef windows}
+  Windows,
+  {$endif}
   Classes, SysUtils, Graphics, Types,
   ATStringProc;
 
 var
   OptUnprintedTabCharLength: integer = 1;
   OptUnprintedTabPointerScale: integer = 22;
+  OptUnprintedEofCharLength: integer = 1;
   OptUnprintedSpaceDotScale: integer = 15;
   OptUnprintedEndDotScale: integer = 30;
   OptUnprintedEndFontScale: integer = 80;
@@ -23,6 +26,14 @@ var
   OptUnprintedEndFontDy: integer = 2;
   OptUnprintedEndArrowOrDot: boolean = true;
   OptUnprintedEndArrowLength: integer = 70;
+
+const
+  //Win: seems no slowdown from offsets
+  //OSX: better use offsets, fonts have float-width, e.g. 10.2 pixels
+  //Linux gtk2: big slowdown from offsets
+  CanvasTextOutMustUseOffsets = {$ifdef linux} false {$else} true {$endif};
+var
+  CanvasTextOutHorzSpacingUsed: boolean = false;
 
 type
   TATLineStyle = (
@@ -35,12 +46,25 @@ type
     cLineStyleWave
     );
 
+  TATFontNeedsOffsets = record
+    ForNormal: boolean;
+    ForBold: boolean;
+    ForItalic: boolean;
+    ForBoldItalic: boolean;
+  end;
+
 type
   TATLinePart = record
     Offset, Len: integer;
     ColorFont, ColorBG, ColorBorder: TColor;
     FontBold, FontItalic, FontStrikeOut: boolean;
     BorderUp, BorderDown, BorderLeft, BorderRight: TATLineStyle;
+  end;
+
+type
+  TATLinePartClass = class
+  public
+    Data: TATLinePart;
   end;
 
 const
@@ -54,12 +78,20 @@ type
     AX, AY: integer; const AStr: atString; ACharSize: TPoint;
     const AExtent: TATIntArray) of object;
 
-procedure CanvasLineEx(C: TCanvas; Color: TColor; Style: TATLineStyle;
+procedure CanvasLineEx(C: TCanvas;
+  Color: TColor; Style: TATLineStyle;
   P1, P2: TPoint; AtDown: boolean);
+
+procedure CanvasArrowHorz(C: TCanvas;
+  const ARect: TRect;
+  AColorFont: TColor;
+  AArrowLen: integer;
+  AToRight: boolean);
 
 procedure CanvasTextOut(C: TCanvas;
   PosX, PosY: integer;
-  const Str: atString;
+  Str: atString;
+  const ANeedOffsets: TATFontNeedsOffsets;
   ATabSize: integer;
   ACharSize: TPoint;
   AMainText: boolean;
@@ -70,11 +102,14 @@ procedure CanvasTextOut(C: TCanvas;
   ACharsSkipped: integer;
   AParts: PATLineParts;
   ADrawEvent: TATSynEditDrawLineEvent;
-  ATextOffsetFromLine: integer
+  ATextOffsetFromLine: integer;
+  AControlWidth: integer;
+  AAllowFontLigatures: boolean
   );
 
 procedure CanvasTextOutMinimap(C: TCanvas;
   const AStr: atString;
+  const ARect: TRect;
   APos: TPoint;
   ACharSize: TPoint;
   ATabSize: integer;
@@ -88,9 +123,7 @@ procedure DoPaintUnprintedEol(C: TCanvas;
   AColorFont, AColorBG: TColor;
   ADetails: boolean);
 
-function CanvasTextSpaces(const S: atString; ATabSize: integer): real;
 function CanvasTextWidth(const S: atString; ATabSize: integer; ACharSize: TPoint): integer;
-
 function CanvasFontSizes(C: TCanvas): TPoint;
 procedure CanvasInvertRect(C: TCanvas; const R: TRect; AColor: TColor);
 procedure CanvasDottedVertLine_Alt(C: TCanvas; Color: TColor; X1, Y1, Y2: integer);
@@ -98,10 +131,11 @@ procedure CanvasDottedHorzVertLine(C: TCanvas; Color: TColor; P1, P2: TPoint);
 procedure CanvasWavyHorzLine(C: TCanvas; Color: TColor; P1, P2: TPoint; AtDown: boolean);
 
 procedure CanvasPaintTriangleDown(C: TCanvas; AColor: TColor; ACoord: TPoint; ASize: integer);
+procedure CanvasPaintTriangleRight(C: TCanvas; AColor: TColor; ACoord: TPoint; ASize: integer);
 procedure CanvasPaintPlusMinus(C: TCanvas; AColorBorder, AColorBG: TColor; ACenter: TPoint; ASize: integer; APlus: boolean);
 
 procedure DoPartFind(const AParts: TATLineParts; APos: integer; out AIndex, AOffsetLeft: integer);
-procedure DoPartInsert(var AParts: TATLineParts; const APart: TATLinePart);
+function DoPartInsert(var AParts: TATLineParts; var APart: TATLinePart; AKeepFontStyles: boolean): boolean;
 procedure DoPartSetColorBG(var AParts: TATLineParts; AColor: TColor; AForceColor: boolean);
 
 
@@ -118,8 +152,55 @@ var
 type
   TATBorderSide = (cSideLeft, cSideRight, cSideUp, cSideDown);
 
+function IsStringSymbolsOnly(const S: string): boolean;
+var
+  i, N: integer;
+begin
+  if S='' then exit(false);
+  for i:= 1 to Length(S) do
+  begin
+    N:= Ord(S[i]);
+    if (N<32) or (N>Ord('~')) then
+      exit(false);
+  end;
+  Result:= true;
+end;
 
-procedure DoPaintUnprintedSpace(C: TCanvas; const ARect: TRect; AScale: integer; AFontColor: TColor);
+
+//override LCLIntf.ExtTextOut on Win32 to draw font ligatures
+function _SelfTextOut(DC: HDC; X, Y: Integer; Rect: PRect;
+  const Str: String;
+  Dx: PInteger;
+  AllowLigatures: boolean
+  ): boolean;
+{$ifdef windows}
+var
+  CharPlaceInfo: TGCPRESULTS;
+  Glyphs: array of WideChar;
+{$endif}
+begin
+  {$ifdef windows}
+  if AllowLigatures then
+  begin
+    ZeroMemory(@CharPlaceInfo, SizeOf(CharPlaceInfo));
+    CharPlaceInfo.lStructSize:= SizeOf(CharPlaceInfo);
+    SetLength(Glyphs, Length(Str));
+    CharPlaceInfo.lpGlyphs:= @Glyphs[0];
+    CharPlaceInfo.nGlyphs:= Length(Glyphs);
+
+    if GetCharacterPlacement(DC, PChar(Str), Length(Str), 0, @CharPlaceInfo, GCP_LIGATE)<> 0 then
+      Result:= Windows.ExtTextOut(DC, X, Y, ETO_CLIPPED or ETO_OPAQUE or ETO_GLYPH_INDEX, Rect, Pointer(Glyphs), Length(Glyphs), Dx)
+    else
+      Result:= ExtTextOut(DC, X, Y, ETO_CLIPPED or ETO_OPAQUE, Rect, PChar(Str), Length(Str), Dx);
+  end
+  else
+  {$endif}
+  Result:= ExtTextOut(DC, X, Y, ETO_CLIPPED or ETO_OPAQUE, Rect, PChar(Str), Length(Str), Dx);
+end;
+
+
+procedure CanvasUnprintedSpace(C: TCanvas; const ARect: TRect;
+  AScale: integer; AFontColor: TColor);
 const
   cMinDotSize = 2;
 var
@@ -136,10 +217,11 @@ begin
   C.FillRect(R);
 end;
 
-procedure DoPaintUnprintedTabulation(C: TCanvas;
+procedure CanvasArrowHorz(C: TCanvas;
   const ARect: TRect;
   AColorFont: TColor;
-  ACharSizeX: integer);
+  AArrowLen: integer; //OptUnprintedTabCharLength*ACharSizeX
+  AToRight: boolean);
 const
   cIndent = 1; //offset left/rt
 var
@@ -148,7 +230,7 @@ begin
   XLeft:= ARect.Left+cIndent;
   XRight:= ARect.Right-cIndent;
 
-  if OptUnprintedTabCharLength=0 then
+  if AArrowLen=0 then
   begin;
     X1:= XLeft;
     X2:= XRight;
@@ -156,23 +238,32 @@ begin
   else
   begin
     X1:= XLeft;
-    X2:= Min(XRight, X1+OptUnprintedTabCharLength*ACharSizeX);
+    X2:= Min(XRight, X1+AArrowLen);
   end;
 
   Y:= (ARect.Top+ARect.Bottom) div 2;
   Dx:= (ARect.Bottom-ARect.Top) * OptUnprintedTabPointerScale div 100;
   C.Pen.Color:= AColorFont;
 
-  C.MoveTo(X2, Y);
-  C.LineTo(X1, Y);
-  C.MoveTo(X2, Y);
-  C.LineTo(X2-Dx, Y-Dx);
-  C.MoveTo(X2, Y);
-  C.LineTo(X2-Dx, Y+Dx);
+  C.Line(X1, Y, X2, Y);
+  if AToRight then
+  begin
+    C.MoveTo(X2, Y);
+    C.LineTo(X2-Dx, Y-Dx);
+    C.MoveTo(X2, Y);
+    C.LineTo(X2-Dx, Y+Dx);
+  end
+  else
+  begin
+    C.MoveTo(X1, Y);
+    C.LineTo(X1+Dx, Y-Dx);
+    C.MoveTo(X1, Y);
+    C.LineTo(X1+Dx, Y+Dx);
+  end;
 end;
 
 
-procedure DoPaintUnprintedArrowDown(C: TCanvas;
+procedure CanvasArrowDown(C: TCanvas;
   const ARect: TRect;
   AColorFont: TColor);
 var
@@ -219,9 +310,9 @@ begin
       R.Bottom:= R.Top+ACharSize.Y;
 
       if AString[i]=' ' then
-        DoPaintUnprintedSpace(C, R, OptUnprintedSpaceDotScale, AColorFont)
+        CanvasUnprintedSpace(C, R, OptUnprintedSpaceDotScale, AColorFont)
       else
-        DoPaintUnprintedTabulation(C, R, AColorFont, ACharSize.X);
+        CanvasArrowHorz(C, R, AColorFont, OptUnprintedTabCharLength*ACharSize.X, true);
     end;
 end;
 
@@ -235,23 +326,25 @@ end;
 
 procedure CanvasRoundedLine(C: TCanvas; Color: TColor; P1, P2: TPoint; AtDown: boolean);
 var
-  cPixel: TColor;
+  Points: array[0..3] of TPoint;
 begin
-  cPixel:= Color;
   C.Pen.Color:= Color;
   if P1.Y=P2.Y then
   begin
-    C.Line(P1.X+2, P1.Y, P2.X-1, P2.Y);
+    //paint polyline, 4 points, horz line and 2 edges
+    Points[1]:= Point(P1.X+2, P1.Y);
+    Points[2]:= Point(P2.X-2, P2.Y);
     if AtDown then
     begin
-      C.Pixels[P1.X+1, P1.Y-1]:= cPixel;
-      C.Pixels[P2.X-1, P2.Y-1]:= cPixel;
+      Points[0]:= Point(P1.X, P1.Y-2);
+      Points[3]:= Point(P2.X+1, P2.Y-3);
     end
     else
     begin
-      C.Pixels[P1.X+1, P1.Y+1]:= cPixel;
-      C.Pixels[P2.X-1, P2.Y+1]:= cPixel;
-    end
+      Points[0]:= Point(P1.X, P1.Y+2);
+      Points[3]:= Point(P2.X+1, P2.Y+3);
+    end;
+    C.Polyline(Points);
   end
   else
   begin
@@ -262,17 +355,25 @@ end;
 
 procedure CanvasWavyHorzLine(C: TCanvas; Color: TColor; P1, P2: TPoint; AtDown: boolean);
 const
-  cWavePeriod = 4;
-  cWaveInc: array[0..cWavePeriod-1] of integer = (0, 1, 2, 1);
+  cWavePeriod = 2;
+  cWaveInc: array[0..cWavePeriod-1] of integer = (0, 2);
 var
-  i, y, sign: integer;
+  Points: array of TPoint;
+  x, y, sign: integer;
 begin
+  SetLength(Points, 0);
   if AtDown then sign:= -1 else sign:= 1;
-  for i:= P1.X to P2.X do
-  begin
-    y:= P2.Y + sign * cWaveInc[(i-P1.X) mod cWavePeriod];
-    C.Pixels[i, y]:= Color;
-  end;
+  for x:= P1.X to P2.X do
+    if not Odd(x) then
+    begin
+      y:= P2.Y + sign * cWaveInc[(x-P1.X) div 2 mod cWavePeriod];
+      SetLength(Points, Length(Points)+1);
+      Points[Length(Points)-1]:= Point(x, y);
+    end;
+
+  C.Pen.Color:= Color;
+  if Length(Points)>0 then
+    C.Polyline(Points);
 end;
 
 procedure CanvasDottedHorzVertLine(C: TCanvas; Color: TColor; P1, P2: TPoint);
@@ -383,7 +484,7 @@ procedure DoPaintHexChars(C: TCanvas;
 var
   Buf: string;
   R: TRect;
-  i, j: integer;
+  i, j, NCode: integer;
 begin
   if AString='' then Exit;
 
@@ -403,7 +504,9 @@ begin
       C.Font.Color:= AColorFont;
       C.Brush.Color:= AColorBg;
 
-      Buf:= '<'+IntToHex(Ord(AString[i]), 4)+'>';
+      NCode:= Ord(AString[i]);
+      Buf:= 'x'+IntToHex(NCode, IfThen(NCode<$100, 2, 4));
+
       ExtTextOut(C.Handle,
         R.Left, R.Top,
         ETO_CLIPPED+ETO_OPAQUE,
@@ -440,11 +543,11 @@ begin
   else
   begin
     if OptUnprintedEndArrowOrDot then
-      DoPaintUnprintedArrowDown(C,
+      CanvasArrowDown(C,
         Rect(APoint.X, APoint.Y, APoint.X+ACharSize.X, APoint.Y+ACharSize.Y),
         AColorFont)
     else
-      DoPaintUnprintedSpace(C,
+      CanvasUnprintedSpace(C,
         Rect(APoint.X, APoint.Y, APoint.X+ACharSize.X, APoint.Y+ACharSize.Y),
         OptUnprintedEndDotScale,
         AColorFont);
@@ -461,29 +564,48 @@ begin
   Result.Y:= Size.cy;
 end;
 
-function CanvasTextSpaces(const S: atString; ATabSize: integer): real;
+function CanvasTextWidth(const S: atString; ATabSize: integer; ACharSize: TPoint): integer;
 var
-  List: TATRealArray;
+  Offsets: TATLineOffsetsInfo;
 begin
   Result:= 0;
   if S='' then Exit;
-  SetLength(List, Length(S));
-  SCalcCharOffsets(S, List, ATabSize);
-  Result:= List[High(List)];
+  SCalcCharOffsets(S, Offsets, ATabSize);
+  Result:= Offsets.OffsetPercent[High(Offsets.OffsetPercent)] * ACharSize.X div 100;
 end;
 
-function CanvasTextWidth(const S: atString; ATabSize: integer; ACharSize: TPoint): integer;
-begin
-  Result:= Trunc(CanvasTextSpaces(S, ATabSize)*ACharSize.X);
-end;
 
-procedure CanvasTextOut(C: TCanvas; PosX, PosY: integer; const Str: atString;
-  ATabSize: integer; ACharSize: TPoint; AMainText: boolean;
-  AShowUnprintable: boolean; AColorUnprintable: TColor; AColorHex: TColor; out
-  AStrWidth: integer; ACharsSkipped: integer; AParts: PATLineParts;
-  ADrawEvent: TATSynEditDrawLineEvent; ATextOffsetFromLine: integer);
+function CanvasTextOutNeedsOffsets(C: TCanvas; const AStr: atString;
+  const AOffsets: TATFontNeedsOffsets): boolean;
 var
-  ListReal: TATRealArray;
+  St: TFontStyles;
+begin
+  if CanvasTextOutMustUseOffsets then exit(true);
+  if CanvasTextOutHorzSpacingUsed then exit(true);
+
+  //detect result but presence of bold/italic tokens, for them offsets needed
+  //ignore underline, strikeout
+  St:= C.Font.Style * [fsBold, fsItalic];
+
+  if St=[] then Result:= AOffsets.ForNormal else
+   if St=[fsBold] then Result:= AOffsets.ForBold else
+    if St=[fsItalic] then Result:= AOffsets.ForItalic else
+     if St=[fsBold, fsItalic] then Result:= AOffsets.ForBoldItalic else
+      Result:= false;
+
+  if Result then exit;
+  Result:= IsStringWithUnicodeChars(AStr);
+end;
+
+procedure CanvasTextOut(C: TCanvas; PosX, PosY: integer; Str: atString;
+  const ANeedOffsets: TATFontNeedsOffsets; ATabSize: integer;
+  ACharSize: TPoint; AMainText: boolean; AShowUnprintable: boolean;
+  AColorUnprintable: TColor; AColorHex: TColor; out AStrWidth: integer;
+  ACharsSkipped: integer; AParts: PATLineParts;
+  ADrawEvent: TATSynEditDrawLineEvent; ATextOffsetFromLine: integer;
+  AControlWidth: integer; AAllowFontLigatures: boolean);
+var
+  ListOffsets: TATLineOffsetsInfo;
   ListInt: TATIntArray;
   Dx: TATIntArray;
   i, j: integer;
@@ -494,19 +616,28 @@ var
   PartFontStyle: TFontStyles;
   PartRect: TRect;
   Buf: AnsiString;
+  DxPointer: PInteger;
+  bAllowLigatures: boolean;
 begin
   if Str='' then Exit;
 
-  SetLength(ListReal, Length(Str));
   SetLength(ListInt, Length(Str));
   SetLength(Dx, Length(Str));
 
-  SCalcCharOffsets(Str, ListReal, ATabSize, ACharsSkipped);
+  SCalcCharOffsets(Str, ListOffsets, ATabSize, ACharsSkipped);
 
-  for i:= 0 to High(ListReal) do
-    ListInt[i]:= Trunc(ListReal[i]*ACharSize.X);
+  for i:= 0 to High(ListOffsets.OffsetPercent) do
+    ListInt[i]:= ListOffsets.OffsetPercent[i] * ACharSize.X div 100;
 
-  for i:= 0 to High(ListReal) do
+  //truncate str, to not paint over screen
+  for i:= 1 to High(ListInt) do
+    if ListInt[i]>AControlWidth then
+    begin
+      SetLength(Str, i);
+      break;
+    end;
+
+  for i:= 0 to High(ListInt) do
     if i=0 then
       Dx[i]:= ListInt[i]
     else
@@ -515,7 +646,12 @@ begin
   if AParts=nil then
   begin
     Buf:= UTF8Encode(SRemoveHexChars(Str));
-    ExtTextOut(C.Handle, PosX, PosY, 0, nil, PChar(Buf), Length(Buf), @Dx[0]);
+    SReplaceAllTabsToOneSpace(Buf);
+    if CanvasTextOutNeedsOffsets(C, Str, ANeedOffsets) then
+      DxPointer:= @Dx[0]
+    else
+      DxPointer:= nil;
+    ExtTextOut(C.Handle, PosX, PosY, 0, nil, PChar(Buf), Length(Buf), DxPointer);
 
     DoPaintHexChars(C,
       Str,
@@ -563,19 +699,36 @@ begin
         PosY+ACharSize.Y);
 
       Buf:= UTF8Encode(SRemoveHexChars(PartStr));
-      ExtTextOut(C.Handle,
+      SReplaceAllTabsToOneSpace(Buf);
+      if CanvasTextOutNeedsOffsets(C, PartStr, ANeedOffsets) then
+        DxPointer:= @Dx[PartOffset]
+      else
+        DxPointer:= nil;
+
+      bAllowLigatures:=
+        {$ifdef windows}
+        AAllowFontLigatures and
+        IsStringSymbolsOnly(Buf) and //disable if unicode chrs
+        (Pos(#9, PartStr)=0); //incorrect for str with tabs
+        {$else}
+        false;
+        {$endif}
+
+      _SelfTextOut(C.Handle,
         PosX+PixOffset1,
         PosY+ATextOffsetFromLine,
-        ETO_CLIPPED+ETO_OPAQUE,
         @PartRect,
-        PChar(Buf),
-        Length(Buf),
-        @Dx[PartOffset]);
+        Buf,
+        DxPointer,
+        bAllowLigatures
+        );
 
       DoPaintHexChars(C,
         PartStr,
         @Dx[PartOffset],
-        Point(PosX+PixOffset1, PosY),
+        Point(
+          PosX+PixOffset1,
+          PosY+ATextOffsetFromLine),
         ACharSize,
         AColorHex,
         PartPtr^.ColorBG
@@ -620,7 +773,7 @@ begin
   _Pen.Assign(C.Pen);
 
   X:= (R.Left+R.Right) div 2;
-  C.Pen.Mode:= pmNotXor;
+  C.Pen.Mode:= {$ifdef darwin} pmNot {$else} pmNotXor {$endif};
   C.Pen.Style:= psSolid;
   C.Pen.Color:= AColor;
   C.AntialiasingMode:= amOff;
@@ -651,11 +804,23 @@ begin
   C.Brush.Color:= AColor;
   C.Pen.Color:= AColor;
   C.Polygon([
-    Point(ACoord.X, ACoord.Y),
-    Point(ACoord.X+ASize*2, ACoord.Y),
-    Point(ACoord.X+ASize, ACoord.Y+ASize)
+    Point(ACoord.X - ASize*2, ACoord.Y - ASize),
+    Point(ACoord.X + ASize*2, ACoord.Y - ASize),
+    Point(ACoord.X, ACoord.Y + ASize)
     ]);
 end;
+
+procedure CanvasPaintTriangleRight(C: TCanvas; AColor: TColor; ACoord: TPoint; ASize: integer);
+begin
+  C.Brush.Color:= AColor;
+  C.Pen.Color:= AColor;
+  C.Polygon([
+    Point(ACoord.X - ASize, ACoord.Y - ASize*2),
+    Point(ACoord.X + ASize, ACoord.Y),
+    Point(ACoord.X - ASize, ACoord.Y + ASize*2)
+    ]);
+end;
+
 
 procedure CanvasPaintPlusMinus(C: TCanvas; AColorBorder, AColorBG: TColor;
   ACenter: TPoint; ASize: integer; APlus: boolean);
@@ -669,8 +834,8 @@ begin
 end;
 
 
-procedure DoPartFind(const AParts: TATLineParts; APos: integer; out
-  AIndex, AOffsetLeft: integer);
+procedure DoPartFind(const AParts: TATLineParts; APos: integer; out AIndex,
+  AOffsetLeft: integer);
 var
   iStart, iEnd, i: integer;
 begin
@@ -692,7 +857,7 @@ begin
     iEnd:= iStart+AParts[i].Len;
 
     //pos at part begin?
-    if APos=iStart then
+    if (APos=iStart) then
       begin AIndex:= i; Break end;
 
     //pos at part middle?
@@ -702,28 +867,99 @@ begin
 end;
 
 
-procedure DoPartInsert(var AParts: TATLineParts; const APart: TATLinePart);
+function DoPartsGetTotalLen(const AParts: TATLineParts): integer;
 var
-  ResParts: TATLineParts;
-  nResPart: integer;
+  N: integer;
+begin
+  N:= 0;
+  while (N<=High(AParts)) and (AParts[N].Len>0) do Inc(N);
+  if N=0 then
+    Result:= 0
+  else
+    Result:= AParts[N-1].Offset+AParts[N-1].Len;
+end;
+
+function DoPartInsert(var AParts: TATLineParts; var APart: TATLinePart;
+  AKeepFontStyles: boolean): boolean;
+var
+  ResultParts: TATLineParts;
+  ResultPartIndex: integer;
   //
   procedure AddPart(const P: TATLinePart);
   begin
-    if P.Len=0 then Exit;
-    Move(P, ResParts[nResPart], SizeOf(P));
-    Inc(nResPart);
+    if P.Len>0 then
+      if ResultPartIndex<High(ResultParts) then
+      begin
+        Move(P, ResultParts[ResultPartIndex], SizeOf(P));
+        Inc(ResultPartIndex);
+      end;
   end;
   //
 var
+  PartSelBegin, PartSelEnd: TATLinePart;
   nIndex1, nIndex2,
   nOffset1, nOffset2,
   newLen1, newLen2, newOffset2: integer;
   i: integer;
 begin
+  Result:= false;
+
+  //if editor scrolled to right, passed parts have Offset<0,
+  //shrink such parts
+  if (APart.Offset<0) and (APart.Offset+APart.Len>0) then
+  begin
+    Inc(APart.Len, APart.Offset);
+    APart.Offset:= 0;
+  end;
+
   DoPartFind(AParts, APart.Offset, nIndex1, nOffset1);
   DoPartFind(AParts, APart.Offset+APart.Len, nIndex2, nOffset2);
   if nIndex1<0 then Exit;
   if nIndex2<0 then Exit;
+
+  //these 2 parts are for edges of selection
+  FillChar(PartSelBegin{%H-}, SizeOf(TATLinePart), 0);
+  FillChar(PartSelEnd{%H-}, SizeOf(TATLinePart), 0);
+
+  PartSelBegin.ColorFont:= APart.ColorFont;
+  PartSelBegin.ColorBG:= APart.ColorBG;
+
+  PartSelBegin.Offset:= AParts[nIndex1].Offset+nOffset1;
+  PartSelBegin.Len:= AParts[nIndex1].Len-nOffset1;
+  {
+  if nIndex1>0 then
+  begin
+    PartSelBegin.Offset:= AParts[nIndex1].Offset+nOffset1;
+    PartSelBegin.Len:= AParts[nIndex1].Len-nOffset1;
+  end
+  else //test- does it help?
+  begin
+    PartSelBegin.Offset:= 0;
+    PartSelBegin.Len:= APart.Len;
+  end;
+  }
+
+  PartSelBegin.FontBold:= AParts[nIndex1].FontBold;
+  PartSelBegin.FontItalic:= AParts[nIndex1].FontItalic;
+  PartSelBegin.FontStrikeOut:= AParts[nIndex1].FontStrikeOut;
+  PartSelBegin.BorderDown:= AParts[nIndex1].BorderDown;
+  PartSelBegin.BorderLeft:= AParts[nIndex1].BorderLeft;
+  PartSelBegin.BorderRight:= AParts[nIndex1].BorderRight;
+  PartSelBegin.BorderUp:= AParts[nIndex1].BorderUp;
+  PartSelBegin.ColorBorder:= AParts[nIndex1].ColorBorder;
+
+  PartSelEnd.ColorFont:= APart.ColorFont;
+  PartSelEnd.ColorBG:= APart.ColorBG;
+  PartSelEnd.Offset:= AParts[nIndex2].Offset;
+  PartSelEnd.Len:= nOffset2;
+  PartSelEnd.FontBold:= AParts[nIndex2].FontBold;
+  PartSelEnd.FontItalic:= AParts[nIndex2].FontItalic;
+  PartSelEnd.FontStrikeOut:= AParts[nIndex2].FontStrikeOut;
+  PartSelEnd.BorderDown:= AParts[nIndex2].BorderDown;
+  PartSelEnd.BorderLeft:= AParts[nIndex2].BorderLeft;
+  PartSelEnd.BorderRight:= AParts[nIndex2].BorderRight;
+  PartSelEnd.BorderUp:= AParts[nIndex2].BorderUp;
+  PartSelEnd.ColorBorder:= AParts[nIndex2].ColorBorder;
 
   with AParts[nIndex1] do
   begin
@@ -735,19 +971,36 @@ begin
     newOffset2:= Offset+nOffset2;
   end;
 
-  FillChar(ResParts, SizeOf(ResParts), 0);
-  nResPart:= 0;
+  FillChar(ResultParts, SizeOf(ResultParts), 0);
+  ResultPartIndex:= 0;
 
-  //add to result parts before selection
-  for i:= 0 to nIndex1-1 do AddPart(AParts[i]);
+  //add parts before selection
+  for i:= 0 to nIndex1-1 do
+    AddPart(AParts[i]);
   if nOffset1>0 then
   begin
     AParts[nIndex1].Len:= newLen1;
     AddPart(AParts[nIndex1]);
   end;
 
-  //add APart
-  AddPart(APart);
+  //add middle (one APart of many parts)
+  if not AKeepFontStyles then
+    AddPart(APart)
+  else
+  begin
+    AddPart(PartSelBegin);
+
+    for i:= nIndex1+1 to nIndex2-1 do
+    begin
+      AParts[i].ColorFont:= APart.ColorFont;
+      if APart.ColorBG<>clNone then
+        AParts[i].ColorBG:= APart.ColorBG;
+      AddPart(AParts[i]);
+    end;
+
+    if nIndex1<nIndex2 then
+      AddPart(PartSelEnd);
+  end;
 
   //add parts after selection
   if nOffset2>0 then
@@ -766,7 +1019,8 @@ begin
   //  [nindex1, nindex2, aparts[nindex2].offset, aparts[nindex2].len]);
 
   //copy result
-  Move(ResParts, AParts, SizeOf(AParts));
+  Move(ResultParts, AParts, SizeOf(AParts));
+  Result:= true;
 end;
 
 
@@ -783,9 +1037,43 @@ begin
   end;
 end;
 
+function ColorBlend(c1, c2: Longint; A: Longint): Longint;
+//blend level: 0..255
+var
+  r, g, b, v1, v2: byte;
+begin
+  v1:= Byte(c1);
+  v2:= Byte(c2);
+  r:= A * (v1 - v2) shr 8 + v2;
+  v1:= Byte(c1 shr 8);
+  v2:= Byte(c2 shr 8);
+  g:= A * (v1 - v2) shr 8 + v2;
+  v1:= Byte(c1 shr 16);
+  v2:= Byte(c2 shr 16);
+  b:= A * (v1 - v2) shr 8 + v2;
+  Result := (b shl 16) + (g shl 8) + r;
+end;
 
-procedure CanvasTextOutMinimap(C: TCanvas; const AStr: atString; APos: TPoint;
-  ACharSize: TPoint; ATabSize: integer; AParts: PATLineParts);
+function ColorBlendHalf(c1, c2: Longint): Longint;
+var
+  r, g, b, v1, v2: byte;
+begin
+  v1:= Byte(c1);
+  v2:= Byte(c2);
+  r:= (v1+v2) shr 1;
+  v1:= Byte(c1 shr 8);
+  v2:= Byte(c2 shr 8);
+  g:= (v1+v2) shr 1;
+  v1:= Byte(c1 shr 16);
+  v2:= Byte(c2 shr 16);
+  b:= (v1+v2) shr 1;
+  Result := (b shl 16) + (g shl 8) + r;
+end;
+
+
+procedure CanvasTextOutMinimap(C: TCanvas; const AStr: atString;
+  const ARect: TRect; APos: TPoint; ACharSize: TPoint; ATabSize: integer;
+  AParts: PATLineParts);
 const
   cLowChars = '.,:;_''-+`~=^*';
 var
@@ -821,11 +1109,15 @@ begin
       Y2:= APos.Y+ACharSize.Y;
       Y1:= Y2-nCharSize;
 
-      C.Pen.Color:= Part^.ColorFont;
-      C.Line(X1, Y1, X1, Y2);
+      if (X1>=ARect.Left) and (X1<ARect.Right) then
+      begin
+        C.Pen.Color:= ColorBlendHalf(Part^.ColorBG, Part^.ColorFont);
+        C.Line(X1, Y1, X1, Y2);
+      end;
     end;
   end;
 end;
+
 
 //------------------
 initialization

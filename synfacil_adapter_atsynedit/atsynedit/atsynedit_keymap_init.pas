@@ -1,3 +1,7 @@
+{
+Copyright (C) Alexey Torgashin, uvviewsoft.com
+License: MPL 2.0 or LGPL
+}
 unit ATSynEdit_Keymap_Init;
 
 //{$define test_combo}
@@ -48,10 +52,14 @@ begin
   M.Add(cCommand_KeyPageDown,     'caret page down',               ['PgDn'], []);
   M.Add(cCommand_KeyPageDown_Sel, 'caret page down + select',      ['Shift+PgDn'], []);
 
-  M.Add(cCommand_ColSelectLeft,  'column select: left',  ['Shift+Alt+Left'], []);
-  M.Add(cCommand_ColSelectRight, 'column select: right', ['Shift+Alt+Right'], []);
-  M.Add(cCommand_ColSelectUp,    'column select: up',    ['Shift+Alt+Up'], []);
-  M.Add(cCommand_ColSelectDown,  'column select: down',  ['Shift+Alt+Down'], []);
+  M.Add(cCommand_ColSelectLeft,        'column select: left',          ['Shift+Alt+Left'], []);
+  M.Add(cCommand_ColSelectRight,       'column select: right',         ['Shift+Alt+Right'], []);
+  M.Add(cCommand_ColSelectUp,          'column select: up',            ['Shift+Alt+Up'], []);
+  M.Add(cCommand_ColSelectDown,        'column select: down',          ['Shift+Alt+Down'], []);
+  M.Add(cCommand_ColSelectPageUp,      'column select: page up',       ['Shift+Alt+PgUp'], []);
+  M.Add(cCommand_ColSelectPageDown,    'column select: page down',     ['Shift+Alt+PgDn'], []);
+  M.Add(cCommand_ColSelectToLineBegin, 'column select: to line begin', ['Shift+Alt+Home'], []);
+  M.Add(cCommand_ColSelectToLineEnd,   'column select: to line end',   ['Shift+Alt+End'], []);
 
   M.Add(cCommand_KeyBackspace, 'delete char left (backspace)', ['Bksp'], []);
   M.Add(cCommand_KeyDelete, 'delete char right (delete)', ['Del'], []);
@@ -62,14 +70,14 @@ begin
   M.Add(cCommand_TextDeleteLine, 'delete line', [cXControl+'+Y'], []);
   M.Add(cCommand_TextDuplicateLine, 'duplicate line', [cXControl+'+D'], []);
 
-  M.Add(cCommand_GotoTextBegin,      'goto text begin',          [cXControl+'+Home'], []);
-  M.Add(cCommand_GotoTextBegin_Sel,  'goto text begin + select', [cXControl+'+Shift+Home'], []);
-  M.Add(cCommand_GotoTextEnd,        'goto text end',            [cXControl+'+End'], []);
-  M.Add(cCommand_GotoTextEnd_Sel,    'goto text end + select',   [cXControl+'+Shift+End'], []);
-  M.Add(cCommand_GotoWordPrev,       'goto word left',           [cXControl+'+Left'], []);
-  M.Add(cCommand_GotoWordPrev_Sel,   'goto word left + select',  [cXControl+'+Shift+Left'], []);
-  M.Add(cCommand_GotoWordNext,       'goto word right',          [cXControl+'+Right'], []);
-  M.Add(cCommand_GotoWordNext_Sel,   'goto word right + select', [cXControl+'+Shift+Right'], []);
+  M.Add(cCommand_GotoTextBegin,      'go to text begin',          [cXControl+'+Home'], []);
+  M.Add(cCommand_GotoTextBegin_Sel,  'go to text begin + select', [cXControl+'+Shift+Home'], []);
+  M.Add(cCommand_GotoTextEnd,        'go to text end',            [cXControl+'+End'], []);
+  M.Add(cCommand_GotoTextEnd_Sel,    'go to text end + select',   [cXControl+'+Shift+End'], []);
+  M.Add(cCommand_GotoWordPrev,       'go to word left',           [cXControl+'+Left'], []);
+  M.Add(cCommand_GotoWordPrev_Sel,   'go to word left + select',  [cXControl+'+Shift+Left'], []);
+  M.Add(cCommand_GotoWordNext,       'go to word right',          [cXControl+'+Right'], []);
+  M.Add(cCommand_GotoWordNext_Sel,   'go to word right + select', [cXControl+'+Shift+Right'], []);
 
   M.Add(cCommand_SelectAll, 'selection: select all', [cXControl+'+A'], []);
   M.Add(cCommand_TextDeleteSelection, 'selection: delete selected text', [], []);
@@ -93,7 +101,8 @@ begin
   M.Add(cCommand_ToggleLineNums, 'toggle show line numbers', [], []);
   M.Add(cCommand_ToggleFolding, 'toggle show folding bar', [], []);
   M.Add(cCommand_ToggleRuler, 'toggle show ruler', [], []);
-  M.Add(cCommand_ToggleMinimap, 'toggle show minimap', [], []);
+  M.Add(cCommand_ToggleMinimap, 'toggle show mini-map', [], []);
+  M.Add(cCommand_ToggleMicromap, 'toggle show micro-map', [], []);
 
   M.Add(cCommand_TextDeleteWordPrev, 'delete word left', [cXControl+'+Bksp'], []);
   M.Add(cCommand_TextDeleteWordNext, 'delete word right', [cXControl+'+Del'], []);
@@ -102,7 +111,7 @@ begin
   M.Add(cCommand_TextDeleteToTextEnd, 'delete to text end', [], []);
 
   M.Add(cCommand_TextIndent, 'indent selection', [cXControl+'+I'], []);
-  M.Add(cCommand_TextUnindent, 'unindent selection', ['Shift+Tab'], []);
+  M.Add(cCommand_TextUnindent, 'unindent selection', [cXControl+'+Shift+I'], ['Shift+Tab']);
 
   M.Add(cCommand_Undo, 'perform undo', [cXControl+'+Z'], []);
   M.Add(cCommand_Redo, 'perform redo', [cXControl+'+Shift+Z'], []);
@@ -115,6 +124,9 @@ begin
   M.Add(cCommand_ClipboardPaste_KeepCaret, 'clipboard: paste, keep caret', [], []);
   M.Add(cCommand_ClipboardPaste_Column, 'clipboard: paste, force column block', [], []);
   M.Add(cCommand_ClipboardPaste_ColumnKeepCaret, 'clipboard: paste, force column block, keep caret', [], []);
+
+  M.Add(cCommand_ClipboardAltPaste, 'clipboard primary (gtk): paste', [], []);
+  M.Add(cCommand_ClipboardAltAltPaste, 'clipboard secondary (gtk): paste', [], []);
 
   M.Add(cCommand_ScrollLineUp, 'scroll line up', [cXControl+'+Up'], []);
   M.Add(cCommand_ScrollLineDown, 'scroll line down', [cXControl+'+Down'], []);
@@ -149,10 +161,23 @@ begin
   M.Add(cCommand_TextCaseInvert, 'convert case: invert case', [], []);
   M.Add(cCommand_TextCaseSentence, 'convert case: sentence case', [], []);
 
+  M.Add(cCommand_TextTrimSpacesLeft, 'trim spaces: left', [], []);
+  M.Add(cCommand_TextTrimSpacesRight, 'trim spaces: right', [], []);
+  M.Add(cCommand_TextTrimSpacesAll, 'trim spaces: all', [], []);
+
   M.Add(cCommand_RepeatTextCommand, 'repeat last text command', [], []);
 
   M.Add(cCommand_FoldAll, 'folding: fold all', [], []);
   M.Add(cCommand_UnfoldAll, 'folding: unfold all', [], []);
+  M.Add(cCommand_FoldLevel1, 'folding: fold level 1', [], []);
+  M.Add(cCommand_FoldLevel2, 'folding: fold level 2', [], []);
+  M.Add(cCommand_FoldLevel3, 'folding: fold level 3', [], []);
+  M.Add(cCommand_FoldLevel4, 'folding: fold level 4', [], []);
+  M.Add(cCommand_FoldLevel5, 'folding: fold level 5', [], []);
+  M.Add(cCommand_FoldLevel6, 'folding: fold level 6', [], []);
+  M.Add(cCommand_FoldLevel7, 'folding: fold level 7', [], []);
+  M.Add(cCommand_FoldLevel8, 'folding: fold level 8', [], []);
+  M.Add(cCommand_FoldLevel9, 'folding: fold level 9', [], []);
 end;
 
 procedure InitKeymapCombo(var M: TATKeymap);
@@ -170,13 +195,13 @@ begin
 
   M.Add(cCommand_KeyBackspace, 'delete char left (backspace)', ['Bksp'], []);
   M.Add(cCommand_KeyDelete, 'delete char right (delete)', ['Del'], []);
-  M.Add(cCommand_KeyEnter, 'insert line-break (enter)', ['Enter'], []);
+  M.Add(cCommand_KeyEnter, 'insert line-break (enter, ctrl+enter)', ['Enter'], [cXControl+'+Enter']);
   M.Add(cCommand_KeyTab, 'tabulation key', [], []);
 
-  M.Add(cCommand_GotoWordPrev,       'goto word left',           [cXControl+'+Left'], []);
-  M.Add(cCommand_GotoWordPrev_Sel,   'goto word left + select',  [cXControl+'+Shift+Left'], []);
-  M.Add(cCommand_GotoWordNext,       'goto word right',          [cXControl+'+Right'], []);
-  M.Add(cCommand_GotoWordNext_Sel,   'goto word right + select', [cXControl+'+Shift+Right'], []);
+  M.Add(cCommand_GotoWordPrev,       'go to word left',           [cXControl+'+Left'], []);
+  M.Add(cCommand_GotoWordPrev_Sel,   'go to word left + select',  [cXControl+'+Shift+Left'], []);
+  M.Add(cCommand_GotoWordNext,       'go to word right',          [cXControl+'+Right'], []);
+  M.Add(cCommand_GotoWordNext_Sel,   'go to word right + select', [cXControl+'+Shift+Right'], []);
 
   M.Add(cCommand_SelectAll, 'selection: select all', [cXControl+'+A'], []);
   M.Add(cCommand_TextDeleteSelection, 'selection: delete selected text', [], []);
@@ -194,7 +219,7 @@ begin
   M.Add(cCommand_ClipboardCut, 'clipboard: cut', [cXControl+'+X'], ['Shift+Del']);
   M.Add(cCommand_ClipboardPaste, 'clipboard: paste', [cXControl+'+V'], ['Shift+Ins']);
 
-  M.Add(cCommand_RecentsPopup, 'combo: recents popup menu', ['Alt+Down'], [cXControl+'+Down']);
+  M.Add(cCommand_ComboboxRecentsMenu, 'combobox: recent items menu', ['Alt+Down'], [cXControl+'+Down']);
 
   M.Add(cCommand_KeyUp,        'blocked: caret line up',   ['Up'], []);
   M.Add(cCommand_KeyDown,      'blocked: caret line down', ['Down'], []);

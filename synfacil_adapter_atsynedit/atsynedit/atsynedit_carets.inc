@@ -1,6 +1,5 @@
 {$ifdef nnnn}begin end;{$endif}
 
-
 function TATSynEdit.IsLineWithCaret(ALine: integer): boolean;
 begin
   Result:= FCarets.IsLineListed(ALine);
@@ -49,7 +48,7 @@ end;
 procedure TATSynEdit.DoCaretsColumnToPoint(AX, AY: integer);
 var
   P, PM1, PM2: TPoint;
-  EolPos: boolean;
+  Details: TATPosDetails;
 begin
   DoCaretSingleAsIs;
   with Carets[0] do
@@ -63,13 +62,13 @@ begin
     SwapInt(PM1.Y, PM2.Y);
 
   Carets.Clear;
-  P:= ClientPosToCaretPos(PM1, EolPos);
+  P:= ClientPosToCaretPos(PM1, Details);
   if P.Y>=0 then
     Carets.Add(P.X, P.Y);
 
   repeat
     Inc(PM1.Y, FCharSize.Y);
-    P:= ClientPosToCaretPos(PM1, EolPos);
+    P:= ClientPosToCaretPos(PM1, Details);
     if P.Y>=0 then
       if not Carets.IsLineListed(P.Y) then
         Carets.Add(P.X, P.Y);
@@ -89,6 +88,7 @@ var
   P: TPoint;
   NStart, i: integer;
   Caret: TATCaretItem;
+  Marker: TATMarkerItem;
 begin
   if AOnlyLast then
     NStart:= Carets.Count-1
@@ -112,12 +112,32 @@ begin
       Caret.CoordY:= P.Y;
     end;
   end;
+
+  for i:= 0 to Markers.Count-1 do
+  begin
+    Marker:= Markers[i];
+    P.X:= Marker.PosX;
+    P.Y:= Marker.PosY;
+    if IsPosFolded(P.X, P.Y) then
+    begin
+      Marker.CoordX:= -1;
+      Marker.CoordY:= -1;
+    end
+    else
+    begin
+      P:= CaretPosToClientPos(P);
+      Marker.CoordX:= P.X;
+      Marker.CoordY:= P.Y;
+    end;
+  end;
 end;
+
 
 function _DoCaretPosToClientPos(
   P: TPoint;
   AWrapInfo: TATSynWrapInfo;
   AStrings: TATStrings;
+  AGaps: TATSynGaps;
   ACharSize: TPoint;
   ATabSize: integer;
   const ARect: TRect;
@@ -125,9 +145,9 @@ function _DoCaretPosToClientPos(
   APreferLeftSide: boolean): TPoint;
 var
   Item: TATSynWrapItem;
-  NIndex1, NIndex2, i: integer;
-  NFromStart: integer;
+  NIndex1, NIndex2, NLineIndexTop, NFromStart: integer;
   Str: atString;
+  i: integer;
 begin
   Result.X:= -1;
   Result.Y:= -1;
@@ -155,55 +175,132 @@ begin
     Inc(Result.X, (Item.NIndent-AScrollHorz.NPos)*ACharSize.X);
     Result.Y:= (i-AScrollVert.NPos)*ACharSize.Y;
 
+    //consider gaps
+    if AWrapInfo.IsIndexValid(AScrollVert.NPos) then
+    begin
+      NLineIndexTop:= AWrapInfo[AScrollVert.NPos].NLineIndex;
+      Inc(Result.Y, AGaps.SizeForLineRange(
+        NLineIndexTop, //index of top line
+        P.Y-1 //index of line before caret
+        ));
+    end;
+
+    //coords of corner
     Inc(Result.X, ARect.Left);
     Inc(Result.Y, ARect.Top);
     Exit
   end;
 end;
 
+
 function _DoClientPosToCaretPos(
   P: TPoint;
   AWrapInfo: TATSynWrapInfo;
   AStrings: TATStrings;
+  AGaps: TATSynGaps;
   ACharSize: TPoint;
   ATabSize: integer;
   const ARect: TRect;
   const AScrollHorz, AScrollVert: TATSynScrollInfo;
   AVirtualPos: boolean;
-  out AWrappedEnd: boolean): TPoint;
+  out ADetails: TATPosDetails;
+  AGapCoordAction: TATGapCoordAction;
+  AAfterEofUsesLastLen: boolean): TPoint;
 var
-  NPixels, NIndex: integer;
+  NIndex, NIndexDecrement, NPixels: integer;
   Item: TATSynWrapItem;
+  ItemGap: TATSynGapItem;
   Str: atString;
-  AllowVirtual: boolean;
+  AllowVirtual, bGapGoesToEnd: boolean;
 begin
-  AWrappedEnd:= false;
   Result.X:= 0;
   Result.Y:= -1;
+  FillChar(ADetails, SizeOf(ADetails), 0);
+
   if (ACharSize.X<=0) or (ACharSize.Y<=0) then Exit;
-
   P.X:= Max(P.X, ARect.Left);
-  NIndex:= (P.Y-ARect.Top) div ACharSize.Y + AScrollVert.NPos;
 
-  if NIndex<0 then
+  //find index in WrapInfo for P.Y
+  NPixels:= ARect.Top;
+  NIndex:= AScrollVert.NPos;
+  bGapGoesToEnd:= false;
+
+  //allow to work for arrow-up/ page-up, if caret at top
+  if P.Y<ARect.Top then
+    if AWrapInfo.IsIndexValid(NIndex) then
+    begin
+      //start later loop, but from decremented NIndex
+      //todo: this not correct if upper (not visible) lines have gaps...
+      NIndexDecrement:= Min((ARect.Top-P.Y) div ACharSize.Y + 1, NIndex);
+      Dec(NIndex, NIndexDecrement);
+      Dec(NPixels, NIndexDecrement*ACharSize.Y);
+    end;
+
+  repeat
+    if not AWrapInfo.IsIndexValid(NIndex) then
+      Break;
+
+    Inc(NPixels, ACharSize.Y);
+    if NPixels>P.Y then Break;
+
+    //consider gap
+    Item:= AWrapInfo[NIndex];
+    if Item.NFinal=cWrapItemFinal then
+    begin
+      ItemGap:= AGaps.Find(Item.NLineIndex);
+      if Assigned(ItemGap) then
+      begin
+        Inc(NPixels, ItemGap.Size);
+        if NPixels>P.Y then
+        begin
+          ADetails.OnGapItem:= ItemGap;
+          ADetails.OnGapPos.Y:= P.Y - (NPixels-ItemGap.Size);
+          if Assigned(ItemGap.Bitmap) then
+            ADetails.OnGapPos.X:= P.X - GetGapBitmapPosLeft(ARect, ItemGap.Bitmap)
+          else
+            ADetails.OnGapPos.X:= P.X - ARect.Left;
+
+          case AGapCoordAction of
+            cGapCoordToLineEnd:
+              bGapGoesToEnd:= true;
+            cGapCoordMoveDown:
+              begin
+                if AWrapInfo.IsIndexValid(NIndex+1) then
+                  Inc(NIndex);
+              end;
+          end;
+          Break;
+        end;
+      end;
+    end;
+
+    Inc(NIndex);
+  until false;
+
   //click above all text
+  if NIndex<0 then
   begin
     Result.X:= 0;
     Result.Y:= 0;
-  end
-  else
-  if not AWrapInfo.IsIndexValid(NIndex) then
+    Exit
+  end;
+
   //click below all text
+  if not AWrapInfo.IsIndexValid(NIndex) then
   begin
     NIndex:= AWrapInfo.Count-1;
-    if AWrapInfo.IsIndexValid(NIndex) then
+    if AAfterEofUsesLastLen then
     begin
-      Item:= AWrapInfo.Items[NIndex];
-      Result.Y:= Item.NLineIndex;
-      Result.X:= Item.NCharIndex+Item.NLength-1;
+      if AWrapInfo.IsIndexValid(NIndex) then
+      begin
+        Item:= AWrapInfo.Items[NIndex];
+        Result.Y:= Item.NLineIndex;
+        Result.X:= Item.NCharIndex+Item.NLength-1;
+      end;
+      Exit
     end;
-  end
-  else
+  end;
+
   //click in text
   begin
     Item:= AWrapInfo.Items[NIndex];
@@ -211,12 +308,18 @@ begin
 
     Str:= Copy(AStrings.Lines[Result.Y], Item.NCharIndex, Item.NLength);
 
-    AllowVirtual:= AVirtualPos and (Item.NFinal=cWrapItemFinal);
-    NPixels:= P.X-ARect.Left + ACharSize.X*(AScrollHorz.NPos-Item.NIndent);
-    Result.X:= SFindClickedPosition(Str, NPixels, ACharSize.X, ATabSize, AllowVirtual, AWrappedEnd) + Item.NCharIndex - 2;
+    if bGapGoesToEnd then
+      Result.X:= Length(Str) + Item.NCharIndex-1
+    else
+    begin
+      AllowVirtual:= AVirtualPos and (Item.NFinal=cWrapItemFinal);
+      NPixels:= P.X-ARect.Left + ACharSize.X*(AScrollHorz.NPos-Item.NIndent);
+      Result.X:= SFindClickedPosition(Str, NPixels, ACharSize.X, ATabSize,
+        AllowVirtual, ADetails.EndOfWrappedLine) + Item.NCharIndex - 2;
+    end;
 
     if Item.NFinal=cWrapItemFinal then //don't set AWrappedEnd for real eol
-      AWrappedEnd:= false;
+      ADetails.EndOfWrappedLine:= false;
   end;
 end;
 
@@ -225,6 +328,7 @@ begin
   Result:= _DoCaretPosToClientPos(P,
     FWrapInfo,
     Strings,
+    Gaps,
     FCharSize,
     FTabSize,
     FRectMain,
@@ -234,18 +338,23 @@ begin
     );
 end;
 
-function TATSynEdit.ClientPosToCaretPos(P: TPoint; out AEndOfLinePos: boolean): TPoint;
+function TATSynEdit.ClientPosToCaretPos(P: TPoint;
+  out ADetails: TATPosDetails;
+  AGapCoordAction: TATGapCoordAction = cGapCoordToLineEnd): TPoint;
 begin
   Result:= _DoClientPosToCaretPos(P,
     FWrapInfo,
     Strings,
+    Gaps,
     FCharSize,
     FTabSize,
     FRectMain,
     FScrollHorz,
     FScrollVert,
     FCaretVirtual,
-    AEndOfLinePos);
+    ADetails,
+    AGapCoordAction,
+    IsSelRectEmpty);
 end;
 
 procedure TATSynEdit.SetCaretShapeIns(AValue: TATSynCaretShape);
@@ -280,65 +389,170 @@ begin
   DoPaintModeBlinking;
 end;
 
-
-procedure TATSynEdit.DoGotoPos(APnt: TPoint; AIndentHorz, AIndentVert: integer);
-var
-  NIndex, NVisLines, NChars: integer;
+procedure TATSynEdit.SetFoldEnabled(AValue: boolean);
 begin
-  if IsPosFolded(APnt.X, APnt.Y) then Exit;
+  if FFoldEnabled=AValue then Exit;
+  FFoldEnabled:= AValue;
+  if not FFoldEnabled then
+  begin
+    DoCommand(cCommand_UnfoldAll);
+    FFold.Clear;
+  end;
+  Update;
+end;
 
-  NVisLines:= GetVisibleLines;
-  APnt:= CaretPosToClientPos(APnt);
-  NIndex:= GetWrapInfoIndex(APnt);
-  if NIndex<0 then Exit;
+
+procedure TATSynEdit.DoScroll_IndentFromTop(AWrapInfoIndex, AIndentVert: integer);
+begin
+  FScrollVert.NPos:= Max(0, AWrapInfoIndex-AIndentVert);
+end;
+
+procedure TATSynEdit.DoScroll_IndentFromBottom(AWrapInfoIndex, AIndentVert: integer);
+//index: original vert scroll pos
+//do dec(index), until offset (pixels) from caret to bottom is small enough
+var
+  NPixels, NPixelsNeeded, NIndex, NCell: integer;
+  ItemGap: TATSynGapItem;
+  i: integer;
+begin
+  NIndex:= AWrapInfoIndex;
+  if NIndex<=0 then exit;
+
+  NCell:= FCharSize.Y;
+  NPixels:= (FRectMain.Bottom-FRectMain.Top)-NCell;
+  if NPixels<=0 then exit;
+    //this is distance of first visible line, to bottom of control
+  NPixelsNeeded:= (AIndentVert+1)*NCell-1;
+    //this distance must be reached,
+    //can be smaller/bigger, if wrapped lines or gaps
+
+  for i:= 1 to GetVisibleLines do
+  begin
+    Dec(NIndex);
+    if NIndex<0 then
+    begin
+      FScrollVert.NPos:= 0;
+      Exit;
+    end;
+
+    Dec(NPixels, NCell);
+
+    //consider gap
+    if FWrapInfo.Items[NIndex].NFinal=cWrapItemFinal then
+    begin
+      ItemGap:= Gaps.Find(FWrapInfo.Items[NIndex].NLineIndex);
+      if Assigned(ItemGap) then
+        Dec(NPixels, ItemGap.Size);
+    end;
+
+    if NPixels<0 then
+    begin
+      FScrollVert.NPos:= NIndex+1;
+      Exit;
+    end;
+
+    if NPixels<=NPixelsNeeded then
+    begin
+      FScrollVert.NPos:= NIndex;
+      Exit;
+    end;
+  end;
+end;
+
+procedure TATSynEdit.DoGotoPos(const APos, APosEnd: TPoint;
+  AIndentHorz, AIndentVert: integer;
+  APlaceCaret, ADoUnfold: boolean;
+  AAllowProcessMsg: boolean=true);
+var
+  NIndex, NChars: integer;
+  Coord: TPoint;
+  bScrolled: boolean;
+begin
+  if not Strings.IsIndexValid(APos.Y) then exit;
+
+  //if IsPosFolded(ACaretPos.X, ACaretPos.Y) -better?
+  if IsLineFolded(APos.Y, true) then
+  begin
+    if ADoUnfold then
+    begin
+      DoUnfoldLine(APos.Y);
+      Update;
+      if AAllowProcessMsg then
+        Application.ProcessMessages;
+    end
+    else
+      exit;
+  end;
+
+  if APlaceCaret then
+  begin
+    DoCaretSingle(APos.X, APos.Y, APosEnd.X, APosEnd.Y);
+    DoEventCarets;
+  end;
+
+  bScrolled:= false;
+  Coord:= CaretPosToClientPos(APos);
 
   //for y
-  if NIndex<FScrollVert.NPos then
+  //  vert indent <0: always indent from top;
+  //             >=0: indent from top (goto up) or bottom (goto down)
+  if Coord.Y<FRectMain.Top then
   begin
-    FScrollVert.NPos:= Max(0, NIndex-AIndentVert);
+    NIndex:= FWrapInfo.FindIndexOfCaretPos(APos);
+    if NIndex<0 then Exit;
+    DoScroll_IndentFromTop(NIndex, Abs(AIndentVert));
     UpdateScrollbars;
+    bScrolled:= true;
   end
   else
-  if NIndex>FScrollVert.NPos+NVisLines-1 then
+  if Coord.Y+FCharSize.Y >= FRectMain.Bottom then
   begin
-    FScrollVert.NPos:= Max(0, NIndex-NVisLines+1+AIndentVert);
+    NIndex:= FWrapInfo.FindIndexOfCaretPos(APos);
+    if NIndex<0 then Exit;
+    if AIndentVert<0 then
+      DoScroll_IndentFromTop(NIndex, Abs(AIndentVert))
+    else
+      DoScroll_IndentFromBottom(NIndex, Abs(AIndentVert));
     UpdateScrollbars;
+    bScrolled:= true;
   end;
 
   //for x
-  if APnt.X<FRectMain.Left then
+  if Coord.X<FRectMain.Left then
   begin
-    NChars:= (FRectMain.Left-APnt.X) div FCharSize.X + 1 + AIndentHorz;
+    NChars:= (FRectMain.Left-Coord.X) div FCharSize.X + 1 + AIndentHorz;
     FScrollHorz.NPos:= Max(0, FScrollHorz.NPos-NChars);
     UpdateScrollbars;
+    bScrolled:= true;
   end
   else
-  if APnt.X>FRectMain.Right-FCharSize.X then
+  if Coord.X>FRectMain.Right-FCharSize.X then
   begin
-    NChars:= (APnt.X-FRectMain.Right) div FCharSize.X + 2 + AIndentHorz;
+    NChars:= (Coord.X-FRectMain.Right) div FCharSize.X + 2 + AIndentHorz;
     Inc(FScrollHorz.NPos, NChars);
     UpdateScrollbars;
+    bScrolled:= true;
   end;
+
+  //if bScrolled then
+  //  UpdateCaretsCoords;
+  Update;
 end;
 
 procedure TATSynEdit.DoGotoCaret(AEdge: TATCaretEdge);
+var
+  Pos, PosEnd: TPoint;
 begin
-  DoGotoPos(Carets.CaretAtEdge(AEdge), cScrollIndentCaretHorz, cScrollIndentCaretVert);
+  Pos:= Carets.CaretAtEdge(AEdge);
+  PosEnd:= Point(-1, -1);
+  DoGotoPos(Pos, PosEnd,
+    cScrollIndentCaretHorz,
+    cScrollIndentCaretVert,
+    false,
+    false //dont unfold
+    );
 end;
 
-procedure TATSynEdit.DoGotoPosEx(APnt: TPoint);
-begin
-  if not Strings.IsIndexValid(APnt.Y) then Exit;
-
-  DoCommand(cCommand_Cancel);
-  DoCaretSingle(APnt.X, APnt.Y);
-
-  if IsLineFolded(APnt.Y, true) then
-    DoUnfoldLine(APnt.Y);
-
-  DoGotoPos(APnt, cScrollIndentGotoHorz, cScrollIndentGotoVert);
-  Update;
-end;
 
 procedure TATSynEdit.DoCaretsDeleteOnSameLines;
 var
@@ -362,21 +576,30 @@ begin
     Carets.Delete(Carets.Count-1);
 end;
 
-procedure TATSynEdit.DoCaretSingle(AX, AY: integer);
+
+procedure TATSynEdit.DoCaretSingle(APosX, APosY, AEndX, AEndY: integer);
 begin
   FSelRect:= cRectEmpty;
+  Carets.Clear;
+  Carets.Add(APosX, APosY, AEndX, AEndY);
+end;
 
-  if Carets.Count=0 then
-    Carets.Add(AX, AY);
+procedure TATSynEdit.DoCaretSingle(AX, AY: integer; AClearSelection: boolean);
+var
+  NEndX, NEndY: integer;
+  Caret: TATCaretItem;
+begin
+  NEndX:= -1;
+  NEndY:= -1;
 
-  while Carets.Count>1 do
-    Carets.Delete(Carets.Count-1);
-
-  with Carets[0] do
+  if (not AClearSelection) and (Carets.Count>0) then
   begin
-    PosX:= AX;
-    PosY:= AY;
+    Caret:= Carets[0];
+    NEndX:= Caret.EndX;
+    NEndY:= Caret.EndY;
   end;
+
+  DoCaretSingle(AX, AY, NEndX, NEndY);
 end;
 
 function TATSynEdit.GetCaretSelectionIndex(P: TPoint): integer;
@@ -437,14 +660,15 @@ end;
 
 function TATSynEdit.GetCaretsArray: TATPointArray;
 begin
+  SetLength(Result, 0);
   if Assigned(FCarets) then
-    Result:= FCarets.SaveToArray;
+    Result:= FCarets.AsArray;
 end;
 
-procedure TATSynEdit.SetCaretsArray(const L: TATPointArray);
+procedure TATSynEdit.SetCaretsArray(const Ar: TATPointArray);
 begin
   if Assigned(FCarets) then
-    FCarets.LoadFromArray(L);
+    FCarets.AsArray:= Ar;
 end;
 
 procedure TATSynEdit.DoCaretsExtend(ADown: boolean; ALines: integer);
@@ -495,4 +719,160 @@ begin
   Carets.UpdateIncorrectPositions(Strings.Count-1);
 end;
 
+
+procedure TATSynEdit.DoCaretsShift_CaretItem(Caret: TATCaretItem;
+  APosX, APosY, AShiftX, AShiftY, AShiftBelowX: integer);
+begin
+  //carets below src, apply ShiftY/ShiftBelowX
+  if Caret.PosY>APosY then
+  begin
+    if AShiftY=0 then exit;
+
+    if Caret.PosY=APosY+1 then
+      Inc(Caret.PosX, AShiftBelowX);
+
+    Inc(Caret.PosY, AShiftY);
+  end
+  else
+  //carets on same line as src, apply ShiftX
+  begin
+    if Caret.PosX>APosX then
+      Inc(Caret.PosX, AShiftX);
+  end;
+
+  //same, but for EndX/EndY
+  if Caret.EndY>APosY then
+  begin
+    if Caret.EndY=APosY+1 then
+      Inc(Caret.EndX, AShiftBelowX);
+
+    Inc(Caret.EndY, AShiftY);
+  end
+  else
+  begin
+    if Caret.EndX>APosX then
+      Inc(Caret.EndX, AShiftX);
+  end;
+
+  if Caret.PosX<0 then Caret.PosX:= 0;
+  if Caret.PosY<0 then Caret.PosY:= 0;
+end;
+
+
+procedure TATSynEdit.DoCaretsShift_MarkerItem(Mark: TATMarkerItem;
+  APosX, APosY, AShiftX, AShiftY, AShiftBelowX: integer;
+  APosAfter: TPoint);
+begin
+  //marker below src, apply ShiftY/ShiftBelowX
+  if Mark.PosY>APosY then
+  begin
+    if AShiftY=0 then exit;
+
+    if Mark.PosY=APosY+1 then
+      Inc(Mark.PosX, AShiftBelowX);
+
+    Inc(Mark.PosY, AShiftY);
+  end
+  else
+  //marker on same line as src
+  if Mark.PosY=APosY then
+  begin
+    if Mark.PosX=APosX then
+    begin
+      Mark.PosX:= APosAfter.X;
+      Mark.PosY:= APosAfter.Y;
+    end
+    else
+    if Mark.PosX>=APosX then
+      if AShiftY=0 then
+        Inc(Mark.PosX, AShiftX)
+      else
+      begin
+        Inc(Mark.PosX, -APosX+APosAfter.X);
+        Inc(Mark.PosY, AShiftY);
+      end;
+  end;
+
+  if Mark.PosX<0 then Mark.PosX:= 0;
+  if Mark.PosY<0 then Mark.PosY:= 0;
+end;
+
+
+procedure TATSynEdit.DoCaretsFixIfInsideCollapsedPart;
+var
+  Caret: TATCaretItem;
+  NFoldFrom, i: integer;
+  bHidden: boolean;
+begin
+  for i:= Carets.Count-1 downto 0 do
+  begin
+    Caret:= Carets[i];
+    if Caret.EndY>=0 then Continue;
+    if not Strings.IsIndexValid(Caret.PosY) then Continue;
+
+    bHidden:= Strings.LinesHidden[Caret.PosY, FEditorIndex];
+    if bHidden then
+    begin
+      Caret.PosX:= 0;
+      Continue;
+    end;
+
+    NFoldFrom:= Strings.LinesFoldFrom[Caret.PosY, FEditorIndex];
+    if NFoldFrom=0 then
+      Continue
+    else
+      Caret.PosX:= Min(Caret.PosX, NFoldFrom-1);
+  end;
+end;
+
+
+procedure TATSynEdit.DoCaretsShift(APosX, APosY: integer; AShiftX,
+  AShiftY: integer; APosAfter: TPoint; AShiftBelowX: integer);
+var
+  NStart, i: integer;
+  {$ifdef debug_markers_shift}
+  S: string;
+  {$endif}
+begin
+  if APosX<0 then Exit;
+  if APosY<0 then Exit;
+
+  //adjust carets
+  //(optimized, from index NStart, to fast do on 200 carets)
+  NStart:= Carets.IndexOfPosYAvg(APosY);
+  if NStart>=0 then
+    for i:= NStart to Carets.Count-1 do
+      DoCaretsShift_CaretItem(Carets[i],
+        APosX, APosY, AShiftX, AShiftY, AShiftBelowX);
+
+  {$ifdef debug_markers_shift}
+  S:= '';
+  for i:= 0 to Markers.Count-1 do
+    S:= S+Format('mark[%d] %d %d, ', [i, Markers[i].PosX, Markers[i].PosY]);
+  Application.Mainform.Caption:= S+' -- '+Format(
+    'pos %d %d, shift %d %d, posafter %d %d',
+    [APosX, APosY, AShiftX, AShiftY, APosAfter.X, APosAfter.Y]);
+  {$endif}
+
+  //adjust markers
+  //(cannot optimize, markers not sorted)
+  for i:= 0 to Markers.Count-1 do
+    DoCaretsShift_MarkerItem(Markers[i],
+      APosX, APosY, AShiftX, AShiftY, AShiftBelowX, APosAfter);
+
+  for i:= 0 to Attribs.Count-1 do
+    DoCaretsShift_MarkerItem(Attribs[i],
+      APosX, APosY, AShiftX, AShiftY, AShiftBelowX, APosAfter);
+
+  for i:= 0 to FMarkedRange.Count-1 do
+    DoCaretsShift_MarkerItem(FMarkedRange[i],
+      APosX, APosY, AShiftX, AShiftY, AShiftBelowX, APosAfter);
+end;
+
+
+procedure TATSynEdit.DoCaretForceShow;
+begin
+  Include(FPaintFlags, cPaintUpdateCarets);
+  FCaretAllowNextBlink:= true;
+end;
 

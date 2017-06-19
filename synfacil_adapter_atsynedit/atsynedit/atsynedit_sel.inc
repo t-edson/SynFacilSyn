@@ -1,11 +1,20 @@
 {$ifdef nnn}begin end;{$endif}
 
 function TATSynEdit.IsPosSelected(AX, AY: integer): boolean;
+var
+  NPosLeft,
+  NPosRight: integer;
+  SLine: atString;
 begin
   if not IsSelRectEmpty then
-    //a) faster, b) works w/o mul-carets
-    Result:= (AY>=FSelRect.Top) and (AY<=FSelRect.Bottom) and
-             (AX>=FSelRect.Left) and (AX<FSelRect.Right)
+  begin
+    if not ((AY>=FSelRect.Top) and (AY<=FSelRect.Bottom)) then exit(False);
+
+    SLine:= Strings.Lines[AY];
+    NPosLeft:= SColumnPosToCharPos(SLine, FSelRect.Left, OptTabSize);
+    NPosRight:= SColumnPosToCharPos(SLine, FSelRect.Right, OptTabSize);
+    Result:= (AX>=NPosLeft) and (AX<NPosRight);
+  end
   else
     Result:= Carets.IsPosSelected(AX, AY);
 end;
@@ -120,14 +129,14 @@ begin
       if not Sel then Continue;
 
       //add range
-      NewCarets.Add(XPrev, YPrev, X1, Y1);
+      NewCarets.Add(X1, Y1, XPrev, YPrev);
       XPrev:= X2;
       YPrev:= Y2;
     end;
 
     //add range after last caret
     PosLast:= GetEndOfFilePos;
-    NewCarets.Add(XPrev, YPrev, PosLast.X, PosLast.Y);
+    NewCarets.Add(PosLast.X, PosLast.Y, XPrev, YPrev);
 
     DoCaretsAssign(NewCarets);
   finally
@@ -139,7 +148,7 @@ procedure TATSynEdit.DoSelect_SplitSelectionToLines;
 var
   NewCarets: TATCarets;
   X1, Y1, X2, Y2: integer;
-  i, j: integer;
+  i, j, NLen: integer;
   Sel: boolean;
 begin
   NewCarets:= TATCarets.Create;
@@ -155,27 +164,29 @@ begin
 
       if Y1=Y2 then
       begin
-        NewCarets.Add(X1, Y1, X2, Y2);
+        NewCarets.Add(X2, Y2, X1, Y1);
         Continue;
       end;
 
       //add first part
-      if X1<Length(Strings.Lines[Y1]) then
-        NewCarets.Add(X1, Y1, Length(Strings.Lines[Y1]), Y1)
+      NLen:= Strings.LinesLen[Y1];
+      if X1<NLen then
+        NewCarets.Add(NLen, Y1, X1, Y1)
       else
         NewCarets.Add(X1, Y1);
 
       //add middle parts
       for j:= Y1+1 to Y2-1 do
       begin
-        if Strings.Lines[j]='' then
+        NLen:= Strings.LinesLen[j];
+        if NLen=0 then
           NewCarets.Add(0, j)
         else
-          NewCarets.Add(0, j, Length(Strings.Lines[j]), j);
+          NewCarets.Add(NLen, j, 0, j);
       end;
 
       //add last part
-      NewCarets.Add(0, Y2, X2, Y2);
+      NewCarets.Add(X2, Y2, 0, Y2);
     end;
 
     DoCaretsAssign(NewCarets);
@@ -215,7 +226,7 @@ begin
         Y2:= PosLast.Y;
       end;
 
-      NewCarets.Add(X1, Y1, X2, Y2);
+      NewCarets.Add(X2, Y2, X1, Y1);
     end;
 
     DoCaretsAssign(NewCarets);
@@ -266,6 +277,7 @@ end;
 
 procedure TATSynEdit.DoSelect_ColumnBlock(P1, P2: TPoint);
 var
+  SLine: atString;
   i: integer;
 begin
   if P1.Y>P2.Y then
@@ -279,14 +291,12 @@ begin
   for i:= P1.Y to P2.Y do
   begin
     if i=P1.Y then Carets.Clear;
-    Carets.Add(0, 0);
-    with Carets[Carets.Count-1] do
-    begin
-      PosX:= P2.X;
-      PosY:= i;
-      EndX:= P1.X;
-      EndY:= i;
-    end;
+    SLine:= Strings.Lines[i];
+    Carets.Add(
+      SColumnPosToCharPos(SLine, FSelRect.Right, OptTabSize),
+      i,
+      SColumnPosToCharPos(SLine, FSelRect.Left, OptTabSize),
+      i );
   end;
 end;
 
@@ -298,4 +308,53 @@ begin
     DoSelect_None;
 end;
 
+procedure TATSynEdit.DoSelect_NormalSelToColumnSel(out ABegin, AEnd: TPoint);
+var
+  Caret: TATCaretItem;
+begin
+  Caret:= Carets[0];
+  if (Caret.EndY>=0) and (Caret.EndX>=0) then
+  begin
+    ABegin.X:= SCharPosToColumnPos(Strings.Lines[Caret.EndY], Caret.EndX, OptTabSize);
+    ABegin.Y:= Caret.EndY;
+    AEnd.X:= SCharPosToColumnPos(Strings.Lines[Caret.PosY], Caret.PosX, OptTabSize);
+    AEnd.Y:= Caret.PosY;
+  end
+  else
+  begin
+    ABegin.X:= SCharPosToColumnPos(Strings.Lines[Caret.PosY], Caret.PosX, OptTabSize);
+    ABegin.Y:= Caret.PosY;
+    AEnd:= ABegin;
+  end;
+end;
+
+procedure TATSynEdit.DoSelectionDeleteColumnBlock;
+var
+  X1, X2, i: Integer;
+  Str, StrNew: atString;
+begin
+  if IsSelRectEmpty then exit;
+
+  Strings.BeginUndoGroup;
+  try
+    for i:= FSelRect.Top to FSelRect.Bottom do
+    begin
+      Str:= Strings.Lines[i];
+      X1:= SColumnPosToCharPos(Str, FSelRect.Left, OptTabSize);
+      X2:= SColumnPosToCharPos(Str, FSelRect.Right, OptTabSize);
+
+      StrNew:= Str;
+      Delete(StrNew, X1+1, X2-X1);
+      if StrNew<>Str then
+        Strings.Lines[i]:= StrNew;
+    end;
+  finally
+    Strings.EndUndoGroup;
+  end;
+
+  DoSelect_None;
+
+  if Carets.Count>0 then
+    Carets[0].PosX:= X1;
+end;
 

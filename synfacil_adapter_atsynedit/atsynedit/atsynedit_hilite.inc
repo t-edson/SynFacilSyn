@@ -1,10 +1,39 @@
 {$ifdef nnn}begin end;{$endif}
 
+function TATSynEdit.DoCalcLineHiliteEx(ALineIndex: integer;
+  var AParts: TATLineParts;
+  AColorBG: TColor; out AColorAfter: TColor): boolean;
+const
+  cMaxCharsInLine = 50*1024;
+var
+  WrapItem: TATSynWrapItem;
+  Str: atString;
+begin
+  Result:= Strings.IsIndexValid(ALineIndex);
+  if not Result then exit;
+  FillChar(AParts, SizeOf(AParts), 0);
+
+  Str:= Strings.Lines[ALineIndex];
+  if Str='' then exit;
+
+  WrapItem:= TATSynWrapItem.Create(ALineIndex, 1, Length(Str), 0, cWrapItemFinal);
+  try
+    AColorAfter:= AColorBG;
+    DoCalcLineHilite(WrapItem, AParts, 0, cMaxCharsInLine,
+      AColorBG, false, AColorAfter);
+  finally
+    FreeAndNil(WrapItem);
+  end;
+end;
+
+
+
 procedure TATSynEdit.DoCalcLineHilite(const AItem: TATSynWrapItem;
   var AParts: TATLineParts; ACharsSkipped, ACharsMax: integer;
   AColorBG: TColor; AColorForced: boolean; var AColorAfter: TColor);
 var
   nMaxOffset, nCharIndex, nLineIndex, nLineLen: integer;
+  bFound: boolean;
 begin
   nMaxOffset:= Min(ACharsMax, AItem.NLength-ACharsSkipped);
   nLineIndex:= AItem.NLineIndex;
@@ -12,14 +41,31 @@ begin
   nCharIndex:= AItem.NCharIndex+ACharsSkipped;
 
   FillChar(AParts, SizeOf(AParts), 0);
+
+  //1) get hilites from adapter
   if Assigned(FAdapterHilite) then
-    FAdapterHilite.OnEditorCalcHilite(Self, AParts, nLineIndex, nCharIndex, nLineLen, AColorAfter);
+  begin
+    //DynamicHilite must disable cache
+    FAdapterCache.Enabled:= not FAdapterHilite.DynamicHiliteActiveNow(Strings.Count);
+    bFound:= FAdapterCache.Get(nLineIndex, nCharIndex, nLineLen, AParts, AColorAfter);
+    if not bFound then
+    begin
+      FAdapterHilite.OnEditorCalcHilite(Self, AParts, nLineIndex, nCharIndex, nLineLen, AColorAfter);
+      FAdapterCache.Add(nLineIndex, nCharIndex, nLineLen, AParts, AColorAfter);
+    end;
+  end;
+
+  //2) get hilites from OnCalcHilite
   if Assigned(FOnCalcHilite) then
     FOnCalcHilite(Self, AParts, nLineIndex, nCharIndex, nLineLen, AColorAfter);
 
   DoPartSetColorBG(AParts, AColorBG, AColorForced);
   if AColorForced then
     AColorAfter:= AColorBG;
+
+  //first add Attribs,
+  //selection must be over attribs
+  DoPartCalc_ApplyAttribsOver(AParts, nMaxOffset, nLineIndex, nCharIndex-1, AColorBG);
 
   //Createnew makes parts for selection and fills empty AParts with these parts.
   //Applyover makes parts for selection and inserts these one-by-one over ready AParts
@@ -29,12 +75,10 @@ begin
   if AParts[0].Len>0 then
   begin
     DoPartCalc_ApplyOver(AParts, nMaxOffset, nLineIndex, nCharIndex-1);
-    //aparts[0].ColorBG:= clgreen;
   end
   else
   begin
     DoPartCalc_CreateNew(AParts, nMaxOffset, nLineIndex, nCharIndex-1, AColorBG);
-    //aparts[0].ColorBG:= clyellow;
   end;
 end;
 
@@ -106,7 +150,7 @@ begin
 
     if bSel and (i=AOffsetMax) then
     begin
-      DoPartInsert(AParts, Part);
+      DoPartInsert(AParts, Part, true);
       Break
     end;
 
@@ -121,7 +165,8 @@ begin
     else
     if bSelPrev and not bSel then
     begin
-      DoPartInsert(AParts, Part);
+      DoPartInsert(AParts, Part, true);
+      //DoPartShow(AParts); /////////////debug
     end;
     bSelPrev:= bSel;
   end;
@@ -143,9 +188,13 @@ begin
 
   BmKind:= Strings.LinesBm[ALine];
   if BmKind<>0 then
-    AColor:= Strings.LinesBmColor[ALine];
+  begin
+    AColor:= Colors.BookmarkBG;
+    if Assigned(FOnCalcBookmarkColor) then
+      FOnCalcBookmarkColor(Self, BmKind, AColor);
+  end;
 
-  if FOptShowCurLine then
+  if FOptShowCurLine and (not FOptShowCurLineOnlyFocused or Self.Focused) then
   begin
     if FOptShowCurLineMinimal then
     begin
@@ -159,8 +208,49 @@ begin
     end;
   end;
 
+  if FMarkedRange.Count=2 then
+    if (ALine>=FMarkedRange.Items[0].PosY) and
+       (ALine<=FMarkedRange.Items[1].PosY) then
+      AColor:= Colors.MarkedLinesBG;
+
   AColorForced:= AColor<>clNone;
   if not AColorForced then
     AColor:= GetColorTextBG;
 end;
+
+
+procedure TATSynEdit.DoPartCalc_ApplyAttribsOver(var AParts: TATLineParts;
+  AOffsetMax, ALineIndex, ACharIndex: integer; AColorBG: TColor);
+var
+  i: integer;
+  Attr: TATMarkerItem;
+  Part: TATLinePart;
+  PartObj: TATLinePartClass;
+begin
+  for i:= 0 to Attribs.Count-1 do
+  begin
+    Attr:= Attribs[i];
+    PartObj:= TATLinePartClass(Attr.Ptr);
+    if Assigned(PartObj) then
+      if Attr.PosY=ALineIndex then
+      begin
+        //empty parts? init part for whole line, for DoPartInsert to work
+        if AParts[0].Len=0 then
+        begin
+          AParts[0].Offset:= 0;
+          AParts[0].Len:= AOffsetMax;
+          AParts[0].ColorBG:= AColorBG;
+          AParts[0].ColorFont:= GetColorTextFont;
+        end;
+
+        Part:= PartObj.Data;
+        Part.Len:= Attr.LenX;
+        Part.Offset:= Attr.PosX-ACharIndex;
+        if Part.ColorBG=clNone then
+          Part.ColorBG:= AColorBG;
+        DoPartInsert(AParts, Part, false);
+      end;
+  end;
+end;
+
 

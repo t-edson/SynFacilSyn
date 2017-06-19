@@ -1,9 +1,44 @@
 {$ifdef none}begin end;{$endif}
 
+procedure TATSynEdit.DoMenuText;
+var
+  P: TPoint;
+begin
+  P:= ClientToScreen(Point(0, 0));
+  if Assigned(FMenuText) then
+    FMenuText.PopUp(P.X, P.Y)
+  else
+    FMenuStd.PopUp(P.X, P.Y);
+end;
+
 procedure TATSynEdit.KeyDown(var Key: Word; Shift: TShiftState);
 begin
-  if not FWantTabs then
-    if Key=vk_tab then Exit;
+  inherited;
+
+  //special handle for spec keys
+  case Key of
+    VK_SHIFT,
+    VK_CONTROL,
+    VK_MENU, //3 usual state keys
+    VK_LSHIFT..VK_RMENU: //also 6 state keys
+      begin
+        //ignore Ctrl/Alt/Shift to not hide caret
+        exit;
+      end;
+    VK_TAB:
+      begin
+        if not WantTabs then exit;
+      end;
+    VK_RETURN:
+      begin
+        if not WantReturns then exit;
+      end;
+    VK_APPS:
+      begin
+        DoMenuText;
+        exit;
+      end;
+  end;
 
   DoPaintModeStatic;
   try
@@ -57,11 +92,15 @@ end;
 
 procedure TATSynEdit.DoCommandResults(Res: TATCommandResults);
 begin
-  if cResultText in Res then
+  if (cResultText in Res) or
+     (cResultFoldChange in Res) then
   begin
     FWrapUpdateNeeded:= true;
     UpdateWrapInfo;
+  end;
 
+  if cResultText in Res then
+  begin
     if FOptMouseHideCursor then
       if PtInRect(FRectMain, ScreenToClient(Mouse.CursorPos)) then
         SetCursor(crNone);
@@ -81,12 +120,14 @@ begin
   begin
     if not (cResultKeepColumnSel in Res) then
       FSelRect:= cRectEmpty;
+    DoCaretsFixIfInsideCollapsedPart;
     DoEventCarets;
   end;
 
   if cResultText in Res then
   begin
-    FSelRect:= cRectEmpty;
+    if not (cResultKeepColumnSel in Res) then
+      FSelRect:= cRectEmpty;
     DoEventChange;
   end;
 
@@ -99,37 +140,6 @@ begin
   Update;
 end;
 
-function TATSynEdit.DoCommand_FoldUnfoldAll(ADoFold: boolean): TATCommandResults;
-var
-  Ar: TATIntArray;
-  R: TATSynRange;
-  i: integer;
-begin
-  if ADoFold then
-  begin
-    Ar:= Fold.FindRangesContainingLines(
-      0, Strings.Count-1, nil,
-      false{OnlyFolded}, true{TopLevelOnly}, cRngHasAnyOfLines);
-    for i:= Low(Ar) to High(Ar) do
-    begin
-      R:= Fold.Items[Ar[i]];
-      if not R.Folded then
-        DoRangeFold(R);
-    end;
-  end
-  else
-  begin
-    for i:= 0 to Fold.Count-1 do
-    begin
-      R:= Fold.Items[i];
-      if R.Folded then
-        DoRangeUnfold(R);
-    end;
-  end;
-
-  Result:= [cResultCaretAny, cResultScroll];
-end;
-
 procedure TATSynEdit.DoCommand(ACmd: integer; const AText: atString = '');
 var
   Caret: TATCaretItem;
@@ -137,10 +147,13 @@ var
   i: integer;
 begin
   if ACmd<=0 then Exit;
-  if DoEventCommand(ACmd) then Exit;
+  if DoEventCommand(ACmd, AText) then Exit;
 
   Res:= [];
   FCaretSpecPos:= false;
+
+  //moving must be with visible caret
+  DoCaretForceShow;
 
   //---handle special command bits (cCmdNNNNN)
   if ACmd and cCmdSelKeep <> 0 then
@@ -190,10 +203,14 @@ begin
     cCommand_KeyPageDown,
     cCommand_KeyPageDown_Sel:     Res:= DoCommand_KeyUpDown(true, GetPageLines, FOptKeyPageKeepsRelativePos);
 
-    cCommand_ColSelectLeft:      Res:= DoCommand_SelectColumn(cDirLeft);
-    cCommand_ColSelectRight:     Res:= DoCommand_SelectColumn(cDirRight);
-    cCommand_ColSelectUp:        Res:= DoCommand_SelectColumn(cDirUp);
-    cCommand_ColSelectDown:      Res:= DoCommand_SelectColumn(cDirDown);
+    cCommand_ColSelectLeft:        Res:= DoCommand_SelectColumn(cDirColumnLeft);
+    cCommand_ColSelectRight:       Res:= DoCommand_SelectColumn(cDirColumnRight);
+    cCommand_ColSelectUp:          Res:= DoCommand_SelectColumn(cDirColumnUp);
+    cCommand_ColSelectDown:        Res:= DoCommand_SelectColumn(cDirColumnDown);
+    cCommand_ColSelectPageUp:      Res:= DoCommand_SelectColumn(cDirColumnPageUp);
+    cCommand_ColSelectPageDown:    Res:= DoCommand_SelectColumn(cDirColumnPageDown);
+    cCommand_ColSelectToLineBegin: Res:= DoCommand_SelectColumnToLineEdge(false);
+    cCommand_ColSelectToLineEnd:   Res:= DoCommand_SelectColumnToLineEdge(true);
 
     cCommand_TextInsert:          Res:= DoCommand_TextInsertAtCarets(AText, false, FOverwrite, false);
     cCommand_TextInsertTabChar:   Res:= DoCommand_TextInsertAtCarets(#9, false, FOverwrite, false);
@@ -242,7 +259,8 @@ begin
     cCommand_ToggleLineNums:           Res:= DoCommand_ToggleLineNums;
     cCommand_ToggleFolding:            Res:= DoCommand_ToggleFolding;
     cCommand_ToggleRuler:              Res:= DoCommand_ToggleRuler;
-    cCommand_ToggleMinimap:            Res:= DoCommand_ToggleMinimap;
+    cCommand_ToggleMinimap:            Res:= DoCommand_ToggleMiniMap;
+    cCommand_ToggleMicromap:           Res:= DoCommand_ToggleMicroMap;
 
     cCommand_TextIndent:               Res:= DoCommand_TextIndentUnindent(true);
     cCommand_TextUnindent:             Res:= DoCommand_TextIndentUnindent(false);
@@ -254,14 +272,25 @@ begin
     cCommand_ScrollToCaretLeft:        Res:= [cResultCaretLeft];
     cCommand_ScrollToCaretRight:       Res:= [cResultCaretRight];
 
-    cCommand_ClipboardCopy:            Res:= DoCommand_ClipboardCopy;
-    cCommand_ClipboardCopyAdd:         Res:= DoCommand_ClipboardCopy(true);
-    cCommand_ClipboardCut:             Res:= DoCommand_ClipboardCut;
-    cCommand_ClipboardPaste:           Res:= DoCommand_ClipboardPaste(false, false);
-    cCommand_ClipboardPaste_Select:    Res:= DoCommand_ClipboardPaste(false, true);
-    cCommand_ClipboardPaste_KeepCaret: Res:= DoCommand_ClipboardPaste(true, false);
-    cCommand_ClipboardPaste_Column:          Res:= DoCommand_ClipboardPasteColumnBlock(false);
-    cCommand_ClipboardPaste_ColumnKeepCaret: Res:= DoCommand_ClipboardPasteColumnBlock(true);
+    cCommand_ClipboardCopy:            Res:= DoCommand_ClipboardCopy(false, Clipboard);
+    cCommand_ClipboardCopyAdd:         Res:= DoCommand_ClipboardCopy(true, Clipboard);
+    cCommand_ClipboardCut:             Res:= DoCommand_ClipboardCut(Clipboard);
+
+    //use Clipboard:TClipboard
+    cCommand_ClipboardPaste:                 Res:= DoCommand_ClipboardPaste(false, false, Clipboard);
+    cCommand_ClipboardPaste_Select:          Res:= DoCommand_ClipboardPaste(false, true, Clipboard);
+    cCommand_ClipboardPaste_KeepCaret:       Res:= DoCommand_ClipboardPaste(true, false, Clipboard);
+    cCommand_ClipboardPaste_Column:          Res:= DoCommand_ClipboardPasteColumnBlock(false, Clipboard);
+    cCommand_ClipboardPaste_ColumnKeepCaret: Res:= DoCommand_ClipboardPasteColumnBlock(true, Clipboard);
+
+    //use PrimarySelection:TClipboard
+    cCommand_ClipboardAltPaste:                 Res:= DoCommand_ClipboardPaste(false, false, PrimarySelection);
+    cCommand_ClipboardAltPaste_Select:          Res:= DoCommand_ClipboardPaste(false, true, PrimarySelection);
+    cCommand_ClipboardAltPaste_KeepCaret:       Res:= DoCommand_ClipboardPaste(true, false, PrimarySelection);
+    cCommand_ClipboardAltPaste_Column:          Res:= DoCommand_ClipboardPasteColumnBlock(false, PrimarySelection);
+    cCommand_ClipboardAltPaste_ColumnKeepCaret: Res:= DoCommand_ClipboardPasteColumnBlock(true, PrimarySelection);
+    //use SecondarySelection:TClipboard
+    cCommand_ClipboardAltAltPaste:              Res:= DoCommand_ClipboardPaste(false, false, SecondarySelection);
 
     cCommand_MoveSelectionUp:          Res:= DoCommand_MoveSelectionUpDown(false);
     cCommand_MoveSelectiondown:        Res:= DoCommand_MoveSelectionUpDown(true);
@@ -274,8 +303,14 @@ begin
     cCommand_TextCaseInvert:           Res:= DoCommand_TextChangeCase(cCaseInvert);
     cCommand_TextCaseSentence:         Res:= DoCommand_TextChangeCase(cCaseSentence);
 
+    cCommand_TextTrimSpacesLeft:       Res:= DoCommand_TextTrimSpaces(cTrimLeft);
+    cCommand_TextTrimSpacesRight:      Res:= DoCommand_TextTrimSpaces(cTrimRight);
+    cCommand_TextTrimSpacesAll:        Res:= DoCommand_TextTrimSpaces(cTrimAll);
+
     cCommand_FoldAll:                  Res:= DoCommand_FoldUnfoldAll(true);
     cCommand_UnfoldAll:                Res:= DoCommand_FoldUnfoldAll(false);
+    cCommand_FoldLevel1..
+    cCommand_FoldLevel9:               Res:= DoCommand_FoldLevel(ACmd-cCommand_FoldLevel1);
 
     cCommand_Cancel:                   Res:= DoCommand_Cancel;
     cCommand_CaretsExtendUpLine:       Res:= DoCommand_CaretsExtend(false, 1);
@@ -298,7 +333,7 @@ begin
     end;
 
   DoCommandResults(Res);
+  DoEventCommandAfter(ACmd, AText);
 end;
-
 
 

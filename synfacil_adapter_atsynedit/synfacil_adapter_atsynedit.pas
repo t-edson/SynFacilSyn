@@ -130,7 +130,7 @@ begin
   noffset:= 0;
   while not hlt.GetEol do
   begin
-    atr:= TSynHighlighterAttributes(hlt.GetTokenKind);
+    atr:= hlt.GetTokenAttribute;
     AParts[npart].ColorBG:= atr.Background;
     if atr.Foreground<>clNone then
       AParts[npart].ColorFont:= atr.Foreground;

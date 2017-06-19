@@ -24,53 +24,106 @@ begin
   Result:= [cResultCaretBottom];
 end;
 
-function TATSynEdit.DoCommand_SelectColumn(ADir: TATDirection): TATCommandResults;
+function TATSynEdit.DoCommand_SelectColumn(ADir: TATSelectColumnDirection): TATCommandResults;
+var
+  PntBegin, PntEnd: TPoint;
+  N, NPageLines, i: integer;
 begin
   Result:= [];
   if Carets.Count=0 then Exit;
 
   if IsSelRectEmpty or (FSelRectBegin.X<0) then
   begin
+    DoSelect_NormalSelToColumnSel(PntBegin, PntEnd);
     DoCaretSingleAsIs;
     DoSelect_None;
-    FSelRectBegin.X:= Carets[0].PosX;
-    FSelRectBegin.Y:= Carets[0].PosY;
-    FSelRectEnd.X:= FSelRectBegin.X;
-    FSelRectEnd.Y:= FSelRectBegin.Y;
+    FSelRectBegin:= PntBegin;
+    FSelRectEnd:= PntEnd;
   end;
 
+  if ADir in [cDirColumnPageUp, cDirColumnPageDown] then
+    NPageLines:= GetPageLines
+  else
+    NPageLines:= 1;
+
   case ADir of
-    cDirLeft:
+    cDirColumnLeft:
       begin
-        if FSelRectEnd.X>0 then Dec(FSelRectEnd.X);
+        N:= SColumnPosToCharPos(Strings.Lines[FSelRectEnd.Y], FSelRectEnd.X, OptTabSize);
+        if N>0 then Dec(N);
+        N:= SCharPosToColumnPos(Strings.Lines[FSelRectEnd.Y], N, OptTabSize);
+        FSelRectEnd.X:= N;
         Result:= [cResultKeepColumnSel, cResultCaretLeft];
       end;
-    cDirRight:
+    cDirColumnRight:
       begin
-        Inc(FSelRectEnd.X);
+        N:= SColumnPosToCharPos(Strings.Lines[FSelRectEnd.Y], FSelRectEnd.X, OptTabSize);
+        Inc(N);
+        N:= SCharPosToColumnPos(Strings.Lines[FSelRectEnd.Y], N, OptTabSize);
+        FSelRectEnd.X:= N;
         Result:= [cResultKeepColumnSel, cResultCaretRight];
       end;
-    cDirUp:
+    cDirColumnUp,
+    cDirColumnPageUp:
       begin
-        if FSelRectEnd.Y>0 then
-        begin
-          Dec(FSelRectEnd.Y);
-          FSelRectEnd.Y:= GetNextUnfoldedLineNumber(FSelRectEnd.Y, false);
-        end;
-        Result:= [cResultKeepColumnSel, cResultCaretTop];
+        for i:= 1 to NPageLines do
+          if FSelRectEnd.Y>0 then
+          begin
+            Dec(FSelRectEnd.Y);
+            FSelRectEnd.Y:= GetNextUnfoldedLineNumber(FSelRectEnd.Y, false);
+          end;
+
+        if FSelRectEnd.Y>=FSelRectBegin.Y then
+          Result:= [cResultKeepColumnSel, cResultCaretBottom]
+        else
+          Result:= [cResultKeepColumnSel, cResultCaretTop];
       end;
-    cDirDown:
+    cDirColumnDown,
+    cDirColumnPageDown:
       begin
-        if FSelRectEnd.Y<Strings.Count-1 then
-        begin
-          Inc(FSelRectEnd.Y);
-          FSelRectEnd.Y:= GetNextUnfoldedLineNumber(FSelRectEnd.Y, true);
-        end;
-        Result:= [cResultKeepColumnSel, cResultCaretBottom];
+        for i:= 1 to NPageLines do
+          if FSelRectEnd.Y<Strings.Count-1 then
+          begin
+            Inc(FSelRectEnd.Y);
+            FSelRectEnd.Y:= GetNextUnfoldedLineNumber(FSelRectEnd.Y, true);
+          end;
+
+        if FSelRectEnd.Y>=FSelRectBegin.Y then
+          Result:= [cResultKeepColumnSel, cResultCaretBottom]
+        else
+          Result:= [cResultKeepColumnSel, cResultCaretTop];
       end;
   end;
 
   DoSelect_ColumnBlock(FSelRectBegin, FSelRectEnd);
+end;
+
+function TATSynEdit.DoCommand_SelectColumnToLineEdge(AToEnd: boolean): TATCommandResults;
+var
+  NPos, i: integer;
+begin
+  Result:= [];
+  if Carets.Count=0 then Exit;
+
+  if IsSelRectEmpty or (FSelRectBegin.X<0) then Exit;
+  //maybe todo: make column sel if normal sel active here
+  //like DoCommand_SelectColumn
+
+  if not AToEnd then
+  begin
+    FSelRectEnd.X:= 0;
+  end
+  else
+  begin
+    NPos:= 0;
+    for i:= FSelRectBegin.Y to FSelRectEnd.Y do
+      if Strings.IsIndexValid(i) then
+        NPos:= Max(NPos, Length(STabsToSpaces(Strings.Lines[i], FTabSize)));
+    FSelRectEnd.X:= NPos;
+  end;
+
+  DoSelect_ColumnBlock(FSelRectBegin, FSelRectEnd);
+  Result:= [cResultKeepColumnSel, cResultCaretBottom];
 end;
 
 function TATSynEdit.DoCommand_MoveSelectionUpDown(ADown: boolean): TATCommandResults;

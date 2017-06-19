@@ -9,27 +9,10 @@ const
   crNiceScrollLeft  = TCursor(-33);
   crNiceScrollRight = TCursor(-34);
 
-//fold gutter fold
-var
-  cBitmapFoldPlus: TBitmap = nil;
-  cBitmapFoldMinus: TBitmap = nil;
-
 const
   //under Mac don't use Ctrl key, use Meta key as default (e.g. Meta+C, Meta+A)
   ssXControl = {$ifndef darwin} ssCtrl {$else} ssMeta {$endif};
 
-procedure AppProcessMessages;
-begin
-  //why we need it?
-  //1) ScrollTop:=N applies for drawed control (it needs wrapinfo),
-  //and it needs paint called. paint called only passive, QT+Mac needs it.
-  //so need to call processmessages to wait for paint..
-  //2) for showing "wait" on loading huge file
-
-  {$ifdef allow_proc_msg}
-  Application.ProcessMessages;
-  {$endif}
-end;
 
 procedure DoClearScrollInfo(var Info: TATSynScrollInfo);
 begin
@@ -50,37 +33,20 @@ end;
 
 procedure InitClipboardFormat;
 begin
-  cClipFormatId:= RegisterClipboardFormat('Application/X-Laz-ATSynEdit-Block');
+  cATClipboardFormatId:= RegisterClipboardFormat('Application/X-Laz-ATSynEdit-Block');
 end;
 
 procedure InitResourcesNicescroll;
 begin
   cBitmapNiceScroll:= TBitmap.Create;
-  cBitmapNiceScroll.LoadFromResourceName(HInstance, 'AB_MOVE');
+  cBitmapNiceScroll.LoadFromResourceName(HInstance, 'ATSYN_MOVE');
   cBitmapNiceScroll.Transparent:= true;
 
-  Screen.Cursors[crNiceScrollNone]:= LoadCursor(HInstance, 'AB_MOVE');
-  Screen.Cursors[crNiceScrollUp]:= LoadCursor(HInstance, 'AB_MOVE_U');
-  Screen.Cursors[crNiceScrollDown]:= LoadCursor(HInstance, 'AB_MOVE_D');
-  Screen.Cursors[crNiceScrollLeft]:= LoadCursor(HInstance, 'AB_MOVE_L');
-  Screen.Cursors[crNiceScrollRight]:= LoadCursor(HInstance, 'AB_MOVE_R');
-end;
-
-procedure InitResourcesFoldbar;
-begin
-  if cBitmapFoldPlus=nil then
-  begin
-    cBitmapFoldPlus:= TBitmap.Create;
-    cBitmapFoldPlus.LoadFromResourceName(HInstance, 'FOLDBAR_P');
-    cBitmapFoldPlus.Transparent:= true;
-  end;
-
-  if cBitmapFoldMinus=nil then
-  begin
-    cBitmapFoldMinus:= TBitmap.Create;
-    cBitmapFoldMinus.LoadFromResourceName(HInstance, 'FOLDBAR_M');
-    cBitmapFoldMinus.Transparent:= true;
-  end;
+  Screen.Cursors[crNiceScrollNone]:= LoadCursor(HInstance, 'ATSYN_MOVE');
+  Screen.Cursors[crNiceScrollUp]:= LoadCursor(HInstance, 'ATSYN_MOVE_U');
+  Screen.Cursors[crNiceScrollDown]:= LoadCursor(HInstance, 'ATSYN_MOVE_D');
+  Screen.Cursors[crNiceScrollLeft]:= LoadCursor(HInstance, 'ATSYN_MOVE_L');
+  Screen.Cursors[crNiceScrollRight]:= LoadCursor(HInstance, 'ATSYN_MOVE_R');
 end;
 
 procedure FreeResources;
@@ -88,46 +54,48 @@ begin
   FreeAndNil(cBitmapNiceScroll);
 end;
 
-procedure InitDefaultColors(C: TATSynEditColors);
+function IsDoubleBufferedNeeded: boolean;
 begin
-  C.TextFont:= clBlack;
-  C.TextBG:= clWhite;
-  C.TextSelFont:= clHighlightText;
-  C.TextSelBG:= clHighlight;
-  C.TextDisabledFont:= clGray;
-  C.TextDisabledBG:= $f0f0f0;
-  C.Caret:= clBlack;
-  C.GutterFont:= clGray;
-  C.GutterBG:= $e0e0e0;
-  C.GutterCaretBG:= $c8c8c8;
-  C.GutterPlusBorder:= clGray;
-  C.GutterPlusBG:= $f4f4f4;
-  C.GutterFoldLine:= clGray;
-  C.GutterFoldBG:= $c8c8c8;
-  C.GutterSeparatorBG:= clBlack;
-  C.CurrentLineBG:= $e0f0f0;
-  C.RulerBG:= C.GutterBG;
-  C.RulerFont:= clGray;
-  C.CollapseLine:= $a06060;
-  C.CollapseMarkFont:= $e08080;
-  C.CollapseMarkBG:= clCream;
-  C.MarginRight:= clLtGray;
-  C.MarginCaret:= clLime;
-  C.MarginUser:= clYellow;
-  C.IndentVertLines:= clMedGray;
-  C.UnprintedFont:= $5050f0;
-  C.UnprintedBG:= $e0e0e0;
-  C.UnprintedHexFont:= clMedGray;
-  C.MinimapBorder:= clLtGray;
-  C.MinimapSelBG:= $eeeeee;
-  C.StateChanged:= $00f0f0;
-  C.StateAdded:= $20c020;
-  C.StateSaved:= clMedGray;
-  C.TextHintFont:= clGray;
-  C.BlockStaple:= clMedGray;
-  C.BlockSepLine:= clMedGray;
-  C.LockedBG:= $e0e0e0;
-  C.ComboboxArrow:= clGray;
-  C.ComboboxArrowBG:= $f0f0f0;
+  Result:= WidgetSet.GetLCLCapability(lcCanDrawOutsideOnPaint) = LCL_CAPABILITY_YES;
+end;
+
+
+procedure InitMouseActions(var M: TATMouseActions);
+  //
+  procedure Add(AId: TATMouseActionId; AState: TShiftState);
+  begin
+    SetLength(M, Length(M)+1);
+    M[High(M)].MouseActionId:= AId;
+    M[High(M)].MouseState:= AState;
+  end;
+  //
+begin
+  SetLength(M, 0);
+
+  Add(cMouseActionClickSimple, [ssLeft]);
+  Add(cMouseActionClickRight, [ssRight]);
+  Add(cMouseActionClickAndSelBlock, [ssLeft, ssShift]);
+  Add(cMouseActionMakeCaret, [ssLeft, ssXControl]);
+  Add(cMouseActionMakeCaretsColumn, [ssLeft, ssXControl, ssShift]);
+  Add(cMouseActionNiceScrolling, [ssMiddle]);
+
+  Add(cMouseActionClickSimple, [ssLeft, ssAlt]);
+  Add(cMouseActionClickSimple, [ssLeft, ssAltGr]);
+  Add(cMouseActionClickSimple, [ssLeft, ssAlt, ssXControl]);
+  Add(cMouseActionClickSimple, [ssLeft, ssAlt, ssShift]);
+  Add(cMouseActionClickSimple, [ssLeft, ssAlt, ssShift, ssXControl]);
+end;
+
+
+function GetMouseActionId(const M: TATMouseActions; State: TShiftState): TATMouseActionId;
+var
+  i: integer;
+begin
+  Result:= cMouseActionNone;
+  if State=[] then exit;
+
+  for i:= Low(M) to High(M) do
+    if M[i].MouseState=State then
+      exit(M[i].MouseActionId);
 end;
 

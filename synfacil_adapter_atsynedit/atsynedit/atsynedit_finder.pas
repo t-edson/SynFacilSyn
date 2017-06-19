@@ -1,3 +1,7 @@
+{
+Copyright (C) Alexey Torgashin, uvviewsoft.com
+License: MPL 2.0 or LGPL
+}
 unit ATSynEdit_Finder;
 
 {$mode objfpc}{$H+}
@@ -6,9 +10,11 @@ interface
 
 uses
   SysUtils, Classes, Dialogs, Forms,
-  RegExpr, //must be with {$define Unicode}
+  Math,
+  ATSynEdit_RegExpr, //must be with {$define Unicode}
   ATSynEdit,
   ATSynEdit_Carets,
+  ATStrings,
   ATStringProc,
   ATStringProc_TextBuffer;
 
@@ -21,30 +27,50 @@ type
     var AConfirm, AContinue: boolean) of object;
 
 type
+  { TATFinderResult }
+
+  TATFinderResult = class
+  public
+    NPos, NLen: integer;
+    constructor Create(APos, ALen: integer);
+  end;
+
+type
   { TATTextFinder }
 
   TATTextFinder = class
   private
     FMatchPos: integer;
     FMatchLen: integer;
+    FStrFind: UnicodeString;
+    FStrReplace: UnicodeString;
+    FRegex: TRegExpr;
+    FPrevProgress: integer;
     FOnProgress: TATFinderProgress;
     FOnBadRegex: TNotifyEvent;
-    function DoCountMatchesRegex(FromPos: integer; AWithEvent: boolean): integer;
-    function DoCountMatchesUsual(FromPos: integer; AWithEvent: boolean): Integer;
-    function DoFindMatchRegex(FromPos: integer; var MatchPos, MatchLen: integer): boolean;
-    function DoFindMatchUsual(FromPos: integer): Integer;
     function IsMatchUsual(APos: integer): boolean;
+    function DoFind_Usual(AFromPos: integer): boolean;
+    function DoFind_Regex(AFromPos: integer): boolean;
+    procedure DoCollect_Usual(AList: TList; AFromPos: integer; AWithEvent, AWithConfirm: boolean);
+    procedure DoCollect_Regex(AList: TList; AFromPos: integer; AWithEvent, AWithConfirm: boolean);
+    function DoCountAll(AWithEvent: boolean): integer;
+    procedure SetStrFind(const AValue: UnicodeString);
+    procedure SetStrReplace(const AValue: UnicodeString);
+    function GetRegexReplacement(const AFromText: UnicodeString): UnicodeString;
+    function IsProgressNeeded(ANewPos: integer): boolean;
   protected
     procedure DoOnFound; virtual;
+    procedure DoConfirmReplace(APos, ALen: integer;
+      var AConfirmThis, AConfirmContinue: boolean); virtual;
   public
-    StrText: UnicodeString;
-    StrFind: UnicodeString;
-    StrReplace: UnicodeString;
-    StrReplacement: UnicodeString; //for regex
     OptBack: boolean; //for non-regex
     OptWords: boolean; //for non-regex
     OptCase: boolean; //for regex and usual
     OptRegex: boolean;
+    OptWrapped: boolean;
+    StrText: UnicodeString;
+    property StrFind: UnicodeString read FStrFind write SetStrFind;
+    property StrReplace: UnicodeString read FStrReplace write SetStrReplace;
     constructor Create;
     destructor Destroy; override;
     function FindMatch(ANext: boolean; ASkipLen: integer; AStartPos: integer): boolean;
@@ -52,6 +78,15 @@ type
     property MatchLen: integer read FMatchLen; //too
     property OnProgress: TATFinderProgress read FOnProgress write FOnProgress;
     property OnBadRegex: TNotifyEvent read FOnBadRegex write FOnBadRegex;
+  end;
+
+type
+  { TATEditorFragment }
+
+  TATEditorFragment = class
+  public
+    X1, Y1, X2, Y2: integer;
+    Text: atString;
   end;
 
 type
@@ -64,25 +99,59 @@ type
     FSkipLen: integer;
     FOnFound: TATFinderFound;
     FOnConfirmReplace: TATFinderConfirmReplace;
-    procedure DoReplaceTextInEditor(P1, P2: TPoint);
+    FFragments: TList;
+    FFragmentIndex: integer;
+    FReplacedAtEndOfText: boolean;
+    //
+    procedure UpdateBuffer(AUpdateFragmentsFirst: boolean);
+    procedure UpdateBuffer_FromText(const AText: atString);
+    procedure UpdateBuffer_FromStrings(AStrings: TATStrings);
+    function ConvertBufferPosToCaretPos(APos: integer): TPoint;
+    function ConvertCaretPosToBufferPos(APos: TPoint): integer;
     function GetOffsetOfCaret: integer;
     function GetOffsetStartPos: integer;
+    function GetRegexSkipIncrement: integer;
+    procedure DoFixCaretSelectionDirection;
+    //
+    function DoReplaceAll: integer;
+    function DoFindOrReplace_Inner(ANext, AReplace, AForMany: boolean;
+      out AChanged: boolean): boolean;
+    function DoFindOrReplace_Internal(ANext, AReplace, AForMany: boolean;
+      out AChanged: boolean; AStartPos: integer): boolean;
+    procedure DoReplaceTextInEditor(APosBegin, APosEnd: TPoint;
+      const AReplacement: UnicodeString; AUpdateBuffer, AUpdateCaret: boolean);
+    function IsSelectionStartsAtFoundMatch: boolean;
+    //fragments
+    procedure DoFragmentsClear;
+    procedure DoFragmentsInit;
+    procedure DoFragmentsShow;
+    procedure SetFragmentIndex(AValue: integer);
+    function GetFragmentsTouched: boolean;
+    function CurrentFragment: TATEditorFragment;
+    property CurrentFragmentIndex: integer read FFragmentIndex write SetFragmentIndex;
   protected
     procedure DoOnFound; override;
+    procedure DoConfirmReplace(APos, ALen: integer;
+      var AConfirmThis, AConfirmContinue: boolean); override;
   public
     OptFromCaret: boolean;
     OptConfirmReplace: boolean;
+    OptInSelection: boolean;
+    OptPutBackwardSelection: boolean; //on backward search, place backward selection, ie caret on left of selection
+    //
     constructor Create;
     destructor Destroy; override;
-    procedure UpdateBuffer;
     property Editor: TATSynEdit read FEditor write FEditor;
+    //
+    function DoAction_FindOrReplace(ANext, AReplace, AForMany: boolean; out AChanged: boolean): boolean;
+    function DoAction_ReplaceSelected: boolean;
+    function DoAction_CountAll(AWithEvent: boolean): integer;
+    function DoAction_ReplaceAll: integer;
+    //
     property OnFound: TATFinderFound read FOnFound write FOnFound;
     property OnConfirmReplace: TATFinderConfirmReplace read FOnConfirmReplace write FOnConfirmReplace;
-    function DoFindOrReplace(ANext, AReplace, AForMany: boolean; out AChanged: boolean): boolean;
-    function DoReplaceSelectedMatch: boolean;
-    function DoCountAll(AWithEvent: boolean): integer;
-    function DoReplaceAll: integer;
  end;
+
 
 implementation
 
@@ -90,6 +159,25 @@ function IsWordChar(ch: Widechar): boolean;
 begin
   Result:= ATStringProc.IsCharWord(ch, '');
 end;
+
+function SRegexReplaceEscapedTabs(const AStr: string): string;
+begin
+  Result:= AStr;
+  Result:= StringReplace(Result, '\\', #1, [rfReplaceAll]);
+  Result:= StringReplace(Result, '\t', #9, [rfReplaceAll]);
+  Result:= StringReplace(Result, #1, '\\', [rfReplaceAll]);
+end;
+
+{ TATFinderResult }
+
+constructor TATFinderResult.Create(APos, ALen: integer);
+begin
+  NPos:= APos;
+  NLen:= ALen;
+end;
+
+
+{ TATTextFinder }
 
 function TATTextFinder.IsMatchUsual(APos: integer): boolean;
 var
@@ -116,270 +204,506 @@ begin
         ((APos >= LastPos) or (not IsWordChar(StrText[APos + LenF])));
 end;
 
+procedure TATTextFinder.SetStrFind(const AValue: UnicodeString);
+begin
+  if FStrFind=AValue then Exit;
+  FStrFind:= AValue;
+  FMatchPos:= -1;
+  FMatchLen:= 0;
+end;
+
+procedure TATTextFinder.SetStrReplace(const AValue: UnicodeString);
+begin
+  if FStrReplace=AValue then Exit;
+  FStrReplace:= AValue;
+end;
+
 procedure TATTextFinder.DoOnFound;
 begin
   //
 end;
 
-function TATTextFinder.DoFindMatchUsual(FromPos: integer): Integer;
-var
-  LastPos, i: integer;
+procedure TATTextFinder.DoConfirmReplace(APos, ALen: integer;
+  var AConfirmThis, AConfirmContinue: boolean);
 begin
-  Result:= 0;
-  if StrText='' then exit;
-  if StrFind='' then exit;
-  LastPos:= Length(StrText) - Length(StrFind) + 1;
-
-  if not OptBack then
-    for i:= FromPos to LastPos do
-    begin
-      if IsMatchUsual(i) then
-      begin
-        Result:= i;
-        Break
-      end;
-    end
-  else
-    for i:= FromPos downto 1 do
-    begin
-     if IsMatchUsual(i) then
-      begin
-        Result:= i;
-        Break
-      end;
-    end;
+  AConfirmThis:= true;
+  AConfirmContinue:= true;
 end;
 
-function TATTextFinder.DoFindMatchRegex(FromPos: integer; var MatchPos,
-  MatchLen: integer): boolean;
+
+function TATTextFinder.DoFind_Usual(AFromPos: integer): boolean;
 var
-  Obj: TRegExpr;
+  NLastPos, i: integer;
+begin
+  Result:= false;
+  if StrText='' then exit;
+  if StrFind='' then exit;
+  NLastPos:= Length(StrText) - Length(StrFind) + 1;
+
+  if not OptBack then
+  begin
+    for i:= AFromPos to NLastPos do
+      if IsMatchUsual(i) then
+      begin
+        FMatchPos:= i;
+        FMatchLen:= Length(StrFind);
+        exit(true);
+      end;
+  end
+  else
+  begin
+    for i:= AFromPos downto 1 do
+      if IsMatchUsual(i) then
+      begin
+        FMatchPos:= i;
+        FMatchLen:= Length(StrFind);
+        exit(true);
+      end;
+  end;
+end;
+
+function TATTextFinder.DoFind_Regex(AFromPos: integer): boolean;
 begin
   Result:= false;
   if StrText='' then exit;
   if StrFind='' then exit;
 
-  Obj:= TRegExpr.Create;
+  FRegex.ModifierI:= not OptCase;
+
   try
-    Obj.ModifierS:= false; //don't catch all text by .*
-    Obj.ModifierM:= true; //allow to work with ^$
-    Obj.ModifierI:= not OptCase;
-
-    try
-      Obj.Expression:= StrFind;
-      Obj.InputString:= StrText;
-      Result:= Obj.ExecPos(FromPos);
-    except
-      if Assigned(FOnBadRegex) then
-        FOnBadRegex(Self);
-      Result:= false;
-    end;
-
+    FRegex.Expression:= StrFind;
+    FRegex.InputString:= StrText;
+    Result:= FRegex.ExecPos(AFromPos);
     if Result then
     begin
-      MatchPos:= Obj.MatchPos[0];
-      MatchLen:= Obj.MatchLen[0];
-      if StrReplace<>'' then
-        StrReplacement:= Obj.Replace(Obj.Match[0], StrReplace, true);
+      FMatchPos:= FRegex.MatchPos[0];
+      FMatchLen:= FRegex.MatchLen[0];
     end;
-  finally
-    FreeAndNil(Obj);
+  except
+    if Assigned(FOnBadRegex) then
+      FOnBadRegex(Self);
   end;
 end;
 
-function TATTextFinder.DoCountMatchesUsual(FromPos: integer; AWithEvent: boolean
-  ): Integer;
-var
-  LastPos, i: Integer;
-  Ok: boolean;
+function TATTextFinder.GetRegexReplacement(const AFromText: UnicodeString): UnicodeString;
 begin
-  Result:= 0;
+  FRegex.ModifierI:= not OptCase;
+
+  try
+    FRegex.Expression:= StrFind;
+  except
+    if Assigned(FOnBadRegex) then
+      FOnBadRegex(Self);
+    exit;
+  end;
+
+  if StrReplace='' then
+    Result:= ''
+  else
+    Result:= FRegex.Replace(AFromText, SRegexReplaceEscapedTabs(StrReplace), true);
+end;
+
+
+function TATTextFinder.IsProgressNeeded(ANewPos: integer): boolean;
+begin
+  Result:= Abs(FPrevProgress-ANewPos) >= 2000;
+  if Result then
+    FPrevProgress:= ANewPos;
+end;
+
+
+procedure TATTextFinder.DoCollect_Usual(AList: TList; AFromPos: integer; AWithEvent, AWithConfirm: boolean);
+var
+  LastPos, N: Integer;
+  bOk, bContinue: boolean;
+  Res: TATFinderResult;
+begin
+  AList.Clear;
   if StrText='' then exit;
   if StrFind='' then exit;
   LastPos:= Length(StrText) - Length(StrFind) + 1;
 
-  for i:= FromPos to LastPos do
-    if IsMatchUsual(i) then
+  N:= AFromPos;
+  repeat
+    if Application.Terminated then exit;
+    if IsMatchUsual(N) then
     begin
-      Inc(Result);
+      if AWithConfirm then
+      begin
+        DoConfirmReplace(N, Length(StrFind), bOk, bContinue);
+        if not bContinue then exit;
+        if not bOk then begin Inc(N, Length(StrFind)); Continue; end;
+      end;
+
+      Res:= TATFinderResult.Create(N, Length(StrFind));
+      AList.Add(Res);
+
       if AWithEvent then
       begin
-        FMatchPos:= i;
-        FMatchLen:= Length(StrFind);
+        FMatchPos:= Res.NPos;
+        FMatchLen:= Res.NLen;
         DoOnFound;
       end;
 
+      if IsProgressNeeded(Res.NPos) then
       if Assigned(FOnProgress) then
       begin
-        Ok:= true;
-        FOnProgress(Self, i, LastPos, Ok);
-        if not Ok then Break;
+        bOk:= true;
+        FOnProgress(Self, Res.NPos, LastPos, bOk);
+        if not bOk then Break;
       end;
-    end;
+
+      Inc(N, Length(StrFind));
+    end
+    else
+      Inc(N);
+  until N>LastPos;
 end;
 
-function TATTextFinder.DoCountMatchesRegex(FromPos: integer; AWithEvent: boolean
-  ): integer;
+
+procedure TATTextFinder.DoCollect_Regex(AList: TList; AFromPos: integer; AWithEvent, AWithConfirm: boolean);
 var
-  Obj: TRegExpr;
-  Ok: boolean;
+  bOk, bContinue: boolean;
+  Res: TATFinderResult;
 begin
-  Result:= 0;
+  AList.Clear;
   if StrFind='' then exit;
   if StrText='' then exit;
 
-  Obj:= TRegExpr.Create;
+  FRegex.ModifierI:= not OptCase;
+
   try
-    Obj.ModifierS:= false;
-    Obj.ModifierM:= true;
-    Obj.ModifierI:= not OptCase;
+    FRegex.Expression:= StrFind;
+    FRegex.InputString:= StrText;
+    if not FRegex.ExecPos(AFromPos) then exit;
+  except
+    if Assigned(FOnBadRegex) then
+      FOnBadRegex(Self);
+    exit;
+  end;
 
-    try
-      Obj.Expression:= StrFind;
-      Obj.InputString:= StrText;
-      Ok:= Obj.ExecPos(FromPos);
-    except
-      if Assigned(FOnBadRegex) then
-        FOnBadRegex(Self);
-      Result:= 0;
-      Exit;
-    end;
+  bOk:= true;
+  if AWithConfirm then
+  begin
+    DoConfirmReplace(FRegex.MatchPos[0], FRegex.MatchLen[0], bOk, bContinue);
+    if not bContinue then exit;
+  end;
 
-    if Ok then
+  if bOk then
+  begin
+    Res:= TATFinderResult.Create(FRegex.MatchPos[0], FRegex.MatchLen[0]);
+    AList.Add(Res);
+
+    if AWithEvent then
     begin
-      Inc(Result);
-      if AWithEvent then
-      begin
-        FMatchPos:= Obj.MatchPos[0];
-        FMatchLen:= Obj.MatchLen[0];
-        DoOnFound;
-      end;
-
-      while Obj.ExecNext do
-      begin
-        Inc(Result);
-        if AWithEvent then
-        begin
-          FMatchPos:= Obj.MatchPos[0];
-          FMatchLen:= Obj.MatchLen[0];
-          DoOnFound;
-        end;
-
-        if Assigned(FOnProgress) then
-        begin
-          Ok:= true;
-          FOnProgress(Self, Obj.MatchPos[0], Length(StrText), Ok);
-          if not Ok then Break;
-        end;
-      end;
+      FMatchPos:= Res.NPos;
+      FMatchLen:= Res.NLen;
+      DoOnFound;
     end;
-  finally
-    FreeAndNil(Obj);
+  end;
+
+  while FRegex.ExecNext do
+  begin
+    if Application.Terminated then exit;
+    if AWithConfirm then
+    begin
+      DoConfirmReplace(FRegex.MatchPos[0], FRegex.MatchLen[0], bOk, bContinue);
+      if not bContinue then exit;
+      if not bOk then Continue;
+    end;
+
+    Res:= TATFinderResult.Create(FRegex.MatchPos[0], FRegex.MatchLen[0]);
+    AList.Add(Res);
+
+    if AWithEvent then
+    begin
+      FMatchPos:= Res.NPos;
+      FMatchLen:= Res.NLen;
+      DoOnFound;
+    end;
+
+    if IsProgressNeeded(Res.NPos) then
+    if Assigned(FOnProgress) then
+    begin
+      bOk:= true;
+      FOnProgress(Self, Res.NPos, Length(StrText), bOk);
+      if not bOk then exit;
+    end;
   end;
 end;
 
-procedure TATEditorFinder.UpdateBuffer;
+function TATTextFinder.DoCountAll(AWithEvent: boolean): integer;
 var
-  Lens: TList;
+  L: TList;
+begin
+  L:= TList.Create;
+  try
+    if OptRegex then
+      DoCollect_Regex(L, 1, AWithEvent, false)
+    else
+      DoCollect_Usual(L, 1, AWithEvent, false);
+    Result:= L.Count;
+  finally
+    FreeAndNil(L);
+  end;
+end;
+
+
+procedure TATEditorFinder.UpdateBuffer_FromText(const AText: atString);
+begin
+  FBuffer.SetupSlow(AText);
+  StrText:= AText;
+end;
+
+procedure TATEditorFinder.UpdateBuffer_FromStrings(AStrings: TATStrings);
+var
+  Lens: array of integer;
   i: integer;
 begin
-  Lens:= TList.Create;
-  try
-    Lens.Clear;
-    for i:= 0 to FEditor.Strings.Count-1 do
-      Lens.Add(pointer(Length(FEditor.Strings.Lines[i])));
-    FBuffer.Setup(FEditor.Strings.TextString, Lens, 1);
-  finally
-    FreeAndNil(Lens);
-  end;
-
+  SetLength(Lens, AStrings.Count);
+  for i:= 0 to Length(Lens)-1 do
+    Lens[i]:= AStrings.LinesLen[i];
+  FBuffer.Setup(AStrings.TextString_Unicode, Lens);
   StrText:= FBuffer.FText;
 end;
+
+procedure TATEditorFinder.UpdateBuffer(AUpdateFragmentsFirst: boolean);
+var
+  Fr: TATEditorFragment;
+begin
+  if AUpdateFragmentsFirst then
+  begin
+    if OptRegex then
+      OptBack:= false;
+    if OptInSelection then
+      OptFromCaret:= false;
+
+    DoFragmentsClear;
+    if OptInSelection then
+      DoFragmentsInit;
+  end;
+
+  Fr:= CurrentFragment;
+  if Assigned(Fr) then
+    UpdateBuffer_FromText(Fr.Text)
+  else
+    UpdateBuffer_FromStrings(FEditor.Strings);
+end;
+
 
 constructor TATEditorFinder.Create;
 begin
   inherited;
+
   FEditor:= nil;
   FBuffer:= TATStringBuffer.Create;
+  FSkipLen:= 0;
+  FFragments:= nil;
+  FFragmentIndex:= 0;
+  FReplacedAtEndOfText:= false;
+
   OptFromCaret:= false;
   OptConfirmReplace:= false;
+  OptInSelection:= false;
+  OptPutBackwardSelection:= false;
 end;
 
 destructor TATEditorFinder.Destroy;
 begin
   FEditor:= nil;
   FreeAndNil(FBuffer);
+  DoFragmentsClear;
   inherited;
+end;
+
+function TATEditorFinder.ConvertBufferPosToCaretPos(APos: integer): TPoint;
+var
+  Fr: TATEditorFragment;
+begin
+  Dec(APos); //was 1-based
+  Result:= FBuffer.StrToCaret(APos);
+
+  Fr:= CurrentFragment;
+  if Assigned(Fr) then
+  begin
+    if Result.Y=0 then
+      Inc(Result.X, Fr.X1);
+    Inc(Result.Y, Fr.Y1);
+  end;
+end;
+
+function TATEditorFinder.ConvertCaretPosToBufferPos(APos: TPoint): integer;
+var
+  Fr: TATEditorFragment;
+begin
+  Fr:= CurrentFragment;
+  if Assigned(Fr) then
+  begin
+    if (APos.Y<Fr.Y1) or ((APos.Y=Fr.Y1) and (APos.X<Fr.X1)) then
+      Exit(1);
+    if (APos.Y>Fr.Y2) then
+      Exit(FBuffer.TextLength);
+    if (APos.Y=Fr.Y1) then
+      Dec(APos.X, Fr.X1);
+    Dec(APos.Y, Fr.Y1);
+  end;
+
+  Result:= FBuffer.CaretToStr(APos);
+  Inc(Result); //was 0-based
 end;
 
 function TATEditorFinder.GetOffsetOfCaret: integer;
 var
-  Pos1, Pos2: TPoint;
+  Pnt: TPoint;
 begin
   with FEditor.Carets[0] do
   begin
-    Pos1.X:= PosX;
-    Pos1.Y:= PosY;
-    Pos2.X:= EndX;
-    Pos2.Y:= EndY;
+    Pnt.X:= PosX;
+    Pnt.Y:= PosY;
   end;
 
-  if Pos2.Y>=0 then
-    Result:= FBuffer.CaretToStr(Pos2)
-  else
-    Result:= FBuffer.CaretToStr(Pos1);
-  Inc(Result); //was 0-based
+  Result:= ConvertCaretPosToBufferPos(Pnt);
 
   //find-back must goto previous match
   if OptBack then
-    Dec(Result, Length(StrFind)*2);
+    Dec(Result, Length(StrFind));
 
   if Result<1 then
     Result:= 1;
 end;
 
-function TATEditorFinder.DoCountAll(AWithEvent: boolean): integer;
-begin
-  UpdateBuffer;
-  if OptRegex then
-    Result:= DoCountMatchesRegex(1, AWithEvent)
-  else
-    Result:= DoCountMatchesUsual(1, AWithEvent);
-end;
-
-function TATEditorFinder.DoReplaceAll: integer;
+function TATEditorFinder.DoAction_CountAll(AWithEvent: boolean): integer;
 var
-  Ok, Changed: boolean;
+  i: integer;
 begin
-  Result:= 0;
-  if DoFindOrReplace(false, true, true, Changed) then
+  UpdateBuffer(true);
+
+  if FFragments=nil then
+    Result:= DoCountAll(AWithEvent)
+  else
   begin
-    if Changed then Inc(Result);
-    while DoFindOrReplace(true, true, true, Changed) do
+    Result:= 0;
+    for i:= 0 to FFragments.Count-1 do
     begin
-      if Changed then Inc(Result);
-      if Assigned(FOnProgress) then
-      begin
-        Ok:= true;
-        FOnProgress(Self, FMatchPos, Length(StrText), Ok);
-        if not Ok then Break;
-      end;
+      CurrentFragmentIndex:= i;
+      Inc(Result, DoCountAll(AWithEvent));
     end;
+    CurrentFragmentIndex:= 0;
   end;
 end;
 
-procedure TATEditorFinder.DoReplaceTextInEditor(P1, P2: TPoint);
+function TATEditorFinder.DoAction_ReplaceAll: integer;
+var
+  i: integer;
+begin
+  Result:= 0;
+  if FEditor.ModeReadOnly then exit;
+  UpdateBuffer(true);
+
+  if FFragments=nil then
+    Result:= DoReplaceAll
+  else
+  begin
+    Result:= 0;
+    //fragments touched- do loop-downto,
+    //else its safe to do loop-to
+    if GetFragmentsTouched then
+      for i:= FFragments.Count-1 downto 0 do
+      begin
+        CurrentFragmentIndex:= i;
+        Inc(Result, DoReplaceAll);
+      end
+    else
+      for i:= 0 to FFragments.Count-1 do
+      begin
+        CurrentFragmentIndex:= i;
+        Inc(Result, DoReplaceAll);
+      end;
+    CurrentFragmentIndex:= 0;
+  end;
+end;
+
+
+function TATEditorFinder.DoReplaceAll: integer;
+var
+  L: TList;
+  Res: TATFinderResult;
+  Str: UnicodeString;
+  P1, P2: TPoint;
+  i: integer;
+begin
+  Result:= 0;
+
+  L:= TList.Create;
+  try
+    if OptRegex then
+      DoCollect_Regex(L, 1, false, OptConfirmReplace)
+    else
+      DoCollect_Usual(L, 1, false, OptConfirmReplace);
+
+    for i:= L.Count-1 downto 0 do
+    begin
+      Res:= TATFinderResult(L[i]);
+
+      if OptRegex then
+        Str:= GetRegexReplacement(FBuffer.SubString(Res.NPos, Res.NLen))
+      else
+        Str:= StrReplace;
+
+      P1:= ConvertBufferPosToCaretPos(Res.NPos);
+      P2:= ConvertBufferPosToCaretPos(Res.NPos+Res.NLen);
+      DoReplaceTextInEditor(P1, P2, Str, false, false);
+      Inc(Result);
+
+      if Application.Terminated then exit;
+      if FReplacedAtEndOfText then exit;
+
+      {
+      //gives progress rolling back
+      if Assigned(FOnProgress) then
+      begin
+        Ok:= true;
+        FOnProgress(Self, Res.NPos, Length(StrText), Ok);
+        if not Ok then exit;
+      end;
+      }
+    end;
+
+    FEditor.DoEventChange;
+  finally
+    FreeAndNil(L);
+  end;
+end;
+
+
+procedure TATEditorFinder.DoReplaceTextInEditor(APosBegin, APosEnd: TPoint;
+  const AReplacement: UnicodeString; AUpdateBuffer, AUpdateCaret: boolean);
 var
   Shift, PosAfter: TPoint;
-  Str: UnicodeString;
+  Strs: TATStrings;
 begin
-  if OptRegex then
-    Str:= StrReplacement
-  else
-    Str:= StrReplace;
+  //replace in editor
+  Strs:= FEditor.Strings;
+  FReplacedAtEndOfText:=
+    (APosEnd.Y>Strs.Count-1) or
+    ((APosEnd.Y=Strs.Count-1) and (APosEnd.X=Strs.LinesLen[APosEnd.Y]));
 
-  FEditor.Strings.TextDeleteRange(P1.X, P1.Y, P2.X, P2.Y, Shift, PosAfter);
-  FEditor.Strings.TextInsert(P1.X, P1.Y, Str, false, Shift, PosAfter);
+  Strs.TextReplaceRange(APosBegin.X, APosBegin.Y, APosEnd.X, APosEnd.Y, AReplacement, Shift, PosAfter);
+
+  if AUpdateBuffer then
+  begin
+    FEditor.DoEventChange;
+    UpdateBuffer_FromStrings(Strs);
+  end;
+
+  if AUpdateCaret then
+    if not OptBack then
+    begin
+      //correct caret pos
+      //e.g. replace "dddddd" to "--": move lefter
+      //e.g. replace "ab" to "cd cd": move righter
+      FEditor.DoCaretSingle(PosAfter.X, PosAfter.Y);
+    end;
 end;
 
 function TATEditorFinder.GetOffsetStartPos: integer;
@@ -396,137 +720,229 @@ begin
     Result:= 1;
 end;
 
-function TATEditorFinder.DoFindOrReplace(ANext, AReplace, AForMany: boolean;
-  out AChanged: boolean): boolean;
+procedure TATEditorFinder.DoFixCaretSelectionDirection;
 var
-  P1, P2: TPoint;
-  Cfm, CfmCont: boolean;
+  Caret: TATCaretItem;
+  X1, Y1, X2, Y2: integer;
+  bSel: boolean;
+begin
+  if FEditor.Carets.Count=0 then exit;
+  Caret:= FEditor.Carets[0];
+  Caret.GetRange(X1, Y1, X2, Y2, bSel);
+  if not bSel then exit;
+
+  if OptBack then
+  begin
+    Caret.PosX:= X1;
+    Caret.PosY:= Y1;
+    Caret.EndX:= X2;
+    Caret.EndY:= Y2;
+  end
+  else
+  begin
+    Caret.PosX:= X2;
+    Caret.PosY:= Y2;
+    Caret.EndX:= X1;
+    Caret.EndY:= Y1;
+  end;
+end;
+
+function TATEditorFinder.DoAction_FindOrReplace(ANext, AReplace, AForMany: boolean;
+  out AChanged: boolean): boolean;
 begin
   Result:= false;
   AChanged:= false;
 
   if not Assigned(FEditor) then
-  begin
-    Showmessage('Finder.Editor not set');
-    Exit
-  end;
+    raise Exception.Create('Finder.Editor not set');
   if StrFind='' then
-  begin
-    Showmessage('Finder.StrFind not set');
-    Exit
-  end;
+    raise Exception.Create('Finder.StrFind is empty');
   if FEditor.Carets.Count=0 then
-  begin
-    Showmessage('Editor has not caret');
-    Exit
-  end;
-
+    raise Exception.Create('Finder.Editor.Carets is empty');
   if AReplace and FEditor.ModeReadOnly then exit;
-  if OptRegex then OptBack:= false;
 
-  Result:= FindMatch(ANext, FSkipLen, GetOffsetStartPos);
+  UpdateBuffer(true);
+  DoFixCaretSelectionDirection;
+
+  Result:= DoFindOrReplace_Inner(ANext, AReplace, AForMany, AChanged);
+end;
+
+function TATEditorFinder.DoFindOrReplace_Inner(ANext, AReplace, AForMany: boolean;
+  out AChanged: boolean): boolean;
+var
+  NStartPos: integer;
+begin
+  Result:= false;
+  AChanged:= false;
+  FReplacedAtEndOfText:= false;
+
+  NStartPos:= GetOffsetStartPos;
+  Result:= DoFindOrReplace_Internal(ANext, AReplace, AForMany, AChanged, NStartPos);
+
+  if (not Result) and (OptWrapped and not OptInSelection) then
+    if (not OptBack and (NStartPos>1)) or
+       (OptBack and (NStartPos<Length(StrText))) then
+    begin
+      //we must have AReplace=false
+      //(if not, need more actions: don't allow to replace in wrapped part if too big pos)
+      //
+      if DoFindOrReplace_Internal(ANext, false, AForMany, AChanged,
+        IfThen(not OptBack, 1, Length(StrText))) then
+      begin
+        Result:= (not OptBack and (MatchPos<NStartPos)) or
+                 (OptBack and (MatchPos>NStartPos));
+        if not Result then
+        begin
+          FMatchPos:= -1;
+          FMatchLen:= 0;
+        end;
+      end;
+    end;
+end;
+
+
+function TATEditorFinder.DoFindOrReplace_Internal(ANext, AReplace, AForMany: boolean;
+  out AChanged: boolean; AStartPos: integer): boolean;
+  //function usually called 1 time in outer func,
+  //or 1-2 times if OptWrap=true
+var
+  P1, P2: TPoint;
+  ConfirmThis, ConfirmContinue: boolean;
+  SNew: UnicodeString;
+begin
+  AChanged:= false;
+  Result:= FindMatch(ANext, FSkipLen, AStartPos);
   FSkipLen:= FMatchLen;
 
   if Result then
   begin
-    P1:= FBuffer.StrToCaret(MatchPos-1);
-    P2:= FBuffer.StrToCaret(MatchPos-1+MatchLen);
+    P1:= ConvertBufferPosToCaretPos(MatchPos);
+    P2:= ConvertBufferPosToCaretPos(MatchPos+MatchLen);
     FEditor.DoCaretSingle(P1.X, P1.Y);
 
     if AReplace then
     begin
-      Cfm:= true;
-      CfmCont:= true;
+      ConfirmThis:= true;
+      ConfirmContinue:= true;
 
       if OptConfirmReplace then
         if Assigned(FOnConfirmReplace) then
-          FOnConfirmReplace(Self, P1, P2, AForMany, Cfm, CfmCont);
+          FOnConfirmReplace(Self, P1, P2, AForMany, ConfirmThis, ConfirmContinue);
 
-      if not CfmCont then
+      if not ConfirmContinue then
+        Exit(false);
+
+      if ConfirmThis then
       begin
-        Result:= false;
-        Exit;
-      end;
-
-      if Cfm then
-      begin
-        DoReplaceTextInEditor(P1, P2);
-        UpdateBuffer;
-
         if OptRegex then
-          FSkipLen:= Length(StrReplacement)
+          SNew:= GetRegexReplacement(FBuffer.SubString(MatchPos, MatchLen))
         else
-          FSkipLen:= Length(StrReplace);
+          SNew:= StrReplace;
+
+        DoReplaceTextInEditor(P1, P2, SNew, true, true);
+
+        FSkipLen:= Length(SNew);
+        if OptRegex then
+          Inc(FSkipLen, GetRegexSkipIncrement);
+
         AChanged:= true;
       end;
     end;
 
-    with FEditor.Carets[0] do
-    begin
-      EndX:= -1;
-      EndY:= -1;
-      if not AReplace then
-      begin
-        EndX:= P2.X;
-        EndY:= P2.Y;
-      end;
-    end;
+    if AReplace then
+      //don't select
+      FEditor.DoCaretSingle(P1.X, P1.Y)
+    else
+    if OptBack and OptPutBackwardSelection then
+      FEditor.DoCaretSingle(P1.X, P1.Y, P2.X, P2.Y)
+    else
+      FEditor.DoCaretSingle(P2.X, P2.Y, P1.X, P1.Y);
   end;
 end;
 
-function TATEditorFinder.DoReplaceSelectedMatch: boolean;
+function TATEditorFinder.IsSelectionStartsAtFoundMatch: boolean;
 var
   Caret: TATCaretItem;
-  P1, P2: TPoint;
   X1, Y1, X2, Y2: integer;
-  NPos: integer;
+  PosOfBegin, PosOfEnd: integer;
   bSel: boolean;
 begin
   Result:= false;
   if FEditor.Carets.Count=0 then exit;
   Caret:= FEditor.Carets[0];
+  Caret.GetRange(X1, Y1, X2, Y2, bSel);
+  if not bSel then exit;
 
+  PosOfBegin:= ConvertCaretPosToBufferPos(Point(X1, Y1));
+  PosOfEnd:= ConvertCaretPosToBufferPos(Point(X2, Y2));
+
+  //allow to replace, also if selection=Strfind
+  Result:=
+    ((PosOfBegin=FMatchPos) and (PosOfEnd=FMatchPos+FMatchLen)) or
+    ((StrFind<>'') and (FEditor.TextSelected=StrFind));
+end;
+
+function TATEditorFinder.DoAction_ReplaceSelected: boolean;
+var
+  Caret: TATCaretItem;
+  P1, P2: TPoint;
+  X1, Y1, X2, Y2: integer;
+  bSel: boolean;
+  SSelText, SNew: UnicodeString;
+begin
+  Result:= false;
+  if FEditor.ModeReadOnly then exit;
+  FReplacedAtEndOfText:= false;
+  UpdateBuffer(true);
+
+  if not IsSelectionStartsAtFoundMatch then
+  begin
+    //do Find-next (from caret)
+    DoFindOrReplace_Inner(false, false, false, bSel);
+    exit;
+  end;
+
+  Caret:= FEditor.Carets[0];
   Caret.GetRange(X1, Y1, X2, Y2, bSel);
   if not bSel then exit;
   P1:= Point(X1, Y1);
   P2:= Point(X2, Y2);
 
-  NPos:= FBuffer.CaretToStr(P1)+1;
-  if NPos<>FMatchPos then
-  begin
-    Showmessage('Please call "Replace" for found match, which is selected');
-    exit;
-  end;
+  SSelText:= FEditor.TextSelected;
 
   Caret.EndX:= -1;
   Caret.EndY:= -1;
 
-  DoReplaceTextInEditor(P1, P2);
-  UpdateBuffer;
-
   if OptRegex then
-    FSkipLen:= Length(StrReplacement)
+    SNew:= GetRegexReplacement(SSelText)
   else
-    FSkipLen:= Length(StrReplace);
+    SNew:= StrReplace;
+
+  DoReplaceTextInEditor(P1, P2, SNew, true, true);
+  Result:= true;
 end;
 
 
 constructor TATTextFinder.Create;
 begin
-  StrFind:= '';
   StrText:= '';
-  StrReplace:= '';
-  StrReplacement:= '';
+  FStrFind:= '';
+  FStrReplace:= '';
   OptBack:= false;
   OptCase:= false;
   OptWords:= false;
   OptRegex:= false;
-  FMatchPos:= 0;
+  FMatchPos:= -1;
   FMatchLen:= 0;
+
+  FRegex:= TRegExpr.Create;
+  FRegex.ModifierS:= false; //don't catch all text by .*
+  FRegex.ModifierM:= true; //allow to work with ^$
 end;
 
 destructor TATTextFinder.Destroy;
 begin
+  FreeAndNil(FRegex);
   inherited Destroy;
 end;
 
@@ -545,7 +961,7 @@ begin
       FromPos:= AStartPos
     else
       FromPos:= FMatchPos+ASkipLen;
-    Result:= DoFindMatchRegex(FromPos, FMatchPos, FMatchLen);
+    Result:= DoFind_Regex(FromPos);
     if Result then DoOnFound;
     Exit
   end;
@@ -557,7 +973,7 @@ begin
   end
   else
   begin
-    if FMatchPos=0 then
+    if FMatchPos<=0 then
       FMatchPos:= 1;
     if not OptBack then
       Inc(FMatchPos, ASkipLen)
@@ -565,13 +981,8 @@ begin
       Dec(FMatchPos, ASkipLen);
   end;
 
-  FMatchPos:= DoFindMatchUsual(FMatchPos);
-  Result:= FMatchPos>0;
-  if Result then
-  begin
-    FMatchLen:= Length(StrFind);
-    DoOnFound;
-  end;
+  Result:= DoFind_Usual(FMatchPos);
+  if Result then DoOnFound;
 end;
 
 procedure TATEditorFinder.DoOnFound;
@@ -580,9 +991,128 @@ var
 begin
   if Assigned(FOnFound) then
   begin
-    P1:= FBuffer.StrToCaret(MatchPos-1);
-    P2:= FBuffer.StrToCaret(MatchPos-1+MatchLen);
+    P1:= ConvertBufferPosToCaretPos(MatchPos);
+    P2:= ConvertBufferPosToCaretPos(MatchPos+MatchLen);
     FOnFound(Self, P1, P2);
+  end;
+end;
+
+function TATEditorFinder.GetRegexSkipIncrement: integer;
+//this is to solve loop-forever if regex "$" replaced-all to eg "==="
+//(need to skip one more char)
+begin
+  Result:= 0;
+  if StrFind='$' then Result:= 1;
+end;
+
+
+procedure TATEditorFinder.DoFragmentsInit;
+var
+  Caret: TATCaretItem;
+  X1, Y1, X2, Y2: integer;
+  Fr: TATEditorFragment;
+  bSel: boolean;
+  i: integer;
+begin
+  DoFragmentsClear;
+  if FEditor=nil then exit;
+  FFragments:= TList.Create;
+
+  for i:= 0 to FEditor.Carets.Count-1 do
+  begin
+    Caret:= FEditor.Carets[i];
+    Caret.GetRange(X1, Y1, X2, Y2, bSel);
+    if not bSel then Continue;
+    Fr:= TATEditorFragment.Create;
+    Fr.X1:= X1;
+    Fr.X2:= X2;
+    Fr.Y1:= Y1;
+    Fr.Y2:= Y2;
+    Fr.Text:= FEditor.Strings.TextSubstring(X1, Y1, X2, Y2);
+    FFragments.Add(Fr);
+  end;
+
+  //debug
+  //DoFragmentsShow;
+end;
+
+procedure TATEditorFinder.DoFragmentsShow;
+var
+  Fr: TATEditorFragment;
+  S: string;
+  i: integer;
+begin
+  S:= '';
+  for i:= 0 to FFragments.Count-1 do
+  begin
+    Fr:= TATEditorFragment(FFragments[i]);
+    S:= S+ Utf8Encode(Fr.Text) +
+      Format(#10'--[%d:%d .. %d:%d]-----'#10, [Fr.Y1, Fr.X1, Fr.Y2, Fr.X2]);
+  end;
+  ShowMessage(S);
+end;
+
+procedure TATEditorFinder.DoFragmentsClear;
+var
+  i: integer;
+begin
+  if Assigned(FFragments) then
+  begin
+    for i:= FFragments.Count-1 downto 0 do
+      TObject(FFragments[i]).Free;
+    FFragments.Clear;
+    FreeAndNil(FFragments);
+  end;
+end;
+
+function TATEditorFinder.CurrentFragment: TATEditorFragment;
+begin
+  Result:= nil;
+  if OptInSelection then
+    if Assigned(FFragments) then
+      if (FFragmentIndex>=0) and (FFragmentIndex<FFragments.Count) then
+        Result:= TATEditorFragment(FFragments[FFragmentIndex]);
+end;
+
+procedure TATEditorFinder.SetFragmentIndex(AValue: integer);
+begin
+  if FFragmentIndex=AValue then Exit;
+  if (AValue>=0) and (AValue<FFragments.Count) then
+  begin
+    FFragmentIndex:= AValue;
+    StrText:= TATEditorFragment(FFragments[FFragmentIndex]).Text;
+    FBuffer.SetupSlow(StrText);
+  end;
+end;
+
+function TATEditorFinder.GetFragmentsTouched: boolean;
+var
+  Fr1, Fr2: TATEditorFragment;
+  i: integer;
+begin
+  Result:= false;
+  for i:= 0 to FFragments.Count-2 do
+  begin
+    Fr1:= TATEditorFragment(FFragments[i]);
+    Fr2:= TATEditorFragment(FFragments[i+1]);
+    if Fr1.Y2=Fr2.Y1 then Exit(true);
+  end;
+end;
+
+procedure TATEditorFinder.DoConfirmReplace(APos, ALen: integer;
+  var AConfirmThis, AConfirmContinue: boolean);
+var
+  P1, P2: TPoint;
+begin
+  AConfirmThis:= true;
+  AConfirmContinue:= true;
+
+  if Assigned(FOnConfirmReplace) then
+  begin
+    P1:= ConvertBufferPosToCaretPos(APos);
+    P2:= ConvertBufferPosToCaretPos(APos+ALen);
+    FEditor.DoCaretSingle(P1.X, P1.Y);
+    FOnConfirmReplace(Self, P1, P2, true, AConfirmThis, AConfirmContinue);
   end;
 end;
 

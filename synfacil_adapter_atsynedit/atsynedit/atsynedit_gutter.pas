@@ -1,3 +1,7 @@
+{
+Copyright (C) Alexey Torgashin, uvviewsoft.com
+License: MPL 2.0 or LGPL
+}
 unit ATSynEdit_Gutter;
 
 {$mode objfpc}{$H+}
@@ -15,11 +19,15 @@ type
   end;
 
 type
+
+  { TATGutter }
+
   TATGutter = class
   private
     FList: TList;
     function GetItem(N: Integer): TATGutterItem;
   public
+    GutterLeft: integer;
     constructor Create; virtual;
     destructor Destroy; override;
     function IsIndexValid(N: integer): boolean;
@@ -101,7 +109,7 @@ end;
 function TATGutter.Width: integer;
 begin
   if Count>0 then
-    Result:= Items[Count-1].Right
+    Result:= Items[Count-1].Right - GutterLeft
   else
     Result:= 0;
 end;
@@ -116,7 +124,7 @@ begin
       if i>0 then
         Left:= Items[i-1].Right
       else
-        Left:= 0;
+        Left:= GutterLeft;
       Right:= Left;
       if Visible then
         Inc(Right, Size);

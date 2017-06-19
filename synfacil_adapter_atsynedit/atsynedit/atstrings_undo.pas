@@ -1,3 +1,7 @@
+{
+Copyright (C) Alexey Torgashin, uvviewsoft.com
+License: MPL 2.0 or LGPL
+}
 unit ATStrings_Undo;
 
 {$mode objfpc}{$H+}
@@ -5,7 +9,7 @@ unit ATStrings_Undo;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes, SysUtils, StrUtils,
   ATStringProc;
 
 type
@@ -13,7 +17,17 @@ type
     cEditActionChange,
     cEditActionChangeEol,
     cEditActionInsert,
-    cEditActionDelete
+    cEditActionDelete,
+    cEditActionClearModified
+    );
+
+const
+  StrEditActionDescriptions: array[TATEditAction] of string = (
+    'change',
+    'change-eol',
+    'insert',
+    'delete',
+    'clear-mod'
     );
 
 type
@@ -25,9 +39,10 @@ type
     ItemText: atString;
     ItemEnd: TATLineEnds;
     ItemCarets: TATPointArray;
-    GroupMark: boolean;
+    ItemSoftMark: boolean;
+    ItemHardMark: boolean;
     constructor Create(AAction: TATEditAction; AIndex: integer;
-      const AText: atString; AEnd: TATLineEnds; AGroupMark: boolean;
+      const AText: atString; AEnd: TATLineEnds; ASoftMark, AHardMark: boolean;
       const ACarets: TATPointArray); virtual;
   end;
 
@@ -38,8 +53,9 @@ type
   private
     FList: TList;
     FMaxCount: integer;
-    FGroupMark: boolean;
     FLocked: boolean;
+    FSoftMark: boolean;
+    FHardMark: boolean;
     function GetItem(N: integer): TATUndoItem;
   public
     constructor Create; virtual;
@@ -50,14 +66,17 @@ type
     function Last: TATUndoItem;
     property Items[N: integer]: TATUndoItem read GetItem; default;
     property MaxCount: integer read FMaxCount write FMaxCount;
-    property GroupMark: boolean read FGroupMark write FGroupMark;
+    property SoftMark: boolean read FSoftMark write FSoftMark;
+    property HardMark: boolean read FHardMark write FHardMark;
     property Locked: boolean read FLocked write FLocked;
     procedure Clear;
     procedure Delete(N: integer);
     procedure DeleteLast;
+    procedure DeleteUnmodifiedMarks;
     procedure Add(AAction: TATEditAction; AIndex: integer; const AText: atString;
       AEnd: TATLineEnds; const ACarets: TATPointArray);
-    procedure DebugShow;
+    procedure AddUnmodifiedMark;
+    function DebugText: string;
   end;
 
 
@@ -69,7 +88,7 @@ uses
 { TATUndoItem }
 
 constructor TATUndoItem.Create(AAction: TATEditAction; AIndex: integer;
-  const AText: atString; AEnd: TATLineEnds; AGroupMark: boolean;
+  const AText: atString; AEnd: TATLineEnds; ASoftMark, AHardMark: boolean;
   const ACarets: TATPointArray);
 var
   i: integer;
@@ -78,7 +97,8 @@ begin
   ItemIndex:= AIndex;
   ItemText:= AText;
   ItemEnd:= AEnd;
-  GroupMark:= AGroupMark;
+  ItemSoftMark:= ASoftMark;
+  ItemHardMark:= AHardMark;
 
   SetLength(ItemCarets, Length(ACarets));
   for i:= 0 to High(ACarets) do
@@ -101,7 +121,8 @@ constructor TATUndoList.Create;
 begin
   FList:= TList.Create;
   FMaxCount:= 5000;
-  FGroupMark:= false;
+  FSoftMark:= false;
+  FHardMark:= false;
   FLocked:= false;
 end;
 
@@ -189,42 +210,70 @@ begin
       end;
   end;
 
-  Item:= TATUndoItem.Create(AAction, AIndex, AText, AEnd, FGroupMark, ACarets);
+  Item:= TATUndoItem.Create(AAction, AIndex, AText, AEnd, FSoftMark, FHardMark, ACarets);
   FList.Add(Item);
-  FGroupMark:= false;
+  FSoftMark:= false;
 
   while Count>MaxCount do
     Delete(0);
 end;
 
-procedure TATUndoList.DebugShow;
+
+procedure TATUndoList.AddUnmodifiedMark;
+var
+  Item: TATUndoItem;
+  Carets: TATPointArray;
+begin
+  //if FLocked then exit; //on load file called with Locked=true
+
+  //don't do two marks
+  Item:= Last;
+  if Assigned(Item) then
+    if Item.ItemAction=cEditActionClearModified then exit;
+
+  SetLength(Carets, 0);
+  Item:= TATUndoItem.Create(cEditActionClearModified, 0, '', cEndNone, false, false, Carets);
+  FList.Add(Item);
+end;
+
+procedure TATUndoList.DeleteUnmodifiedMarks;
 var
   i: integer;
-  s, sa, s1: string;
-  Item: TATUndoItem;
 begin
-  s:= '';
-  for i:= 0 to Min(40, Count)-1 do
+  for i:= Count-1 downto 0 do
+    if Items[i].ItemAction=cEditActionClearModified then
+      Delete(i);
+end;
+
+function TATUndoList.DebugText: string;
+var
+  s_action, s_text: string;
+  i, n_carets: integer;
+  Item: TATUndoItem;
+const
+  MaxItems=40;
+  MaxLen=30;
+begin
+  Result:= '';
+  for i:= 0 to Min(MaxItems, Count)-1 do
   begin
     Item:= Items[i];
-    case Item.ItemAction of
-      cEditActionChange: sa:= 'ch';
-      cEditActionChangeEol: sa:= 'eol';
-      cEditActionDelete: sa:= 'del';
-      cEditActionInsert: sa:= 'ins';
-    end;
-    if Item.ItemEnd=cEndNone then
-      s1:= '-' else s1:= '';
-    s:= s+Format('%s, text "%s", %s, index %d', [
-      sa, UTF8Encode(Item.ItemText), s1, Item.ItemIndex
-      ])+#13;
+    s_action:= StrEditActionDescriptions[Item.ItemAction];
+    s_text:= UTF8Encode(Item.ItemText);
+    if Length(s_text)>MaxLen then
+      s_text:= Copy(s_text, 1, MaxLen)+'...';
+    n_carets:= Length(Item.ItemCarets) div 2;
+    Result:= Result+Format('actn "%s", text "%s", crts %d'#10, [s_action, s_text, n_carets]);
   end;
-  ShowMessage('Undo list:'#13+s);
 end;
+
 
 function TATUndoList.Last: TATUndoItem;
 begin
-  Result:= Items[Count-1];
+  if Count>0 then
+    Result:= Items[Count-1]
+  else
+    Result:= nil;
 end;
 
 end.

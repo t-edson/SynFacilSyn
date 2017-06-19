@@ -1,3 +1,7 @@
+{
+Copyright (C) Alexey Torgashin, uvviewsoft.com
+License: MPL 2.0 or LGPL
+}
 unit ATStringProc;
 
 {$mode objfpc}{$H+}
@@ -14,9 +18,14 @@ type
   PatChar = PWideChar;
 
 type
-  TATIntArray = array of Longint;
-  TATRealArray = array of real;
+  TATIntArray = array of integer;
   TATPointArray = array of TPoint;
+
+  TATLineOffsetsInfo = record
+    OffsetPercent: array of integer; //word is too small
+    Ligatures: atString;
+  end;
+
 
 function SCharUpper(ch: atChar): atChar;
 function SCharLower(ch: atChar): atChar;
@@ -28,14 +37,15 @@ function SCaseSentence(const S, SWordChars: atString): atString;
 type
   TATLineEnds = (cEndNone, cEndWin, cEndUnix, cEndMac);
 const
-  cLineEndStrings: array[TATLineEnds] of atString = ('', #13#10, #10, #13);
+  cLineEndStrings: array[TATLineEnds] of string = ('', #13#10, #10, #13);
   cLineEndNiceNames: array[TATLineEnds] of string = ('', 'win', 'un', 'mac');
 
 const
-  cMaxTabPositionToExpand = 500; //no sense to expand too far tabs
-  cCharScaleFullwidth = 1.7; //width of CJK chars
-  cCharScaleHex = 6.0; //width of hex show: "<NNNN>"
-  cMinWordWrapOffset = 3;
+  cMaxTabPositionToExpand: integer = 500; //no sense to expand too far tabs
+  cCharScaleFullwidth_Default: word = 170; //width of CJK chars
+  cCharScaleHex_Small: word = 300; //width of hex show: "xNN"
+  cCharScaleHex_Big: word = 500; //width of hex show: "xNNNN"
+  cMinWordWrapOffset: integer = 3;
 
 var
   OptHexCharsDefault: UnicodeString = ''; //show these chars as "<NNNN>"
@@ -49,29 +59,43 @@ function IsCharSpace(ch: atChar): boolean;
 function IsCharAsciiControl(ch: atChar): boolean;
 function IsCharAccent(ch: atChar): boolean;
 function IsCharHex(ch: atChar): boolean;
+function IsStringWithUnicodeChars(const S: atString): boolean;
 
-function SBegin(const S, SubStr: atString): boolean;
+function SBeginsWith(const S, SubStr: atString): boolean;
+function SBeginsWith(const S, SubStr: string): boolean;
+function SEndsWith(const S, SubStr: atString): boolean;
+function SEndsWith(const S, SubStr: string): boolean;
+function SEndsWithEol(const S: string): boolean;
+function SEndsWithEol(const S: atString): boolean;
+
 function STrimRight(const S: atString): atString;
 function SGetIndentChars(const S: atString): integer;
 function SGetIndentExpanded(const S: atString; ATabSize: integer): integer;
 function SGetNonSpaceLength(const S: atString): integer;
+
 function STabsToSpaces(const S: atString; ATabSize: integer): atString;
 function SSpacesToTabs(const S: atString; ATabSize: integer): atString;
+function SCharPosToColumnPos(const S: atString; APos, ATabSize: integer): integer;
+function SColumnPosToCharPos(const S: atString; AColumn, ATabSize: integer): integer;
 
 type
   TATCommentAction = (
-    cCommentAdd,
-    cCommentAddIfNone,
+    cCommentAdd_AtNonspace,
+    cCommentAdd_AtNonespace_IfNone,
+    cCommentAdd_AtStart,
+    cCommentAdd_AtStart_IfNone,
     cCommentRemove,
-    cCommentToggle
+    cCommentToggle_AtNonspace,
+    cCommentToggle_AtStart
     );
+
 function SCommentLineAction(L: TStringList; const AComment: atString; Act: TATCommentAction): boolean;
 
 function SRemoveNewlineChars(const S: atString): atString;
 function SRemoveHexChars(const S: atString): atString;
-function SRemoveAsciiControlChars(const S: atString): atString;
+function SRemoveAsciiControlChars(const S: atString; AReplaceChar: Widechar): atString;
 
-procedure SCalcCharOffsets(const S: atString; var AList: TATRealArray;
+procedure SCalcCharOffsets(const S: atString; var AInfo: TATLineOffsetsInfo;
   ATabSize: integer; ACharsSkipped: integer = 0);
 function SFindWordWrapOffset(const S: atString; AColumns, ATabSize: integer;
   const AWordChars: atString; AWrapIndented: boolean): integer;
@@ -80,14 +104,15 @@ function SFindClickedPosition(const Str: atString;
   AAllowVirtualPos: boolean;
   out AEndOfLinePos: boolean): integer;
 procedure SFindOutputSkipOffset(const S: atString; ATabSize, AScrollPos: integer;
-  out ACharsSkipped: integer; out ASpacesSkipped: real);
+  out ACharsSkipped: integer; out ASpacesSkipped: integer);
 
 function SIndentUnindent(const Str: atString; ARight: boolean;
   AIndentSize, ATabSize: integer): atString;
 function SGetItem(var S: string; const sep: Char = ','): string;
+function SGetItemAtEnd(var S: string; const sep: Char = ','): string;
 function SSwapEndian(const S: UnicodeString): UnicodeString;
 function SWithBreaks(const S: atString): boolean;
-function SFindFuzzyPositions(SText, SFind: string): TATIntArray;
+procedure SAddStringToHistory(const S: string; List: TStrings; MaxItems: integer);
 
 function BoolToPlusMinusOne(b: boolean): integer;
 procedure TrimStringList(L: TStringList);
@@ -95,6 +120,19 @@ procedure TrimStringList(L: TStringList);
 type
   TATDecodeRec = record SFrom, STo: UnicodeString; end;
 function SDecodeRecords(const S: UnicodeString; const Decode: array of TATDecodeRec): UnicodeString;
+
+procedure SReplaceAll(var s: string; const SFrom, STo: string);
+procedure SReplaceAllPercentChars(var S: string);
+procedure SReplaceAllTabsToOneSpace(var S: string);
+procedure SDeleteFrom(var s: string; const SFrom: string);
+procedure SDeleteFrom(var s: atString; const SFrom: atString);
+procedure SDeleteFromEol(var s: string);
+procedure SDeleteFromEol(var s: atString);
+
+var
+  OptUnprintedReplaceSpec: boolean = false;
+  OptUnprintedReplaceSpecToCode: integer = 164; //char 164 is small circle
+
 
 implementation
 
@@ -140,7 +178,7 @@ end;
 
 function IsCharAsciiControl(ch: atChar): boolean;
 begin
-  Result:= (ch<>#9) and (AnsiChar(ch)<' ');
+  Result:= (ch<>#9) and (Ord(ch)<$20);
 end;
 
 function IsCharHex(ch: atChar): boolean;
@@ -148,16 +186,28 @@ begin
   Result:= Pos(ch, OptHexCharsDefault+OptHexCharsUser)>0;
 end;
 
+function IsStringWithUnicodeChars(const S: atString): boolean;
+var
+  i, N: integer;
+begin
+  Result:= false;
+  for i:= 1 to Length(S) do
+  begin
+    N:= Ord(S[i]);
+    if (N<32) or (N>126) then exit(true);
+  end;
+end;
 
-procedure DoDebugOffsets(const List: TATRealArray);
+
+procedure DoDebugOffsets(const AList: TATLineOffsetsInfo);
 var
   i: integer;
   s: string;
 begin
   s:= '';
-  for i:= Low(List) to High(List) do
-    s:= s+FloatToStr(List[i])+' ';
-  showmessage('Offsets'#13+s);
+  for i:= Low(AList.OffsetPercent) to High(AList.OffsetPercent) do
+    s:= s+IntToStr(AList.OffsetPercent[i])+'% ';
+  ShowMessage('Offsets'#10+s);
 end;
 
 function SFindWordWrapOffset(const S: atString; AColumns, ATabSize: integer;
@@ -172,17 +222,16 @@ function SFindWordWrapOffset(const S: atString; AColumns, ATabSize: integer;
   //
 var
   N, NMin, NAvg: integer;
-  List: TATRealArray;
+  Offsets: TATLineOffsetsInfo;
 begin
   if S='' then
     begin Result:= 0; Exit end;
   if AColumns<cMinWordWrapOffset then
     begin Result:= AColumns; Exit end;
 
-  SetLength(List, Length(S));
-  SCalcCharOffsets(S, List, ATabSize);
+  SCalcCharOffsets(S, Offsets, ATabSize);
 
-  if List[High(List)]<=AColumns then
+  if Offsets.OffsetPercent[High(Offsets.OffsetPercent)]<=AColumns*100 then
   begin
     Result:= Length(S);
     Exit
@@ -190,7 +239,7 @@ begin
 
   //NAvg is average wrap offset, we use it if no correct offset found
   N:= Length(S)-1;
-  while (N>0) and (List[N]>AColumns+1) do Dec(N);
+  while (N>0) and (Offsets.OffsetPercent[N]>(AColumns+1)*100) do Dec(N);
   NAvg:= N;
   if NAvg<cMinWordWrapOffset then
     begin Result:= cMinWordWrapOffset; Exit end;
@@ -323,21 +372,18 @@ begin
   end;
 end;
 
-{$ifdef test_wide_char}
-const
-  cScaleTest = 1.9; //debug, for test code, commented
-{$endif}
 
-procedure SCalcCharOffsets(const S: atString; var AList: TATRealArray;
+procedure SCalcCharOffsets(const S: atString;
+  var AInfo: TATLineOffsetsInfo;
   ATabSize: integer; ACharsSkipped: integer);
 var
   NSize, NTabSize, NCharsSkipped: integer;
-  Scale: real;
+  NScalePercents: integer;
   i: integer;
 begin
+  SetLength(AInfo.OffsetPercent, Length(S));
+  AInfo.Ligatures:= '';
   if S='' then Exit;
-  if Length(AList)<>Length(S) then
-    raise Exception.Create('Bad list len: CalcCharOffsets');
 
   NCharsSkipped:= ACharsSkipped;
 
@@ -345,18 +391,26 @@ begin
   begin
     Inc(NCharsSkipped);
 
-    Scale:= 1.0;
+    NScalePercents:= 100;
+    if OptUnprintedReplaceSpec and IsCharAsciiControl(S[i]) then
+      NScalePercents:= 100
+    else
     if IsCharHex(S[i]) then
-      Scale:= cCharScaleHex
+    begin
+      if Ord(S[i])<$100 then
+        NScalePercents:= cCharScaleHex_Small
+      else
+        NScalePercents:= cCharScaleHex_Big;
+    end
     else
     if IsCharFullWidth(S[i]) then
-      Scale:= cCharScaleFullwidth;
+      NScalePercents:= cCharScaleFullwidth_Default;
 
     {$ifdef test_wide_char}
     if IsSpaceChar(S[i]) then
-      Scale:= 1
+      NScalePercents:= 100
     else
-      Scale:= cScaleTest;
+      NScalePercents:= 190;
     {$endif}
 
     if S[i]<>#9 then
@@ -372,9 +426,9 @@ begin
       NSize:= 0;
 
     if i=1 then
-      AList[i-1]:= NSize*Scale
+      AInfo.OffsetPercent[i-1]:= NSize*NScalePercents
     else
-      AList[i-1]:= AList[i-2]+NSize*Scale;
+      AInfo.OffsetPercent[i-1]:= AInfo.OffsetPercent[i-2]+NSize*NScalePercents;
   end;
 end;
 
@@ -383,7 +437,7 @@ function SFindClickedPosition(const Str: atString;
   AAllowVirtualPos: boolean;
   out AEndOfLinePos: boolean): integer;
 var
-  ListReal: TATRealArray;
+  ListOffsets: TATLineOffsetsInfo;
   ListEnds, ListMid: TATIntArray;
   i: integer;
 begin
@@ -397,14 +451,13 @@ begin
     Exit;
   end;
 
-  SetLength(ListReal, Length(Str));
   SetLength(ListEnds, Length(Str));
   SetLength(ListMid, Length(Str));
-  SCalcCharOffsets(Str, ListReal, ATabSize);
+  SCalcCharOffsets(Str, ListOffsets, ATabSize);
 
   //positions of each char end
   for i:= 0 to High(ListEnds) do
-    ListEnds[i]:= Trunc(ListReal[i]*ACharSize);
+    ListEnds[i]:= ListOffsets.OffsetPercent[i]*ACharSize div 100;
 
   //positions of each char middle
   for i:= 0 to High(ListEnds) do
@@ -428,22 +481,22 @@ begin
 end;
 
 procedure SFindOutputSkipOffset(const S: atString; ATabSize, AScrollPos: integer;
-  out ACharsSkipped: integer; out ASpacesSkipped: real);
+  out ACharsSkipped: integer; out ASpacesSkipped: integer);
 var
-  List: TATRealArray;
+  Offsets: TATLineOffsetsInfo;
 begin
   ACharsSkipped:= 0;
   ASpacesSkipped:= 0;
   if (S='') or (AScrollPos=0) then Exit;
 
-  SetLength(List, Length(S));
-  SCalcCharOffsets(S, List, ATabSize);
+  SCalcCharOffsets(S, Offsets, ATabSize);
 
-  while (ACharsSkipped<Length(S)) and (List[ACharsSkipped]<AScrollPos) do
+  while (ACharsSkipped<Length(S)) and
+    (Offsets.OffsetPercent[ACharsSkipped] < AScrollPos*100) do
     Inc(ACharsSkipped);
 
   if (ACharsSkipped>0) then
-    ASpacesSkipped:= List[ACharsSkipped-1];
+    ASpacesSkipped:= Offsets.OffsetPercent[ACharsSkipped-1] div 100;
 end;
 
 
@@ -462,6 +515,18 @@ begin
   Delete(s, 1, i);
 end;
 
+function SGetItemAtEnd(var S: string; const sep: Char = ','): string;
+var
+  i: integer;
+begin
+  Result:= '';
+  i:= Pos(sep, S);
+  if i>0 then
+  begin
+    Result:= Copy(S, i+1, MaxInt);
+    Delete(S, i, MaxInt);
+  end;
+end;
 
 procedure TrimStringList(L: TStringList);
 begin
@@ -480,6 +545,34 @@ end;
 function SSpacesToTabs(const S: atString; ATabSize: integer): atString;
 begin
   Result:= StringReplace(S, StringOfChar(' ', ATabSize), #9, [rfReplaceAll]);
+end;
+
+function SCharPosToColumnPos(const S: atString; APos, ATabSize: integer): integer;
+begin
+  Result:= Length(STabsToSpaces(Copy(S, 1, APos), ATabSize));
+  if APos>Length(S) then
+    Inc(Result, APos-Length(S));
+end;
+
+function SColumnPosToCharPos(const S: atString; AColumn, ATabSize: integer): integer;
+var
+  size, i: integer;
+begin
+  if AColumn=0 then exit(AColumn);
+  if Pos(#9, S)=0 then exit(AColumn);
+
+  size:= 0;
+  for i:= 1 to Length(S) do
+  begin
+    if S[i]<>#9 then
+      Inc(size)
+    else
+      Inc(size, SCalcTabulationSize(ATabSize, size+1));
+    if size>=AColumn then
+      exit(i);
+  end;
+
+  Result:= AColumn-Length(STabsToSpaces(S, ATabSize))+Length(S);
 end;
 
 function SIndentUnindent(const Str: atString; ARight: boolean;
@@ -513,7 +606,8 @@ begin
     DoTabs:= Pos(#9, StrIndent)>0;
 
     StrIndent:= STabsToSpaces(StrIndent, ATabSize);
-    if Length(StrIndent)<DecSpaces then Exit;
+    if DecSpaces>Length(StrIndent) then
+      DecSpaces:= Length(StrIndent);
     Delete(StrIndent, 1, DecSpaces);
 
     if DoTabs then
@@ -522,14 +616,16 @@ begin
   end;
 end;
 
-function SRemoveAsciiControlChars(const S: atString): atString;
+function SRemoveAsciiControlChars(const S: atString; AReplaceChar: Widechar
+  ): atString;
 var
   i: integer;
 begin
   Result:= S;
-  for i:= 1 to Length(Result) do
-    if IsCharAsciiControl(Result[i]) then
-      Result[i]:= '.';
+  if OptUnprintedReplaceSpec then
+    for i:= 1 to Length(Result) do
+      if IsCharAsciiControl(Result[i]) then
+        Result[i]:= AReplaceChar;
 end;
 
 function SRemoveHexChars(const S: atString): atString;
@@ -588,10 +684,38 @@ begin
   Result:= Copy(S, 1, N);
 end;
 
-function SBegin(const S, SubStr: atString): boolean;
+function SBeginsWith(const S, SubStr: atString): boolean;
 begin
   Result:= (SubStr<>'') and (Copy(S, 1, Length(SubStr))=SubStr);
 end;
+
+function SBeginsWith(const S, SubStr: string): boolean;
+begin
+  Result:= (SubStr<>'') and (Copy(S, 1, Length(SubStr))=SubStr);
+end;
+
+function SEndsWith(const S, SubStr: atString): boolean;
+begin
+  Result:= (SubStr<>'') and (Length(SubStr)<=Length(S)) and
+    (Copy(S, Length(S)-Length(SubStr)+1, MaxInt)=SubStr);
+end;
+
+function SEndsWith(const S, SubStr: string): boolean;
+begin
+  Result:= (SubStr<>'') and (Length(SubStr)<=Length(S)) and
+    (Copy(S, Length(S)-Length(SubStr)+1, MaxInt)=SubStr);
+end;
+
+function SEndsWithEol(const S: string): boolean;
+begin
+  Result:= (S<>'') and IsCharEol(S[Length(S)]);
+end;
+
+function SEndsWithEol(const S: atString): boolean;
+begin
+  Result:= (S<>'') and IsCharEol(S[Length(S)]);
+end;
+
 
 function SCharUpper(ch: atChar): atChar;
 begin
@@ -705,14 +829,23 @@ begin
     IsCmtAll:= Copy(Str, IndentAll, Length(AComment))=AComment;
 
     case Act of
-      cCommentAdd:
+      cCommentAdd_AtNonspace:
         begin
           Insert(AComment, Str, IndentAll);
         end;
-      cCommentAddIfNone:
+      cCommentAdd_AtNonespace_IfNone:
         begin
           if not IsCmtAll then
             Insert(AComment, Str, IndentAll);
+        end;
+      cCommentAdd_AtStart:
+        begin
+          Insert(AComment, Str, 1);
+        end;
+      cCommentAdd_AtStart_IfNone:
+        begin
+          if not IsCmtAll then
+            Insert(AComment, Str, 1);
         end;
       cCommentRemove:
         begin
@@ -722,12 +855,19 @@ begin
           if IsCmtThis then
             Delete(Str, IndentThis, Length(AComment))
         end;
-      cCommentToggle:
+      cCommentToggle_AtNonspace:
         begin
           if IsCmtAll then
             Delete(Str, IndentAll, Length(AComment))
           else
             Insert(AComment, Str, IndentAll);
+        end;
+      cCommentToggle_AtStart:
+        begin
+          if IsCmtAll then
+            Delete(Str, IndentAll, Length(AComment))
+          else
+            Insert(AComment, Str, 1);
         end;
     end;
 
@@ -740,27 +880,76 @@ begin
 end;
 
 
-function SFindFuzzyPositions(SText, SFind: string): TATIntArray;
-var
-  i, N: integer;
+procedure SReplaceAll(var s: string; const SFrom, STo: string);
 begin
-  SetLength(result, 0);
+  S:= StringReplace(S, SFrom, STo, [rfReplaceAll]);
+end;
 
-  SText:= Lowercase(SText);
-  SFind:= Lowercase(SFind);
+procedure SReplaceAllPercentChars(var S: string);
+var
+  i: Integer;
+begin
+  for i:= $20 to $2F do
+    SReplaceAll(S, '%'+IntToHex(i, 2), Chr(i));
 
-  N:= 0;
-  for i:= 1 to Length(SFind) do
+  i:= $7C;
+  SReplaceAll(S, '%'+IntToHex(i, 2), Chr(i));
+end;
+
+procedure SReplaceAllTabsToOneSpace(var S: string);
+var
+  i: integer;
+begin
+  for i:= 1 to Length(S) do
+    if S[i]=#9 then
+      S[i]:= ' ';
+end;
+
+
+procedure SDeleteFrom(var s: string; const SFrom: string);
+var
+  n: integer;
+begin
+  n:= Pos(SFrom, S);
+  if n>0 then
+    Delete(S, n, MaxInt);
+end;
+
+procedure SDeleteFrom(var s: atString; const SFrom: atString);
+var
+  n: integer;
+begin
+  n:= Pos(SFrom, S);
+  if n>0 then
+    Delete(S, n, MaxInt);
+end;
+
+procedure SDeleteFromEol(var s: string);
+begin
+  SDeleteFrom(s, #10);
+  SDeleteFrom(s, #13);
+end;
+
+procedure SDeleteFromEol(var s: atString);
+begin
+  SDeleteFrom(s, #10);
+  SDeleteFrom(s, #13);
+end;
+
+procedure SAddStringToHistory(const S: string; List: TStrings; MaxItems: integer);
+var
+  n: integer;
+begin
+  if s<>'' then
   begin
-    N:= PosEx(SFind[i], SText, N+1);
-    if N=0 then
-    begin
-      SetLength(result, 0);
-      Exit
-    end;
-    SetLength(result, Length(result)+1);
-    result[high(result)]:= N;
+    n:= List.IndexOf(s);
+    if n>=0 then
+      List.Delete(n);
+    List.Insert(0, s);
   end;
+
+  while List.Count>MaxItems do
+    List.Delete(List.Count-1);
 end;
 
 

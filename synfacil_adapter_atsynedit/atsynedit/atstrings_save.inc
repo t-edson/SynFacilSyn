@@ -5,7 +5,8 @@ var
   i: integer;
   Item: TATStringItem;
   SA: AnsiString;
-  SW: UnicodeString;
+  SWide: UnicodeString;
+  SUtf8: UTF8String;
   Sign: AnsiString;
   bEncoded: boolean;
 begin
@@ -24,40 +25,32 @@ begin
   for i:= 0 to Count-1 do
   begin
     Item:= TATStringItem(FList[i]);
-    SW:= Item.ItemString + cLineEndStrings[Item.ItemEnd];
-    if SW<>'' then
+    SUtf8:= Item.ItemString + cLineEndStrings[Item.ItemEnd];
+    if SUtf8<>'' then
     case AEncoding of
       cEncAnsi:
         begin
-          //if codepage set, convert UnicodeString->utf8->Ansistring
-          //else just UnicodeString->Ansistring
           if FEncodingCodepage='' then
-            SA:= SW
+            SA:= SConvertUtf8ToAnsi(SUtf8)
           else
-          begin
-            SA:= UTF8Encode(SW);
-            {$ifdef laz15}
-            SA:= ConvertEncodingFromUTF8(SA, FEncodingCodepage, bEncoded);
-            {$else}
-            SA:= ConvertEncoding(SA, '', FEncodingCodepage);
-            {$endif}
-          end;
+            SA:= ConvertEncodingFromUTF8(SUtf8, FEncodingCodepage, bEncoded);
 
           Stream.WriteBuffer(SA[1], Length(SA));
         end;
 
       cEncUTF8:
         begin
-          SA:= UTF8Encode(SW);
+          SA:= SUtf8;
           Stream.WriteBuffer(SA[1], Length(SA));
         end;
 
       cEncWideLE,
       cEncWideBE:
         begin
+          SWide:= UTF8Decode(SUtf8);
           if AEncoding=cEncWideBE then
-            SW:= SSwapEndian(SW);
-          Stream.WriteBuffer(SW[1], Length(SW)*2);
+            SWide:= SSwapEndian(SWide);
+          Stream.WriteBuffer(SWide[1], Length(SWide)*2);
         end;
 
       else
@@ -75,7 +68,7 @@ begin
     ((FEncoding in [cEncUTF8]) and FSaveSignUtf8) or
     ((FEncoding in [cEncWideLE, cEncWideBE]) and FSaveSignWide);
 
-  fs:= TFileStreamUtf8.Create(AFilename, fmCreate or fmOpenWrite);
+  fs:= TFileStreamUtf8.Create(AFilename, fmCreate or fmOpenWrite or fmShareDenyWrite);
   try
     SaveToStream(fs, FEncoding, WithSign);
   finally
@@ -88,8 +81,15 @@ end;
 procedure TATStrings.DoFinalizeSaving;
 begin
   DoClearLineStates(true);
+
   if not FUndoAfterSave then
-    DoClearUndo;
-  FModified:= false;
+    DoClearUndo
+  else
+  begin
+    FUndoList.DeleteUnmodifiedMarks;
+    FRedoList.DeleteUnmodifiedMarks;
+  end;
+
+  Modified:= false;
 end;
 

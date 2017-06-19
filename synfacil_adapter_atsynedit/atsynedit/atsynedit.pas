@@ -5,6 +5,8 @@ License: MPL 2.0 or LGPL
 
 {$mode objfpc}{$H+}
 
+//{$define test_markedrange}
+//{$define test_attribs}
 //{$define beep_wrapinfo}
 //{$define debug_findwrapindex}
 //{$define beep_cached_update}
@@ -13,32 +15,80 @@ License: MPL 2.0 or LGPL
 {$define fix_horzscroll} //workaround for gtk2 widgetset unstable: it freezes app
                          //when horz-scroll hides/shows/hides/...
                          //ok also for win32
-
 unit ATSynEdit;
 
 interface
 
 uses
+  {$ifdef Windows}
+  Windows, Imm, Messages,
+  {$endif}
+  InterfaceBase,
   Classes, SysUtils, Graphics,
-  Controls, ExtCtrls, Menus, Forms,
+  Controls, ExtCtrls, Menus, Forms, Clipbrd,
   LMessages, LCLType,
   ATStringProc,
   ATStrings,
+  ATSynEdit_RegExpr,
+  ATSynEdit_ScrollBar,
+  ATSynEdit_Colors,
   ATSynEdit_Keymap,
   ATSynEdit_CanvasProc,
   ATSynEdit_Carets,
+  ATSynEdit_Markers,
   ATSynEdit_Gutter,
   ATSynEdit_WrapInfo,
   ATSynEdit_Ranges,
-  ATSynEdit_Adapters;
+  ATSynEdit_Gaps,
+  ATSynEdit_Adapters,
+  ATSynEdit_Adapter_Cache;
 
 type
+  TATPosDetails = record
+    EndOfWrappedLine: boolean;
+    OnGapItem: TATSynGapItem;
+    OnGapPos: TPoint;
+  end;
+
+  TATMouseActionId = (
+    cMouseActionNone,
+    cMouseActionClickSimple,
+    cMouseActionClickRight,
+    cMouseActionClickAndSelBlock,
+    cMouseActionMakeCaret,
+    cMouseActionMakeCaretsColumn,
+    cMouseActionNiceScrolling
+    );
+
+  TATMouseActionRecord = record
+    MouseState: TShiftState;
+    MouseActionId: TATMouseActionId;
+  end;
+
+  TATMouseActions = array of TATMouseActionRecord;
+
   TATDirection = (
     cDirNone,
     cDirLeft,
     cDirRight,
     cDirUp,
     cDirDown
+    );
+
+  TATSelectColumnDirection = (
+    cDirColumnLeft,
+    cDirColumnRight,
+    cDirColumnUp,
+    cDirColumnDown,
+    cDirColumnPageUp,
+    cDirColumnPageDown
+    );
+
+  TATScrollArrowsKind = (
+    asaArrowsNormal,
+    asaArrowsBelow,
+    asaArrowsAbove,
+    asaArrowsHidden
     );
 
   TATCaseConvert = (
@@ -51,6 +101,7 @@ type
 
   TATCommandResult = (
     cResultText,
+    cResultFoldChange,
     cResultCaretAny,
     cResultCaretLeft,
     cResultCaretTop,
@@ -62,97 +113,35 @@ type
     );
   TATCommandResults = set of TATCommandResult;
 
+  TATGapCoordAction = (
+    cGapCoordIgnore,
+    cGapCoordToLineEnd,
+    cGapCoordMoveDown
+    );
+
+  TATGutterIconsKind = (
+    cGutterIconsPlusMinus,
+    cGutterIconsTriangles
+    );
+
+  TATPasteCaret = (
+    cPasteCaretNoChange,
+    cPasteCaretLeftBottom,
+    cPasteCaretRightBottom,
+    cPasteCaretRightTop,
+    cPasteCaretColumnLeft,
+    cPasteCaretColumnRight
+    );
+
   TATFoldStyle = ( //affects folding of blocks without "text hint" passed from adapter
     cFoldHereWithDots, //show "..." from fold-pos
     cFoldHereWithTruncatedText, //show truncated line instead of "..."
     cFoldFromEndOfLine, //looks like Lazarus: show "..." after line, bad with 2 blocks starting at the same line
+    cFoldFromEndOfLineAlways, //same, even if HintText not empty
     cFoldFromNextLine //looks like SynWrite: don't show "...", show separator line
     );
 
 type
-  TATSynEditColors = class(TPersistent)
-  private
-    FTextFont,
-    FTextBG,
-    FTextDisabledFont,
-    FTextDisabledBG,
-    FTextSelFont,
-    FTextSelBG,
-    FCaret,
-    FGutterFont,
-    FGutterBG,
-    FGutterCaretBG,
-    FGutterPlusBorder,
-    FGutterPlusBG,
-    FGutterFoldLine,
-    FGutterFoldBG,
-    FGutterSeparatorBG,
-    FCurrentLineBG,
-    FMarginRight,
-    FMarginCaret,
-    FMarginUser,
-    FIndentVertLines,
-    FRulerFont,
-    FRulerBG,
-    FCollapseLine,
-    FCollapseMarkFont,
-    FCollapseMarkBG,
-    FUnprintedFont,
-    FUnprintedBG,
-    FUnprintedHexFont,
-    FMinimapBorder,
-    FMinimapSelBG,
-    FStateChanged,
-    FStateAdded,
-    FStateSaved,
-    FTextHintFont,
-    FBlockStaple,
-    FBlockSepLine,
-    FLockedBG,
-    FComboboxArrow,
-    FComboboxArrowBG: TColor;
-  published
-    property TextFont: TColor read FTextFont write FTextFont;
-    property TextBG: TColor read FTextBG write FTextBG;
-    property TextDisabledFont: TColor read FTextDisabledFont write FTextDisabledFont;
-    property TextDisabledBG: TColor read FTextDisabledBG write FTextDisabledBG;
-    property TextSelFont: TColor read FTextSelFont write FTextSelFont;
-    property TextSelBG: TColor read FTextSelBG write FTextSelBG;
-    property Caret: TColor read FCaret write FCaret;
-    property GutterFont: TColor read FGutterFont write FGutterFont;
-    property GutterBG: TColor read FGutterBG write FGutterBG;
-    property GutterCaretBG: TColor read FGutterCaretBG write FGutterCaretBG;
-    property GutterPlusBorder: TColor read FGutterPlusBorder write FGutterPlusBorder;
-    property GutterPlusBG: TColor read FGutterPlusBG write FGutterPlusBG;
-    property GutterFoldLine: TColor read FGutterFoldLine write FGutterFoldLine;
-    property GutterFoldBG: TColor read FGutterFoldBG write FGutterFoldBG;
-    property GutterSeparatorBG: TColor read FGutterSeparatorBG write FGutterSeparatorBG;
-    property CurrentLineBG: TColor read FCurrentLineBG write FCurrentLineBG;
-    property MarginRight: TColor read FMarginRight write FMarginRight;
-    property MarginCaret: TColor read FMarginCaret write FMarginCaret;
-    property MarginUser: TColor read FMarginUser write FMarginUser;
-    property IndentVertLines: TColor read FIndentVertLines write FIndentVertLines;
-    property RulerFont: TColor read FRulerFont write FRulerFont;
-    property RulerBG: TColor read FRulerBG write FRulerBG;
-    property CollapseLine: TColor read FCollapseLine write FCollapseLine;
-    property CollapseMarkFont: TColor read FCollapseMarkFont write FCollapseMarkFont;
-    property CollapseMarkBG: TColor read FCollapseMarkBG write FCollapseMarkBG;
-    property UnprintedFont: TColor read FUnprintedFont write FUnprintedFont;
-    property UnprintedBG: TColor read FUnprintedBG write FUnprintedBG;
-    property UnprintedHexFont: TColor read FUnprintedHexFont write FUnprintedHexFont;
-    property MinimapBorder: TColor read FMinimapBorder write FMinimapBorder;
-    property MinimapSelBG: TColor read FMinimapSelBG write FMinimapSelBG;
-    property StateChanged: TColor read FStateChanged write FStateChanged;
-    property StateAdded: TColor read FStateAdded write FStateAdded;
-    property StateSaved: TColor read FStateSaved write FStateSaved;
-    property BlockStaple: TColor read FBlockStaple write FBlockStaple;
-    property BlockSepLine: TColor read FBlockSepLine write FBlockSepLine;
-    property LockedBG: TColor read FLockedBG write FLockedBG;
-    property TextHintFont: TColor read FTextHintFont write FTextHintFont;
-    property ComboboxArrow: TColor read FComboboxArrow write FComboboxArrow;
-    property ComboboxArrowBG: TColor read FComboboxArrowBG write FComboboxArrowBG;
-  end;
-
   TATAutoIndentKind = (
     cIndentAsIs,
     cIndentSpaces,
@@ -181,8 +170,9 @@ type
 
   TATSynPaintFlag = (
     cPaintUpdateBitmap,
+    cPaintUpdateScrollbars,
     cPaintUpdateCaretsCoords,
-    cPaintUpdateScrollbars
+    cPaintUpdateCarets
     );
   TATSynPaintFlags = set of TATSynPaintFlag;
 
@@ -283,21 +273,36 @@ const
   cMaxCaretTime = 2000;
   cMinCharsAfterAnyIndent = 20; //if indent is too big, leave 20 chrs in wrapped-parts anyway
   cMaxLinesForOldWrapUpdate = 100; //if less lines, force old wrapinfo update (fast)
+  cTextEditorLocked: string = 'Wait...';
   cHintScrollPrefix: string = 'Line';
   cHintScrollDx = 5;
+  cHintBookmarkDx = 6;
+  cHintBookmarkDy = 16;
+  cUrlMarkerTag = -100;
+  cUrlRegexInitial = '\b(https?://|ftp://|magnet:\?|www\.)\w[^<>''"\s\(\)]+';
+  cStrMenuitemFoldAll: string = 'Fold all';
+  cStrMenuitemUnfoldAll: string = 'Unfold all';
+  cStrMenuitemFoldLevel: string = 'Fold level';
+  cEditorScrollbarWidth: integer = 14;
+  cEditorScrollbarBorderSize: integer = 0;
 
 var
   cRectEmpty: TRect = (Left: 0; Top: 0; Right: 0; Bottom: 0);
-  cClipFormatId: integer = 0; //must be inited
-  cClipSignatureColumn: integer = $1000;
+  cATClipboardFormatId: integer = 0; //must be inited
+  cATClipboardSignatureColBlock: integer = $1000;
 
 type
   TATSynEditClickEvent = procedure(Sender: TObject; var AHandled: boolean) of object;
-  TATSynEditCommandEvent = procedure(Sender: TObject; ACommand: integer; var AHandled: boolean) of object;
+  TATSynEditClickMoveCaretEvent = procedure(Sender: TObject; APrevPnt, ANewPnt: TPoint) of object;
+  TATSynEditClickGapEvent = procedure(Sender: TObject; AGapItem: TATSynGapItem; APos: TPoint) of object;
+  TATSynEditCommandEvent = procedure(Sender: TObject; ACommand: integer; const AText: string; var AHandled: boolean) of object;
+  TATSynEditCommandAfterEvent = procedure(Sender: TObject; ACommand: integer; const AText: string) of object;
   TATSynEditClickGutterEvent = procedure(Sender: TObject; ABand: integer; ALineNum: integer) of object;
   TATSynEditClickMicromapEvent = procedure(Sender: TObject; AX, AY: integer) of object;
   TATSynEditDrawBookmarkEvent = procedure(Sender: TObject; C: TCanvas; ALineNum: integer; const ARect: TRect) of object;
   TATSynEditDrawRectEvent = procedure(Sender: TObject; C: TCanvas; const ARect: TRect) of object;
+  TATSynEditDrawGapEvent = procedure(Sender: TObject; C: TCanvas; const ARect: TRect; AGap: TATSynGapItem) of object;
+  TATSynEditCalcBookmarkColorEvent = procedure(Sender: TObject; ABookmarkKind: integer; out AColor: TColor) of object;
   TATSynEditCalcStapleEvent = procedure(Sender: TObject; ALine, AIndent: integer; var AStapleColor: TColor) of object;
   TATSynEditCalcHiliteEvent = procedure(Sender: TObject; var AParts: TATLineParts;
     ALineIndex, ACharIndex, ALineLen: integer; var AColorAfterEol: TColor) of object;
@@ -317,24 +322,29 @@ type
     FBitmap: TBitmap;
     FKeymap: TATKeymap;
     FWantTabs: boolean;
+    FWantReturns: boolean;
     FEditorIndex: integer;
     FMarginRight: integer;
     FMarginList: TList;
     FStringsInt,
     FStringsExternal: TATStrings;
     FAdapterHilite: TATAdapterHilite;
+    FAdapterCache: TATAdapterHiliteCache;
     FFold: TATSynRanges;
+    FFoldImageList: TImageList;
     FFoldStyle: TATFoldStyle;
+    FFoldEnabled: boolean;
+    FFontNeedsOffsets: TATFontNeedsOffsets;
     FCursorText,
     FCursorBm: TCursor;
     FTextOffset: TPoint;
-    FTextLocked: string;
     FTextHint: string;
     FTextHintFontStyle: TFontStyles;
     FTextHintCenter: boolean;
     FSelRect: TRect;
     FSelRectBegin,
     FSelRectEnd: TPoint;
+    FScalePercents: integer;
     FCarets: TATCarets;
     FCaretBlinkEnabled: boolean;
     FCaretShapeIns,
@@ -344,6 +354,10 @@ type
     FCaretVirtual: boolean;
     FCaretSpecPos: boolean;
     FCaretStopUnfocused: boolean;
+    FCaretAllowNextBlink: boolean;
+    FMarkers: TATMarkers;
+    FAttribs: TATMarkers;
+    FMarkedRange: TATMarkers;
     FMenuStd,
     FMenuText,
     FMenuGutterBm,
@@ -356,33 +370,42 @@ type
     FOverwrite: boolean;
     FHintWnd: THintWindow;
     FMouseDownPnt: TPoint;
-    FMouseDownNumber: integer;
+    FMouseDownGutterLineNumber: integer;
     FMouseDownDouble: boolean;
     FMouseDownRight: boolean;
     FMouseNiceScrollPos: TPoint;
     FMouseDragDropping: boolean;
+    FMouseDragMinimap: boolean;
     FMouseAutoScroll: TATDirection;
+    FMouseActions: TATMouseActions;
     FLastTextCmd: integer;
     FLastTextCmdText: atString;
     FCursorOnMinimap: boolean;
     FCursorOnGutter: boolean;
+    FOnBeforeCalcHilite: TNotifyEvent;
     FOnClickDbl,
     FOnClickTriple,
     FOnClickMiddle: TATSynEditClickEvent;
+    FOnClickMoveCaret: TATSynEditClickMoveCaretEvent;
+    FOnClickGap: TATSynEditClickGapEvent;
+    FOnClickEndSelect: TATSynEditClickMoveCaretEvent;
     FOnChangeCaretPos: TNotifyEvent;
     FOnChange: TNotifyEvent;
     FOnScroll: TNotifyEvent;
     FOnClickGutter: TATSynEditClickGutterEvent;
     FOnClickMicromap: TATSynEditClickMicromapEvent;
     FOnDrawBookmarkIcon: TATSynEditDrawBookmarkEvent;
+    FOnDrawGap: TATSynEditDrawGapEvent;
     FOnDrawLine: TATSynEditDrawLineEvent;
     FOnDrawMicromap: TATSynEditDrawRectEvent;
     FOnDrawEditor: TATSynEditDrawRectEvent;
     FOnDrawRuler: TATSynEditDrawRectEvent;
     FOnChangeState: TNotifyEvent;
     FOnCommand: TATSynEditCommandEvent;
+    FOnCommandAfter: TATSynEditCommandAfterEvent;
     FOnCalcHilite: TATSynEditCalcHiliteEvent;
     FOnCalcStaple: TATSynEditCalcStapleEvent;
+    FOnCalcBookmarkColor: TATSynEditCalcBookmarkColorEvent;
     FWrapInfo: TATSynWrapInfo;
     //FWrapProgress: integer;
     FWrapColumn: integer;
@@ -391,9 +414,9 @@ type
     FWrapIndented: boolean;
     FUnprintedVisible,
     FUnprintedSpaces,
+    FUnprintedEof,
     FUnprintedEnds,
-    FUnprintedEndsDetails,
-    FUnprintedReplaceSpec: boolean;
+    FUnprintedEndsDetails: boolean;
     FPrevVisibleColumns: integer;
     FCharSize: TPoint;
     FCharSizeMinimap: TPoint;
@@ -414,9 +437,12 @@ type
     FRectRuler: TRect;
     FLineBottom: integer;
     FScrollVert,
-    FScrollHorz: TATSynScrollInfo;
+    FScrollHorz,
     FScrollVertMinimap,
     FScrollHorzMinimap: TATSynScrollInfo;
+    FScrollbarVert,
+    FScrollbarHorz: TATScroll;
+    FScrollbarLock: boolean;
     FPrevHorz,
     FPrevVert: TATSynScrollInfo;
     FMinimapWidth: integer;
@@ -424,16 +450,28 @@ type
     FMinimapVisible: boolean;
     FMinimapShowSelBorder: boolean;
     FMinimapShowSelAlways: boolean;
+    FMinimapAtLeft: boolean;
     FMicromapWidth: integer;
     FMicromapVisible: boolean;
+    FOptPasteAtEndMakesFinalEmptyLine: boolean;
+    FOptMaxLinesToCountUnindent: integer;
+    FOptScrollbarsNew: boolean;
+    FOptScrollbarsNewArrowsKind: TATScrollArrowsKind;
+    FOptShowFontLigatures: boolean;
+    FOptShowURLs: boolean;
+    FOptShowURLsRegex: string;
     FOptShowStapleStyle: TATLineStyle;
     FOptShowStapleIndent: integer;
     FOptShowStapleWidthPercent: integer;
+    FOptMouseEnableAll: boolean;
     FOptMouseEnableNormalSelection: boolean;
     FOptMouseEnableColumnSelection: boolean;
     FOptMouseDownForPopup: boolean;
     FOptCaretPreferLeftSide: boolean;
+    FOptCaretPosAfterPasteColumn: TATPasteCaret;
+    FOptMarkersSize: integer;
     FOptShowScrollHint: boolean;
+    FOptTextOffsetLeft: integer;
     FOptTextOffsetTop: integer;
     FOptTextOffsetFromLine: integer;
     FOptSavingForceFinalEol: boolean;
@@ -441,6 +479,7 @@ type
     FOptUndoGrouped: boolean;
     FOptIndentSize: integer;
     FOptIndentKeepsAlign: boolean;
+    FOptBorderVisible: boolean;
     FOptRulerVisible: boolean;
     FOptRulerSize: integer;
     FOptRulerFontSize: integer;
@@ -452,6 +491,7 @@ type
     FOptGutterShowFoldAlways: boolean;
     FOptGutterShowFoldLines: boolean;
     FOptGutterShowFoldLinesAll: boolean;
+    FOptGutterIcons: TATGutterIconsKind;
     FOptNumbersAutosize: boolean;
     FOptNumbersAlignment: TAlignment;
     FOptNumbersFontSize: integer;
@@ -479,15 +519,26 @@ type
     FOptShowFullHilite: boolean;
     FOptShowCurLine: boolean;
     FOptShowCurLineMinimal: boolean;
+    FOptShowCurLineOnlyFocused: boolean;
     FOptShowCurColumn: boolean;
     FOptMouseHideCursor: boolean;
     FOptMouse2ClickSelectsLine: boolean;
     FOptMouse3ClickSelectsLine: boolean;
     FOptMouse2ClickDragSelectsWords: boolean;
     FOptMouseDragDrop: boolean;
+    FOptMouseDragDropCopying: boolean;
+    FOptMouseDragDropCopyingWithState: TShiftStateEnum;
     FOptMouseRightClickMovesCaret: boolean;
     FOptMouseGutterClickSelectsLine: boolean;
     FOptMouseNiceScroll: boolean;
+    FOptMouseWheelScrollVert: boolean;
+    FOptMouseWheelScrollHorz: boolean;
+    FOptMouseWheelScrollVertSpeed: integer;
+    FOptMouseWheelScrollHorzSpeed: integer;
+    FOptMouseWheelScrollHorzWithState: TShiftStateEnum;
+    FOptMouseWheelScrollHorzWithState2: TShiftStateEnum;
+    FOptMouseWheelZooms: boolean;
+    FOptMouseWheelZoomsWithState: TShiftStateEnum;
     FOptKeyPageUpDownSize: TATPageUpDownSize;
     FOptKeyLeftRightSwapSel: boolean;
     FOptKeyLeftRightSwapSelAndSelect: boolean;
@@ -496,42 +547,72 @@ type
     FOptKeyTabIndents: boolean;
     FOptShowIndentLines: boolean;
     FOptShowGutterCaretBG: boolean;
-    FOptAllowScrollbars: boolean;
+    FOptAllowScrollbarVert: boolean;
+    FOptAllowScrollbarHorz: boolean;
     FOptAllowZooming: boolean;
     FOptAllowReadOnly: boolean;
+
     //
     procedure DebugFindWrapIndex;
+    function DoCalcIndentCharsFromPrevLines(AX, AY: integer): integer;
+    procedure DoCalcLinks;
     procedure DoCalcPosColor(AX, AY: integer; var AColor: TColor);
     procedure DoCalcLineEntireColor(ALine: integer; ACoordTop: integer;
       ALineWithCaret: boolean; out AColor: TColor; out AColorForced: boolean);
+    procedure DoCaretsOnChanged(Sender: TObject);
+    procedure DoCaretForceShow;
     procedure DoCaretsAssign(NewCarets: TATCarets);
-    procedure DoDropText;
+    procedure DoCaretsShift_CaretItem(Caret: TATCaretItem; APosX, APosY, AShiftX,
+      AShiftY, AShiftBelowX: integer);
+    procedure DoCaretsShift_MarkerItem(Mark: TATMarkerItem; APosX, APosY, AShiftX,
+      AShiftY, AShiftBelowX: integer; APosAfter: TPoint);
+    procedure DoCaretsFixIfInsideCollapsedPart;
+    procedure DoDebugAddAttribs;
+    procedure DoDropText(AndDeleteSelection: boolean);
+    procedure DoEventCommandAfter(ACommand: integer; const AText: string);
     procedure DoFoldbarClick(ALine: integer);
+    procedure DoFoldForLevel(ALevel: integer);
+    procedure DoFoldForLevelAndLines(ALineFrom, ALineTo: integer; ALevel: integer;
+      AForThisRange: TATSynRange);
     procedure DoHandleRightClick(X, Y: integer);
     function DoHandleClickEvent(AEvent: TATSynEditClickEvent): boolean;
     procedure DoHintShow;
     procedure DoHintHide;
+    procedure DoHintShowForBookmark(ALine: integer);
+    procedure DoMenuGutterFold_AddDynamicItems(Menu: TPopupMenu);
     procedure DoMenuGutterFold;
+    procedure DoMenuText;
     procedure DoMinimapClick(APosY: integer);
+    procedure DoMinimapDrag(APosY: integer);
+    function DoScale(N: integer): integer;
+    procedure DoScroll_IndentFromBottom(AWrapInfoIndex, AIndentVert: integer);
+    procedure DoScroll_IndentFromTop(AWrapInfoIndex, AIndentVert: integer);
+    procedure DoSelectionDeleteColumnBlock;
+    procedure DoSelect_NormalSelToColumnSel(out ABegin, AEnd: TPoint);
+    procedure DoUpdateFontNeedsOffsets(C: TCanvas);
     function GetColorTextBG: TColor;
     function GetColorTextFont: TColor;
+    function GetGaps: TATSynGaps;
+    function GetMinimapActualHeight: integer;
+    function GetMinimapSelTop: integer;
+    function GetMinimapSelTop_PixelsToWrapIndex(APixels: integer): integer;
+    function GetOptTextOffsetTop: integer;
+    function GetRectMinimapSel: TRect;
+    procedure InitResourcesFoldbar;
     function IsFoldLineNeededBeforeWrapitem(N: integer): boolean;
-    procedure MenuFoldStdClick(Sender: TObject);
-    procedure PaintEx(ALine: integer);
-    procedure DoPaintGutterFolding(C: TCanvas; AWrapItemIndex: integer; ACoordX1,
-      ACoordX2, ACoordY1, ACoordY2: integer);
-    procedure DoPaintGutterBandBG(C: TCanvas; ABand: integer; AColor: TColor; ATop,
-      ABottom: integer);
-    procedure DoPaintLockedWarning(C: TCanvas);
-    procedure DoPaintStaple(C: TCanvas; const R: TRect; AColor: TColor);
-    procedure DoPaintStaples(C: TCanvas; const ARect: TRect; ACharSize: TPoint;
-      const AScrollHorz: TATSynScrollInfo);
-    procedure DoPaintTextHintTo(C: TCanvas);
+    procedure MenuFoldFoldAllClick(Sender: TObject);
+    procedure MenuFoldLevelClick(Sender: TObject);
+    procedure MenuFoldUnfoldAllClick(Sender: TObject);
+    procedure MenuFoldPlusMinusClick(Sender: TObject);
+    procedure OnNewScrollbarHorzChanged(Sender: TObject);
+    procedure OnNewScrollbarVertChanged(Sender: TObject);
+    procedure DoPartShow(const P: TATLineParts);
     procedure DoPartCalc_ApplyOver(var AParts: TATLineParts; AOffsetMax,
       ALineIndex, ACharIndex: integer);
     procedure DoPartCalc_CreateNew(var AParts: TATLineParts; AOffsetMax,
       ALineIndex, ACharIndex: integer; AColorBG: TColor);
-    procedure DoUnfoldLine(ALine: integer);
+    procedure DoPartCalc_ApplyAttribsOver(var AParts: TATLineParts; AOffsetMax,
+      ALineIndex, ACharIndex: integer; AColorBG: TColor);
     function GetAutoIndentString(APosX, APosY: integer): atString;
     function GetFirstUnfoldedLineNumber: integer;
     function GetFoldedMarkText(ALine: integer): string;
@@ -547,7 +628,6 @@ type
     function GetUndoLimit: integer;
     procedure DoInitPopupMenu;
     function IsCaretBlocked: boolean;
-    function IsLineFolded(ALine: integer; ADetectPartialFold: boolean = false): boolean;
     function IsLineFoldedFull(ALine: integer): boolean;
     function IsLinePartWithCaret(ALine: integer; ACoordY: integer): boolean;
     procedure MenuClick(Sender: TObject);
@@ -559,17 +639,17 @@ type
     //select
     procedure DoSelectionDeleteOrReset;
     procedure DoSelect_ExtendSelectionByLine;
-    procedure DoSelect_ColumnBlock(P1, P2: TPoint);
     procedure DoSelect_CharRange(ACaretIndex: integer; Pnt: TPoint);
     procedure DoSelect_WordRange(ACaretIndex: integer; P1, P2: TPoint);
     procedure DoSelect_Word_ByClick;
     procedure DoSelect_Line_ByClick;
-    procedure DoSelect_None;
     //paint
+    procedure PaintEx(ALineNumber: integer);
     function DoPaint(AFlags: TATSynPaintFlags; ALineFrom: integer): boolean;
+    procedure DoPaintAllTo(C: TCanvas; AFlags: TATSynPaintFlags; ALineFrom: integer);
+    procedure DoPaintMainTo(C: TCanvas; ALineFrom: integer);
     procedure DoPaintNiceScroll(C: TCanvas);
     procedure DoPaintMarginLineTo(C: TCanvas; AX: integer; AColor: TColor);
-    procedure DoPaintTo(C: TCanvas; ALineFrom: integer);
     procedure DoPaintRulerTo(C: TCanvas);
     procedure DoPaintTextTo(C: TCanvas; const ARect: TRect;
       const ACharSize: TPoint; AWithGutter, AMainText: boolean;
@@ -581,6 +661,7 @@ type
     procedure DoPaintMinimapTo(C: TCanvas);
     procedure DoPaintMicromapTo(C: TCanvas);
     procedure DoPaintMarginsTo(C: TCanvas);
+    procedure DoPaintGapTo(C: TCanvas; const ARect: TRect; AGap: TATSynGapItem);
     procedure DoPaintFoldedMark(C: TCanvas; APos: TPoint; ACoord: TPoint;
       const AMarkText: string);
     procedure DoPaintCarets(C: TCanvas; AWithInvalidate: boolean);
@@ -590,6 +671,17 @@ type
       const AVisRect: TRect; APointLeft: TPoint; APointText: TPoint;
       ALineIndex: integer; AEolSelected: boolean;
       const AScrollHorz: TATSynScrollInfo);
+    procedure DoPaintMarkersTo(C: TCanvas);
+    procedure DoPaintGutterPlusMinus(C: TCanvas; AX, AY: integer; APlus: boolean);
+    procedure DoPaintGutterFolding(C: TCanvas; AWrapItemIndex: integer; ACoordX1,
+      ACoordX2, ACoordY1, ACoordY2: integer);
+    procedure DoPaintGutterBandBG(C: TCanvas; ABand: integer; AColor: TColor; ATop,
+      ABottom: integer);
+    procedure DoPaintLockedWarning(C: TCanvas);
+    procedure DoPaintStaple(C: TCanvas; const R: TRect; AColor: TColor);
+    procedure DoPaintStaples(C: TCanvas; const ARect: TRect; ACharSize: TPoint;
+      const AScrollHorz: TATSynScrollInfo);
+    procedure DoPaintTextHintTo(C: TCanvas);
     //carets
     procedure DoCaretsExtend(ADown: boolean; ALines: integer);
     function GetCaretManyAllowed: boolean;
@@ -598,9 +690,10 @@ type
     function DoCaretSwapEdge(AMoveLeft: boolean): boolean;
     procedure DoCaretsSort;
     //events
+    procedure DoEventBeforeCalcHilite;
     procedure DoEventClickMicromap(AX, AY: integer);
     procedure DoEventClickGutter(ABandIndex, ALineNumber: integer);
-    function DoEventCommand(ACommand: integer): boolean;
+    function DoEventCommand(ACommand: integer; const AText: string): boolean;
     procedure DoEventDrawBookmarkIcon(C: TCanvas; ALineNumber: integer; const ARect: TRect);
     //
     function GetCharSpacingX: integer;
@@ -609,12 +702,14 @@ type
     function GetMarginString: string;
     function GetReadOnly: boolean;
     function GetLineTop: integer;
+    function GetColumnLeft: integer;
     function GetTextForClipboard: string;
-    function GetWrapInfoIndex(AMousePos: TPoint): integer;
     function GetStrings: TATStrings;
     function GetMouseNiceScroll: boolean;
     procedure SetCaretShapeRO(AValue: TATSynCaretShape);
     procedure SetCaretBlinkEnabled(AValue: boolean);
+    procedure SetFoldEnabled(AValue: boolean);
+    procedure SetModified(AValue: boolean);
     procedure SetMouseNiceScroll(AValue: boolean);
     procedure SetCaretManyAllowed(AValue: boolean);
     procedure SetCaretBlinkTime(AValue: integer);
@@ -626,8 +721,10 @@ type
     procedure SetMicromapVisible(AValue: boolean);
     procedure SetMinimapVisible(AValue: boolean);
     procedure SetOneLine(AValue: boolean);
+    procedure SetOptScrollbarsNewArrowsKind(AValue: TATScrollArrowsKind);
     procedure SetReadOnly(AValue: boolean);
     procedure SetLineTop(AValue: integer);
+    procedure SetColumnLeft(AValue: integer);
     procedure SetLinesFromTop(AValue: integer);
     procedure SetStrings(Obj: TATStrings);
     function GetRectMain: TRect;
@@ -638,12 +735,9 @@ type
     function GetTextOffset: TPoint;
     function GetGutterNumbersWidth(C: TCanvas): integer;
     function GetPageLines: integer;
-    function GetVisibleLines: integer;
-    function GetVisibleColumns: integer;
-    function GetVisibleLinesMinimap: integer;
     function GetMinimapScrollPos: integer;
     procedure SetTabSize(AValue: integer);
-    procedure SetText(AValue: atString);
+    procedure SetText(const AValue: atString);
     procedure SetUndoAfterSave(AValue: boolean);
     procedure SetUndoLimit(AValue: integer);
     procedure SetWrapMode(AValue: TATSynWrapMode);
@@ -669,22 +763,26 @@ type
     //carets
     procedure DoCaretAddToPoint(AX, AY: integer);
     procedure DoCaretsColumnToPoint(AX, AY: integer);
-    procedure DoCaretsShift(APosX, APosY: integer; AShiftX, AShiftY: integer; AShiftBelowX: integer = 0);
     procedure DoCaretsDeleteOnSameLines;
 
     //editing
     procedure DoCommandResults(Res: TATCommandResults);
+    function DoCommand_FoldLevel(ALevel: integer): TATCommandResults;
     function DoCommand_FoldUnfoldAll(ADoFold: boolean): TATCommandResults;
+    function DoCommand_TextTrimSpaces(AMode: TATTrimSpaces): TATCommandResults;
     function DoCommand_TextChangeCase(AMode: TATCaseConvert): TATCommandResults;
     function DoCommand_SizeChange(AIncrease: boolean): TATCommandResults;
     function DoCommand_MoveSelectionUpDown(ADown: boolean): TATCommandResults;
     function DoCommand_TextInsertEmptyAboveBelow(ADown: boolean): TATCommandResults;
-    function DoCommand_SelectColumn(ADir: TATDirection): TATCommandResults;
+    function DoCommand_SelectColumn(ADir: TATSelectColumnDirection): TATCommandResults;
+    function DoCommand_SelectColumnToLineEdge(AToEnd: boolean): TATCommandResults;
     function DoCommand_TextInsertColumnBlockOnce(const AText: atString; AKeepCaret: boolean): TATCommandResults;
     function DoCommand_CaretsExtend(ADown: boolean; ALines: integer): TATCommandResults;
     function DoCommand_Undo: TATCommandResults;
     function DoCommand_Redo: TATCommandResults;
     function DoCommand_TextIndentUnindent(ARight: boolean): TATCommandResults;
+    function DoCommand_TextIndentUnindent_StreamBlock(ARight: boolean): TATCommandResults;
+    function DoCommand_TextIndentUnindent_ColumnBlock(ARight: boolean): TATCommandResults;
     function DoCommand_SelectWords: TATCommandResults;
     function DoCommand_SelectLines: TATCommandResults;
     function DoCommand_SelectAll: TATCommandResults;
@@ -702,11 +800,13 @@ type
     function DoCommand_ToggleLineNums: TATCommandResults;
     function DoCommand_ToggleFolding: TATCommandResults;
     function DoCommand_ToggleRuler: TATCommandResults;
-    function DoCommand_ToggleMinimap: TATCommandResults;
+    function DoCommand_ToggleMiniMap: TATCommandResults;
+    function DoCommand_ToggleMicroMap: TATCommandResults;
     function DoCommand_GotoWord(ANext: boolean): TATCommandResults;
     function DoCommand_ScrollVert(ALines: integer): TATCommandResults;
     function DoCommand_TextInsertAtCarets(const AText: atString; AKeepCaret,
       AOvrMode, ASelectThen: boolean): TATCommandResults;
+    function DoCommand_TextInsertTabSpacesAtCarets(AOvrMode: boolean): TATCommandResults;
     function DoCommand_TextTabulation: TATCommandResults;
     function DoCommand_KeyHome: TATCommandResults;
     function DoCommand_KeyEnd: TATCommandResults;
@@ -729,42 +829,72 @@ type
     function DoCommand_TextDeleteToFileEnd: TATCommandResults;
     function DoCommand_GotoTextBegin: TATCommandResults;
     function DoCommand_GotoTextEnd: TATCommandResults;
-    function DoCommand_ClipboardPaste(AKeepCaret, ASelectThen: boolean): TATCommandResults;
-    function DoCommand_ClipboardPasteColumnBlock(AKeepCaret: boolean): TATCommandResults;
-    function DoCommand_ClipboardCopy(Append: boolean = false): TATCommandResults;
-    function DoCommand_ClipboardCut: TATCommandResults;
+    function DoCommand_ClipboardPaste(AKeepCaret, ASelectThen: boolean;
+      AClipboardObject: TClipboard): TATCommandResults;
+    function DoCommand_ClipboardPasteColumnBlock(AKeepCaret: boolean;
+      AClipboardObject: TClipboard): TATCommandResults;
+    function DoCommand_ClipboardCopy(Append: boolean;
+      AClipboardObject: TClipboard): TATCommandResults;
+    function DoCommand_ClipboardCut(
+      AClipboardObject: TClipboard): TATCommandResults;
     //
     function GetCommandFromKey(var Key: Word; Shift: TShiftState): integer;
     function DoMouseWheelAction(Shift: TShiftState; AUp: boolean): boolean;
     function GetCaretsArray: TATPointArray;
-    procedure SetCaretsArray(const L: TATPointArray);
+    procedure SetCaretsArray(const Ar: TATPointArray);
     property MouseNiceScroll: boolean read GetMouseNiceScroll write SetMouseNiceScroll;
     procedure DoDebugInitFoldList;
 
+    procedure OnCanvasFontChanged(Sender:TObject);
+  protected
+    procedure DoSendShowHideToInterface; override;
+    procedure DragOver(Source: TObject; X, Y: Integer; State: TDragState;
+      var Accept: Boolean); override;
   public
+    MenuitemTextCut: TMenuItem;
+    MenuitemTextCopy: TMenuItem;
+    MenuitemTextPaste: TMenuItem;
+    MenuitemTextDelete: TMenuItem;
+    MenuitemTextSelAll: TMenuItem;
+    MenuitemTextUndo: TMenuItem;
+    MenuitemTextRedo: TMenuItem;
+
     //overrides
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure SetFocus; override;
+    function ClientWidth: integer;
+    function ClientHeight: integer;
+    procedure DragDrop(Source: TObject; X, Y: Integer); override;
+    procedure AutoAdjustLayout(AMode: TLayoutAdjustmentPolicy; const AFromPPI, AToPPI,
+      AOldFormWidth, ANewFormWidth: Integer); override;
     //updates
     procedure Invalidate; override;
+    procedure InvalidateHilitingCache;
     procedure Update(AUpdateWrapInfo: boolean = false; AUpdateCaretsCoords: boolean = true); reintroduce;
     procedure UpdateIncorrectCaretPositions;
     procedure UpdateFoldedFromLinesHidden;
-    procedure DoEventCarets;
-    procedure DoEventScroll;
-    procedure DoEventChange;
-    procedure DoEventState;
-    //general
+    procedure DoEventCarets; virtual;
+    procedure DoEventScroll; virtual;
+    procedure DoEventChange; virtual;
+    procedure DoEventState; virtual;
+    //lists
     property Strings: TATStrings read GetStrings write SetStrings;
     property Fold: TATSynRanges read FFold;
+    property Carets: TATCarets read FCarets;
+    property Markers: TATMarkers read FMarkers;
+    property Attribs: TATMarkers read FAttribs;
+    property Gaps: TATSynGaps read GetGaps;
     property Keymap: TATKeymap read FKeymap write FKeymap;
-    property Modified: boolean read GetModified;
-    property AdapterHilite: TATAdapterHilite read FAdapterHilite write FAdapterHilite;
+    property MouseMap: TATMouseActions read FMouseActions write FMouseActions;
+    //common
+    property Modified: boolean read GetModified write SetModified;
+    property AdapterForHilite: TATAdapterHilite read FAdapterHilite write FAdapterHilite;
     property EditorIndex: integer read FEditorIndex write FEditorIndex;
     property LineTop: integer read GetLineTop write SetLineTop;
     property LineBottom: integer read FLineBottom;
     property LinesFromTop: integer read GetLinesFromTop write SetLinesFromTop;
+    property ColumnLeft: integer read GetColumnLeft write SetColumnLeft;
     property ModeOverwrite: boolean read FOverwrite write FOverwrite;
     property ModeReadOnly: boolean read GetReadOnly write SetReadOnly;
     property ModeOneLine: boolean read GetOneLine write SetOneLine;
@@ -775,7 +905,10 @@ type
     function IsSelRectEmpty: boolean;
     function IsPosSelected(AX, AY: integer): boolean;
     function IsPosFolded(AX, AY: integer): boolean;
+    function IsLineFolded(ALine: integer; ADetectPartialFold: boolean = false): boolean;
     function IsCharWord(ch: Widechar): boolean;
+    property TextCharSize: TPoint read FCharSize;
+    procedure DoUnfoldLine(ALine: integer);
     //gutter
     property Gutter: TATGutter read FGutter;
     property GutterBandBm: integer read FGutterBandBm write FGutterBandBm;
@@ -788,33 +921,49 @@ type
     procedure LoadFromFile(const AFilename: string);
     procedure SaveToFile(const AFilename: string);
     //carets
-    procedure DoCaretSingle(AX, AY: integer);
+    procedure DoCaretSingle(APosX, APosY, AEndX, AEndY: integer);
+    procedure DoCaretSingle(AX, AY: integer; AClearSelection: boolean = true);
     procedure DoCaretSingleAsIs;
+    procedure DoCaretsShift(APosX, APosY: integer; AShiftX, AShiftY: integer;
+      APosAfter: TPoint; AShiftBelowX: integer = 0);
     function CaretPosToClientPos(P: TPoint): TPoint;
-    function ClientPosToCaretPos(P: TPoint; out AEndOfLinePos: boolean): TPoint;
-    property Carets: TATCarets read FCarets;
+    function ClientPosToCaretPos(P: TPoint;
+      out ADetails: TATPosDetails;
+      AGapCoordAction: TATGapCoordAction=cGapCoordToLineEnd): TPoint;
     function IsLineWithCaret(ALine: integer): boolean;
-    procedure DoGotoPos(APnt: TPoint; AIndentHorz, AIndentVert: integer);
+    //goto
+    procedure DoGotoPos(const APos, APosEnd: TPoint;
+      AIndentHorz, AIndentVert: integer;
+      APlaceCaret, ADoUnfold: boolean;
+      AAllowProcessMsg: boolean=true);
     procedure DoGotoCaret(AEdge: TATCaretEdge);
-    procedure DoGotoPosEx(APnt: TPoint);
     //misc
+    function GetVisibleLines: integer;
+    function GetVisibleColumns: integer;
+    function GetVisibleLinesMinimap: integer;
     procedure DoCommand(ACmd: integer; const AText: atString = ''); virtual;
     procedure BeginUpdate;
     procedure EndUpdate;
     function TextSelected: atString;
     function TextCurrentWord: atString;
     procedure DoSelect_All;
+    procedure DoSelect_None;
     procedure DoSelect_Inverted;
     procedure DoSelect_SplitSelectionToLines;
     procedure DoSelect_Line(P: TPoint);
     procedure DoSelect_Word(P: TPoint);
     procedure DoSelect_LineRange(ALineFrom: integer; P: TPoint);
+    procedure DoSelect_ColumnBlock(P1, P2: TPoint);
     procedure DoRangeFold(ARange: TATSynRange);
     procedure DoRangeUnfold(ARange: TATSynRange);
     procedure DoScrollByDelta(Dx, Dy: integer);
     procedure DoSizeChange(AInc: boolean);
-    procedure DoCommentSelectionLines(Act: TATCommentAction;
-      const AComment: atString);
+    procedure DoCommentSelectionLines(Act: TATCommentAction; const AComment: atString);
+    function DoCalcLineHiliteEx(ALineIndex: integer; var AParts: TATLineParts;
+      AColorBG: TColor; out AColorAfter: TColor): boolean;
+    procedure DoSetMarkedLines(ALine1, ALine2: integer);
+    procedure DoGetMarkedLines(out ALine1, ALine2: integer);
+    function DoGetLinkAtPos(AX, AY: integer): atString;
 
   protected
     procedure Paint; override;
@@ -824,21 +973,33 @@ type
     procedure MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer); override;
     procedure MouseMove(Shift: TShiftState; X,Y: Integer); override;
-    function DoMouseWheelDown(Shift: TShiftState; MousePos{%H-}: TPoint): boolean; override;
-    function DoMouseWheelUp(Shift: TShiftState; MousePos{%H-}: TPoint): boolean; override;
+    procedure MouseLeave; override;
+    function DoMouseWheel(Shift: TShiftState; WheelDelta: integer; MousePos{%H-}: TPoint): boolean; override;
     procedure DblClick; override;
     procedure TripleClick; override;
     function DoGetTextString: atString; virtual;
+    procedure DoEnter; override;
+    procedure DoExit; override;
     //messages
-    procedure WMGetDlgCode(var Msg: TLMNoParams); message LM_GETDLGCODE;
+    //procedure WMGetDlgCode(var Msg: TLMNoParams); message LM_GETDLGCODE;
     procedure WMEraseBkgnd(var Msg: TLMEraseBkgnd); message LM_ERASEBKGND;
     procedure WMHScroll(var Msg: TLMHScroll); message LM_HSCROLL;
     procedure WMVScroll(var Msg: TLMVScroll); message LM_VSCROLL;
+    procedure CMWantSpecialKey(var Message: TCMWantSpecialKey); message CM_WANTSPECIALKEY;
+    // Windows IME Support
+    {$ifdef Windows}
+    procedure WMIME_STARTCOMPOSITION(var Msg:TMessage); message WM_IME_STARTCOMPOSITION;
+    procedure WMIME_COMPOSITION(var Msg:TMessage); message WM_IME_COMPOSITION;
+    procedure WMIME_ENDCOMPOSITION(var Msg:TMessage); message WM_IME_ENDCOMPOSITION;
+    {$endif}
   published
     property Align;
     property Anchors;
     property BorderSpacing;
     property BorderStyle;
+    property DoubleBuffered;
+    property DragMode;
+    property DragKind;
     property Enabled;
     property Font;
     property ParentFont;
@@ -848,6 +1009,7 @@ type
     property TabStop;
     property Visible;
     //menu
+    property PopupTextDefault: TPopupMenu read FMenuStd;
     property PopupText: TPopupMenu read FMenuText write FMenuText;
     property PopupGutterBm: TPopupMenu read FMenuGutterBm write FMenuGutterBm;
     property PopupGutterNum: TPopupMenu read FMenuGutterNum write FMenuGutterNum;
@@ -856,6 +1018,9 @@ type
     property PopupMicromap: TPopupMenu read FMenuMicromap write FMenuMicromap;
     property PopupRuler: TPopupMenu read FMenuRuler write FMenuRuler;
     //events std
+    property OnContextPopup;
+    property OnDragOver;
+    property OnDragDrop;
     property OnEnter;
     property OnExit;
     property OnKeyDown;
@@ -869,6 +1034,7 @@ type
     property OnMouseWheel;
     property OnMouseWheelDown;
     property OnMouseWheelUp;
+    property OnResize;
     property OnUTF8KeyPress;
     //events new
     property OnClickDouble: TATSynEditClickEvent read FOnClickDbl write FOnClickDbl;
@@ -876,133 +1042,171 @@ type
     property OnClickMiddle: TATSynEditClickEvent read FOnClickMiddle write FOnClickMiddle;
     property OnClickGutter: TATSynEditClickGutterEvent read FOnClickGutter write FOnClickGutter;
     property OnClickMicromap: TATSynEditClickMicromapEvent read FOnClickMicromap write FOnClickMicromap;
+    property OnClickMoveCaret: TATSynEditClickMoveCaretEvent read FOnClickMoveCaret write FOnClickMoveCaret;
+    property OnClickEndSelect: TATSynEditClickMoveCaretEvent read FOnClickEndSelect write FOnClickEndSelect;
+    property OnClickGap: TATSynEditClickGapEvent read FOnClickGap write FOnClickGap;
     property OnChange: TNotifyEvent read FOnChange write FOnChange;
     property OnChangeState: TNotifyEvent read FOnChangeState write FOnChangeState;
     property OnChangeCaretPos: TNotifyEvent read FOnChangeCaretPos write FOnChangeCaretPos;
     property OnScroll: TNotifyEvent read FOnScroll write FOnScroll;
     property OnCommand: TATSynEditCommandEvent read FOnCommand write FOnCommand;
+    property OnCommandAfter: TATSynEditCommandAfterEvent read FOnCommandAfter write FOnCommandAfter;
     property OnDrawBookmarkIcon: TATSynEditDrawBookmarkEvent read FOnDrawBookmarkIcon write FOnDrawBookmarkIcon;
     property OnDrawLine: TATSynEditDrawLineEvent read FOnDrawLine write FOnDrawLine;
+    property OnDrawGap: TATSynEditDrawGapEvent read FOnDrawGap write FOnDrawGap;
     property OnDrawMicromap: TATSynEditDrawRectEvent read FOnDrawMicromap write FOnDrawMicromap;
     property OnDrawEditor: TATSynEditDrawRectEvent read FOnDrawEditor write FOnDrawEditor;
     property OnDrawRuler: TATSynEditDrawRectEvent read FOnDrawRuler write FOnDrawRuler;
     property OnCalcHilite: TATSynEditCalcHiliteEvent read FOnCalcHilite write FOnCalcHilite;
     property OnCalcStaple: TATSynEditCalcStapleEvent read FOnCalcStaple write FOnCalcStaple;
+    property OnCalcBookmarkColor: TATSynEditCalcBookmarkColorEvent read FOnCalcBookmarkColor write FOnCalcBookmarkColor;
+    property OnBeforeCalcHilite: TNotifyEvent read FOnBeforeCalcHilite write FOnBeforeCalcHilite;
 
     //misc
-    property CursorText: TCursor read FCursorText write FCursorText;
-    property CursorBm: TCursor read FCursorBm write FCursorBm;
+    property CursorText: TCursor read FCursorText write FCursorText default crIBeam;
+    property CursorBm: TCursor read FCursorBm write FCursorBm default crHandPoint;
     property Colors: TATSynEditColors read FColors write FColors;
-    property WantTabs: boolean read FWantTabs write FWantTabs;
+    property WantTabs: boolean read FWantTabs write FWantTabs default true;
+    property WantReturns: boolean read FWantReturns write FWantReturns default true;
 
     //options
-    property OptTabSpaces: boolean read FOptTabSpaces write FOptTabSpaces;
-    property OptTabSize: integer read FTabSize write SetTabSize;
+    property OptTabSpaces: boolean read FOptTabSpaces write FOptTabSpaces default false;
+    property OptTabSize: integer read FTabSize write SetTabSize default cInitTabSize;
     property OptWordChars: atString read FOptWordChars write FOptWordChars;
-    property OptFoldStyle: TATFoldStyle read FFoldStyle write FFoldStyle;
-    property OptTextLocked: string read FTextLocked write FTextLocked;
+    property OptFoldStyle: TATFoldStyle read FFoldStyle write FFoldStyle default cInitFoldStyle;
+    property OptFoldEnabled: boolean read FFoldEnabled write SetFoldEnabled default true;
     property OptTextHint: string read FTextHint write FTextHint;
-    property OptTextHintFontStyle: TFontStyles read FTextHintFontStyle write FTextHintFontStyle;
-    property OptTextHintCenter: boolean read FTextHintCenter write FTextHintCenter;
-    property OptTextOffsetTop: integer read FOptTextOffsetTop write FOptTextOffsetTop;
-    property OptTextOffsetFromLine: integer read FOptTextOffsetFromLine write FOptTextOffsetFromLine;
-    property OptAutoIndent: boolean read FOptAutoIndent write FOptAutoIndent;
-    property OptAutoIndentKind: TATAutoIndentKind read FOptAutoIndentKind write FOptAutoIndentKind;
-    property OptCopyLinesIfNoSel: boolean read FOptCopyLinesIfNoSel write FOptCopyLinesIfNoSel;
-    property OptCutLinesIfNoSel: boolean read FOptCutLinesIfNoSel write FOptCutLinesIfNoSel;
-    property OptLastLineOnTop: boolean read FOptLastLineOnTop write FOptLastLineOnTop;
-    property OptOverwriteSel: boolean read FOptOverwriteSel write FOptOverwriteSel;
-    property OptOverwriteAllowedOnPaste: boolean read FOptOverwriteAllowedOnPaste write FOptOverwriteAllowedOnPaste;
-    property OptShowStapleStyle: TATLineStyle read FOptShowStapleStyle write FOptShowStapleStyle;
-    property OptShowStapleIndent: integer read FOptShowStapleIndent write FOptShowStapleIndent;
-    property OptShowStapleWidthPercent: integer read FOptShowStapleWidthPercent write FOptShowStapleWidthPercent;
-    property OptShowFullSel: boolean read FOptShowFullSel write FOptShowFullSel;
-    property OptShowFullHilite: boolean read FOptShowFullHilite write FOptShowFullHilite;
-    property OptShowCurLine: boolean read FOptShowCurLine write FOptShowCurLine;
-    property OptShowCurLineMinimal: boolean read FOptShowCurLineMinimal write FOptShowCurLineMinimal;
-    property OptShowScrollHint: boolean read FOptShowScrollHint write FOptShowScrollHint;
-    property OptShowCurColumn: boolean read FOptShowCurColumn write FOptShowCurColumn;
-    property OptCaretManyAllowed: boolean read GetCaretManyAllowed write SetCaretManyAllowed;
-    property OptCaretVirtual: boolean read FCaretVirtual write FCaretVirtual;
-    property OptCaretShape: TATSynCaretShape read FCaretShapeIns write SetCaretShapeIns;
-    property OptCaretShapeOvr: TATSynCaretShape read FCaretShapeOvr write SetCaretShapeOvr;
-    property OptCaretShapeRO: TATSynCaretShape read FCaretShapeRO write SetCaretShapeRO;
-    property OptCaretBlinkTime: integer read GetCaretBlinkTime write SetCaretBlinkTime;
-    property OptCaretBlinkEnabled: boolean read FCaretBlinkEnabled write SetCaretBlinkEnabled;
-    property OptCaretStopUnfocused: boolean read FCaretStopUnfocused write FCaretStopUnfocused;
-    property OptCaretPreferLeftSide: boolean read FOptCaretPreferLeftSide write FOptCaretPreferLeftSide;
-    property OptGutterVisible: boolean read FOptGutterVisible write FOptGutterVisible;
-    property OptGutterPlusSize: integer read FOptGutterPlusSize write FOptGutterPlusSize;
-    property OptGutterShowFoldAlways: boolean read FOptGutterShowFoldAlways write FOptGutterShowFoldAlways;
-    property OptGutterShowFoldLines: boolean read FOptGutterShowFoldLines write FOptGutterShowFoldLines;
-    property OptGutterShowFoldLinesAll: boolean read FOptGutterShowFoldLinesAll write FOptGutterShowFoldLinesAll;
-    property OptRulerVisible: boolean read FOptRulerVisible write FOptRulerVisible;
-    property OptRulerSize: integer read FOptRulerSize write FOptRulerSize;
-    property OptRulerFontSize: integer read FOptRulerFontSize write FOptRulerFontSize;
-    property OptRulerMarkSizeSmall: integer read FOptRulerMarkSizeSmall write FOptRulerMarkSizeSmall;
-    property OptRulerMarkSizeBig: integer read FOptRulerMarkSizeBig write FOptRulerMarkSizeBig;
-    property OptRulerTextIndent: integer read FOptRulerTextIndent write FOptRulerTextIndent;
-    property OptMinimapVisible: boolean read FMinimapVisible write SetMinimapVisible;
-    property OptMinimapCharWidth: integer read FMinimapCharWidth write FMinimapCharWidth;
-    property OptMinimapShowSelBorder: boolean read FMinimapShowSelBorder write FMinimapShowSelBorder;
-    property OptMinimapShowSelAlways: boolean read FMinimapShowSelAlways write FMinimapShowSelAlways;
-    property OptMicromapVisible: boolean read FMicromapVisible write SetMicromapVisible;
-    property OptMicromapWidth: integer read FMicromapWidth write FMicromapWidth;
-    property OptCharSpacingX: integer read GetCharSpacingX write SetCharSpacingX;
-    property OptCharSpacingY: integer read GetCharSpacingY write SetCharSpacingY;
-    property OptWrapMode: TATSynWrapMode read FWrapMode write SetWrapMode;
-    property OptWrapIndented: boolean read FWrapIndented write SetWrapIndented;
-    property OptMarginRight: integer read FMarginRight write SetMarginRight;
+    property OptTextHintFontStyle: TFontStyles read FTextHintFontStyle write FTextHintFontStyle default [fsItalic];
+    property OptTextHintCenter: boolean read FTextHintCenter write FTextHintCenter default false;
+    property OptTextOffsetLeft: integer read FOptTextOffsetLeft write FOptTextOffsetLeft default 0;
+    property OptTextOffsetTop: integer read GetOptTextOffsetTop write FOptTextOffsetTop default 0;
+    property OptTextOffsetFromLine: integer read FOptTextOffsetFromLine write FOptTextOffsetFromLine default cInitTextOffsetFromLine;
+    property OptAutoIndent: boolean read FOptAutoIndent write FOptAutoIndent default true;
+    property OptAutoIndentKind: TATAutoIndentKind read FOptAutoIndentKind write FOptAutoIndentKind default cIndentAsIs;
+    property OptCopyLinesIfNoSel: boolean read FOptCopyLinesIfNoSel write FOptCopyLinesIfNoSel default true;
+    property OptCutLinesIfNoSel: boolean read FOptCutLinesIfNoSel write FOptCutLinesIfNoSel default false;
+    property OptLastLineOnTop: boolean read FOptLastLineOnTop write FOptLastLineOnTop default false;
+    property OptOverwriteSel: boolean read FOptOverwriteSel write FOptOverwriteSel default true;
+    property OptOverwriteAllowedOnPaste: boolean read FOptOverwriteAllowedOnPaste write FOptOverwriteAllowedOnPaste default false;
+    property OptScrollbarsNew: boolean read FOptScrollbarsNew write FOptScrollbarsNew default false;
+    property OptScrollbarsNewArrowsKind: TATScrollArrowsKind read FOptScrollbarsNewArrowsKind write SetOptScrollbarsNewArrowsKind default asaArrowsNormal;
+    property OptShowFontLigatures: boolean read FOptShowFontLigatures write FOptShowFontLigatures default true;
+    property OptShowURLs: boolean read FOptShowURLs write FOptShowURLs default true;
+    property OptShowURLsRegex: string read FOptShowURLsRegex write FOptShowURLsRegex;
+    property OptShowStapleStyle: TATLineStyle read FOptShowStapleStyle write FOptShowStapleStyle default cLineStyleSolid;
+    property OptShowStapleIndent: integer read FOptShowStapleIndent write FOptShowStapleIndent default -1;
+    property OptShowStapleWidthPercent: integer read FOptShowStapleWidthPercent write FOptShowStapleWidthPercent default 100;
+    property OptShowFullWidthForSelection: boolean read FOptShowFullSel write FOptShowFullSel default false;
+    property OptShowFullWidthForSyntaxHilite: boolean read FOptShowFullHilite write FOptShowFullHilite default true;
+    property OptShowCurLine: boolean read FOptShowCurLine write FOptShowCurLine default false;
+    property OptShowCurLineMinimal: boolean read FOptShowCurLineMinimal write FOptShowCurLineMinimal default true;
+    property OptShowCurLineOnlyFocused: boolean read FOptShowCurLineOnlyFocused write FOptShowCurLineOnlyFocused default false;
+    property OptShowCurColumn: boolean read FOptShowCurColumn write FOptShowCurColumn default false;
+    property OptShowScrollHint: boolean read FOptShowScrollHint write FOptShowScrollHint default false;
+    property OptCaretManyAllowed: boolean read GetCaretManyAllowed write SetCaretManyAllowed default true;
+    property OptCaretVirtual: boolean read FCaretVirtual write FCaretVirtual default true;
+    property OptCaretShape: TATSynCaretShape read FCaretShapeIns write SetCaretShapeIns default cInitCaretShapeIns;
+    property OptCaretShapeOvr: TATSynCaretShape read FCaretShapeOvr write SetCaretShapeOvr default cInitCaretShapeOvr;
+    property OptCaretShapeRO: TATSynCaretShape read FCaretShapeRO write SetCaretShapeRO default cInitCaretShapeRO;
+    property OptCaretBlinkTime: integer read GetCaretBlinkTime write SetCaretBlinkTime default cInitTimerBlink;
+    property OptCaretBlinkEnabled: boolean read FCaretBlinkEnabled write SetCaretBlinkEnabled default true;
+    property OptCaretStopUnfocused: boolean read FCaretStopUnfocused write FCaretStopUnfocused default true;
+    property OptCaretPreferLeftSide: boolean read FOptCaretPreferLeftSide write FOptCaretPreferLeftSide default true;
+    property OptCaretPosAfterPasteColumn: TATPasteCaret read FOptCaretPosAfterPasteColumn write FOptCaretPosAfterPasteColumn default cPasteCaretColumnRight;
+    property OptMarkersSize: integer read FOptMarkersSize write FOptMarkersSize default 4;
+    property OptGutterVisible: boolean read FOptGutterVisible write FOptGutterVisible default true;
+    property OptGutterPlusSize: integer read FOptGutterPlusSize write FOptGutterPlusSize default cInitGutterPlusSize;
+    property OptGutterShowFoldAlways: boolean read FOptGutterShowFoldAlways write FOptGutterShowFoldAlways default true;
+    property OptGutterShowFoldLines: boolean read FOptGutterShowFoldLines write FOptGutterShowFoldLines default true;
+    property OptGutterShowFoldLinesAll: boolean read FOptGutterShowFoldLinesAll write FOptGutterShowFoldLinesAll default false;
+    property OptGutterIcons: TATGutterIconsKind read FOptGutterIcons write FOptGutterIcons default cGutterIconsPlusMinus;
+    property OptBorderVisible: boolean read FOptBorderVisible write FOptBorderVisible default false;
+    property OptRulerVisible: boolean read FOptRulerVisible write FOptRulerVisible default true;
+    property OptRulerSize: integer read FOptRulerSize write FOptRulerSize default cSizeRulerHeight;
+    property OptRulerFontSize: integer read FOptRulerFontSize write FOptRulerFontSize default 8;
+    property OptRulerMarkSizeSmall: integer read FOptRulerMarkSizeSmall write FOptRulerMarkSizeSmall default cSizeRulerMarkSmall;
+    property OptRulerMarkSizeBig: integer read FOptRulerMarkSizeBig write FOptRulerMarkSizeBig default cSizeRulerMarkBig;
+    property OptRulerTextIndent: integer read FOptRulerTextIndent write FOptRulerTextIndent default 0;
+    property OptMinimapVisible: boolean read FMinimapVisible write SetMinimapVisible default cInitMinimapVisible;
+    property OptMinimapCharWidth: integer read FMinimapCharWidth write FMinimapCharWidth default 0;
+    property OptMinimapShowSelBorder: boolean read FMinimapShowSelBorder write FMinimapShowSelBorder default false;
+    property OptMinimapShowSelAlways: boolean read FMinimapShowSelAlways write FMinimapShowSelAlways default true;
+    property OptMinimapAtLeft: boolean read FMinimapAtLeft write FMinimapAtLeft default false;
+    property OptMicromapVisible: boolean read FMicromapVisible write SetMicromapVisible default cInitMicromapVisible;
+    property OptMicromapWidth: integer read FMicromapWidth write FMicromapWidth default cInitMicromapWidth;
+    property OptCharSpacingX: integer read GetCharSpacingX write SetCharSpacingX default 0;
+    property OptCharSpacingY: integer read GetCharSpacingY write SetCharSpacingY default cInitSpacingText;
+    property OptWrapMode: TATSynWrapMode read FWrapMode write SetWrapMode default cWrapOn;
+    property OptWrapIndented: boolean read FWrapIndented write SetWrapIndented default true;
+    property OptMarginRight: integer read FMarginRight write SetMarginRight default cInitMarginRight;
     property OptMarginString: string read GetMarginString write SetMarginString;
-    property OptNumbersAutosize: boolean read FOptNumbersAutosize write FOptNumbersAutosize;
-    property OptNumbersAlignment: TAlignment read FOptNumbersAlignment write FOptNumbersAlignment;
-    property OptNumbersFontSize: integer read FOptNumbersFontSize write FOptNumbersFontSize;
-    property OptNumbersStyle: TATSynNumbersStyle read FOptNumbersStyle write FOptNumbersStyle;
-    property OptNumbersShowFirst: boolean read FOptNumbersShowFirst write FOptNumbersShowFirst;
-    property OptNumbersShowCarets: boolean read FOptNumbersShowCarets write FOptNumbersShowCarets;
+    property OptNumbersAutosize: boolean read FOptNumbersAutosize write FOptNumbersAutosize default true;
+    property OptNumbersAlignment: TAlignment read FOptNumbersAlignment write FOptNumbersAlignment default taRightJustify;
+    property OptNumbersFontSize: integer read FOptNumbersFontSize write FOptNumbersFontSize default 0;
+    property OptNumbersStyle: TATSynNumbersStyle read FOptNumbersStyle write FOptNumbersStyle default cInitNumbersStyle;
+    property OptNumbersShowFirst: boolean read FOptNumbersShowFirst write FOptNumbersShowFirst default true;
+    property OptNumbersShowCarets: boolean read FOptNumbersShowCarets write FOptNumbersShowCarets default false;
     property OptNumbersSkippedChar: atString read FOptNumbersSkippedChar write FOptNumbersSkippedChar;
-    property OptNumbersIndentLeft: integer read FOptNumbersIndentLeft write FOptNumbersIndentLeft;
-    property OptNumbersIndentRight: integer read FOptNumbersIndentRight write FOptNumbersIndentRight;
-    property OptUnprintedVisible: boolean read FUnprintedVisible write FUnprintedVisible;
-    property OptUnprintedSpaces: boolean read FUnprintedSpaces write FUnprintedSpaces;
-    property OptUnprintedEnds: boolean read FUnprintedEnds write FUnprintedEnds;
-    property OptUnprintedEndsDetails: boolean read FUnprintedEndsDetails write FUnprintedEndsDetails;
-    property OptUnprintedReplaceSpec: boolean read FUnprintedReplaceSpec write FUnprintedReplaceSpec;
-    property OptMouseEnableNormalSelection: boolean read FOptMouseEnableNormalSelection write FOptMouseEnableNormalSelection;
-    property OptMouseEnableColumnSelection: boolean read FOptMouseEnableColumnSelection write FOptMouseEnableColumnSelection;
-    property OptMouseDownForPopup: boolean read FOptMouseDownForPopup write FOptMouseDownForPopup;
-    property OptMouseHideCursorOnType: boolean read FOptMouseHideCursor write FOptMouseHideCursor;
-    property OptMouse2ClickSelectsLine: boolean read FOptMouse2ClickSelectsLine write FOptMouse2ClickSelectsLine;
-    property OptMouse3ClickSelectsLine: boolean read FOptMouse3ClickSelectsLine write FOptMouse3ClickSelectsLine;
-    property OptMouse2ClickDragSelectsWords: boolean read FOptMouse2ClickDragSelectsWords write FOptMouse2ClickDragSelectsWords;
-    property OptMouseDragDrop: boolean read FOptMouseDragDrop write FOptMouseDragDrop;
-    property OptMouseNiceScroll: boolean read FOptMouseNiceScroll write FOptMouseNiceScroll;
-    property OptMouseRightClickMovesCaret: boolean read FOptMouseRightClickMovesCaret write FOptMouseRightClickMovesCaret;
-    property OptMouseGutterClickSelectsLine: boolean read FOptMouseGutterClickSelectsLine write FOptMouseGutterClickSelectsLine;
-    property OptKeyBackspaceUnindent: boolean read FOptKeyBackspaceUnindent write FOptKeyBackspaceUnindent;
-    property OptKeyPageKeepsRelativePos: boolean read FOptKeyPageKeepsRelativePos write FOptKeyPageKeepsRelativePos;
-    property OptKeyUpDownNavigateWrapped: boolean read FOptKeyUpDownNavigateWrapped write FOptKeyUpDownNavigateWrapped;
-    property OptKeyUpDownKeepColumn: boolean read FOptKeyUpDownKeepColumn write FOptKeyUpDownKeepColumn;
-    property OptKeyHomeEndNavigateWrapped: boolean read FOptKeyHomeEndNavigateWrapped write FOptKeyHomeEndNavigateWrapped;
-    property OptKeyPageUpDownSize: TATPageUpDownSize read FOptKeyPageUpDownSize write FOptKeyPageUpDownSize;
-    property OptKeyLeftRightSwapSel: boolean read FOptKeyLeftRightSwapSel write FOptKeyLeftRightSwapSel;
-    property OptKeyLeftRightSwapSelAndSelect: boolean read FOptKeyLeftRightSwapSelAndSelect write FOptKeyLeftRightSwapSelAndSelect;
-    property OptKeyHomeToNonSpace: boolean read FOptKeyHomeToNonSpace write FOptKeyHomeToNonSpace;
-    property OptKeyEndToNonSpace: boolean read FOptKeyEndToNonSpace write FOptKeyEndToNonSpace;
-    property OptKeyTabIndents: boolean read FOptKeyTabIndents write FOptKeyTabIndents;
-    property OptIndentSize: integer read FOptIndentSize write FOptIndentSize;
-    property OptIndentKeepsAlign: boolean read FOptIndentKeepsAlign write FOptIndentKeepsAlign;
-    property OptShowIndentLines: boolean read FOptShowIndentLines write FOptShowIndentLines;
-    property OptShowGutterCaretBG: boolean read FOptShowGutterCaretBG write FOptShowGutterCaretBG;
-    property OptAllowScrollbars: boolean read FOptAllowScrollbars write FOptAllowScrollbars;
-    property OptAllowZooming: boolean read FOptAllowZooming write FOptAllowZooming;
-    property OptAllowReadOnly: boolean read FOptAllowReadOnly write FOptAllowReadOnly;
-    property OptUndoLimit: integer read GetUndoLimit write SetUndoLimit;
-    property OptUndoGrouped: boolean read FOptUndoGrouped write FOptUndoGrouped;
-    property OptUndoAfterSave: boolean read GetUndoAfterSave write SetUndoAfterSave;
-    property OptSavingForceFinalEol: boolean read FOptSavingForceFinalEol write FOptSavingForceFinalEol;
-    property OptSavingTrimSpaces: boolean read FOptSavingTrimSpaces write FOptSavingTrimSpaces;
+    property OptNumbersIndentLeft: integer read FOptNumbersIndentLeft write FOptNumbersIndentLeft default 5;
+    property OptNumbersIndentRight: integer read FOptNumbersIndentRight write FOptNumbersIndentRight default 5;
+    property OptUnprintedVisible: boolean read FUnprintedVisible write FUnprintedVisible default true;
+    property OptUnprintedSpaces: boolean read FUnprintedSpaces write FUnprintedSpaces default true;
+    property OptUnprintedEnds: boolean read FUnprintedEnds write FUnprintedEnds default true;
+    property OptUnprintedEndsDetails: boolean read FUnprintedEndsDetails write FUnprintedEndsDetails default true;
+    property OptUnprintedEof: boolean read FUnprintedEof write FUnprintedEof default true;
+    property OptMouseEnableAll: boolean read FOptMouseEnableAll write FOptMouseEnableAll default true;
+    property OptMouseEnableNormalSelection: boolean read FOptMouseEnableNormalSelection write FOptMouseEnableNormalSelection default true;
+    property OptMouseEnableColumnSelection: boolean read FOptMouseEnableColumnSelection write FOptMouseEnableColumnSelection default true;
+    property OptMouseDownForPopup: boolean read FOptMouseDownForPopup write FOptMouseDownForPopup default false;
+    property OptMouseHideCursorOnType: boolean read FOptMouseHideCursor write FOptMouseHideCursor default false;
+    property OptMouse2ClickSelectsLine: boolean read FOptMouse2ClickSelectsLine write FOptMouse2ClickSelectsLine default false;
+    property OptMouse3ClickSelectsLine: boolean read FOptMouse3ClickSelectsLine write FOptMouse3ClickSelectsLine default true;
+    property OptMouse2ClickDragSelectsWords: boolean read FOptMouse2ClickDragSelectsWords write FOptMouse2ClickDragSelectsWords default true;
+    property OptMouseDragDrop: boolean read FOptMouseDragDrop write FOptMouseDragDrop default true;
+    property OptMouseDragDropCopying: boolean read FOptMouseDragDropCopying write FOptMouseDragDropCopying default true;
+    property OptMouseDragDropCopyingWithState: TShiftStateEnum read FOptMouseDragDropCopyingWithState write FOptMouseDragDropCopyingWithState default ssCtrl;
+    property OptMouseNiceScroll: boolean read FOptMouseNiceScroll write FOptMouseNiceScroll default true;
+    property OptMouseRightClickMovesCaret: boolean read FOptMouseRightClickMovesCaret write FOptMouseRightClickMovesCaret default false;
+    property OptMouseGutterClickSelectsLine: boolean read FOptMouseGutterClickSelectsLine write FOptMouseGutterClickSelectsLine default true;
+    property OptMouseWheelScrollVert: boolean read FOptMouseWheelScrollVert write FOptMouseWheelScrollVert default true;
+    property OptMouseWheelScrollVertSpeed: integer read FOptMouseWheelScrollVertSpeed write FOptMouseWheelScrollVertSpeed default 3;
+    property OptMouseWheelScrollHorz: boolean read FOptMouseWheelScrollHorz write FOptMouseWheelScrollHorz default true;
+    property OptMouseWheelScrollHorzSpeed: integer read FOptMouseWheelScrollHorzSpeed write FOptMouseWheelScrollHorzSpeed default 10;
+    property OptMouseWheelScrollHorzWithState: TShiftStateEnum read FOptMouseWheelScrollHorzWithState write FOptMouseWheelScrollHorzWithState default ssShift;
+    property OptMouseWheelScrollHorzWithState2: TShiftStateEnum read FOptMouseWheelScrollHorzWithState2 write FOptMouseWheelScrollHorzWithState2 default ssHyper;
+    property OptMouseWheelZooms: boolean read FOptMouseWheelZooms write FOptMouseWheelZooms default true;
+    property OptMouseWheelZoomsWithState: TShiftStateEnum read FOptMouseWheelZoomsWithState write FOptMouseWheelZoomsWithState default ssCtrl;
+    property OptKeyBackspaceUnindent: boolean read FOptKeyBackspaceUnindent write FOptKeyBackspaceUnindent default true;
+    property OptKeyPageKeepsRelativePos: boolean read FOptKeyPageKeepsRelativePos write FOptKeyPageKeepsRelativePos default true;
+    property OptKeyUpDownNavigateWrapped: boolean read FOptKeyUpDownNavigateWrapped write FOptKeyUpDownNavigateWrapped default true;
+    property OptKeyUpDownKeepColumn: boolean read FOptKeyUpDownKeepColumn write FOptKeyUpDownKeepColumn default true;
+    property OptKeyHomeEndNavigateWrapped: boolean read FOptKeyHomeEndNavigateWrapped write FOptKeyHomeEndNavigateWrapped default true;
+    property OptKeyPageUpDownSize: TATPageUpDownSize read FOptKeyPageUpDownSize write FOptKeyPageUpDownSize default cPageSizeFullMinus1;
+    property OptKeyLeftRightSwapSel: boolean read FOptKeyLeftRightSwapSel write FOptKeyLeftRightSwapSel default true;
+    property OptKeyLeftRightSwapSelAndSelect: boolean read FOptKeyLeftRightSwapSelAndSelect write FOptKeyLeftRightSwapSelAndSelect default false;
+    property OptKeyHomeToNonSpace: boolean read FOptKeyHomeToNonSpace write FOptKeyHomeToNonSpace default true;
+    property OptKeyEndToNonSpace: boolean read FOptKeyEndToNonSpace write FOptKeyEndToNonSpace default true;
+    property OptKeyTabIndents: boolean read FOptKeyTabIndents write FOptKeyTabIndents default true;
+    property OptIndentSize: integer read FOptIndentSize write FOptIndentSize default 2;
+    property OptIndentKeepsAlign: boolean read FOptIndentKeepsAlign write FOptIndentKeepsAlign default true;
+    property OptMaxLinesToCountUnindent: integer read FOptMaxLinesToCountUnindent write FOptMaxLinesToCountUnindent default 100;
+    property OptShowIndentLines: boolean read FOptShowIndentLines write FOptShowIndentLines default true;
+    property OptShowGutterCaretBG: boolean read FOptShowGutterCaretBG write FOptShowGutterCaretBG default true;
+    property OptAllowScrollbarVert: boolean read FOptAllowScrollbarVert write FOptAllowScrollbarVert default true;
+    property OptAllowScrollbarHorz: boolean read FOptAllowScrollbarHorz write FOptAllowScrollbarHorz default true;
+    property OptAllowZooming: boolean read FOptAllowZooming write FOptAllowZooming default true;
+    property OptAllowReadOnly: boolean read FOptAllowReadOnly write FOptAllowReadOnly default true;
+    property OptUndoLimit: integer read GetUndoLimit write SetUndoLimit default 5000;
+    property OptUndoGrouped: boolean read FOptUndoGrouped write FOptUndoGrouped default true;
+    property OptUndoAfterSave: boolean read GetUndoAfterSave write SetUndoAfterSave default true;
+    property OptSavingForceFinalEol: boolean read FOptSavingForceFinalEol write FOptSavingForceFinalEol default false;
+    property OptSavingTrimSpaces: boolean read FOptSavingTrimSpaces write FOptSavingTrimSpaces default false;
+    property OptPasteAtEndMakesFinalEmptyLine: boolean read FOptPasteAtEndMakesFinalEmptyLine write FOptPasteAtEndMakesFinalEmptyLine default true;
   end;
+
+var
+  //better to have as global bar (for many editors)
+  OptMouseDragDropFocusesTargetEditor: boolean = true;
 
 
 implementation
@@ -1013,7 +1217,6 @@ uses
   Dialogs,
   Types,
   Math,
-  Clipbrd,
   ATSynEdit_Commands,
   ATSynEdit_Keymap_Init,
   ATStringProc_WordJump;
@@ -1043,7 +1246,7 @@ begin
 
   for i:= NRulerStart to NRulerStart+GetVisibleColumns+1 do
   begin
-    NX:= FTextOffset.X+(i-NRulerStart)*FCharSize.X;
+    NX:= FRectMain.Left + (i-NRulerStart)*FCharSize.X;
     NSize:= IfThen(i mod 5 = 0, FOptRulerMarkSizeBig, FOptRulerMarkSizeSmall);
     C.Line(NX, FRectRuler.Bottom-1,
            NX, FRectRuler.Bottom-1-NSize);
@@ -1180,6 +1383,8 @@ begin
   Beep;
   {$endif}
 
+  InvalidateHilitingCache;
+
   case FWrapMode of
     cWrapOff:
       FWrapColumn:= 0;
@@ -1253,23 +1458,26 @@ end;
 
 procedure TATSynEdit.DoCalcWrapInfos(ALine: integer; AIndentMaximal: integer; AItems: TList);
 var
-  NHiddenIndex, NOffset, NLen, NIndent, NVisColumns: integer;
+  NOffset, NLen, NIndent, NVisColumns: integer;
+  bHidden: boolean;
+  NFoldFrom: integer;
   NFinal: TATSynWrapFinal;
   Str: atString;
 begin
   AItems.Clear;
 
-  NHiddenIndex:= Strings.LinesHidden[ALine, FEditorIndex];
-  if NHiddenIndex<0 then Exit;
+  bHidden:= Strings.LinesHidden[ALine, FEditorIndex];
+  if bHidden then Exit;
 
   Str:= Strings.Lines[ALine];
   NLen:= Length(Str);
   NVisColumns:= Max(GetVisibleColumns, cMinWrapColumnAbs);
 
   //line collapsed partially?
-  if NHiddenIndex>0 then
+  NFoldFrom:= Strings.LinesFoldFrom[ALine, FEditorIndex];
+  if NFoldFrom>0 then
   begin
-    AItems.Add(TATSynWrapItem.Create(ALine, 1, Min(NLen, NHiddenIndex-1), 0, cWrapItemCollapsed));
+    AItems.Add(TATSynWrapItem.Create(ALine, 1, Min(NLen, NFoldFrom-1), 0, cWrapItemCollapsed));
     Exit;
   end;
 
@@ -1313,7 +1521,10 @@ end;
 
 function TATSynEdit.GetVisibleLines: integer;
 begin
-  Result:= (FRectMain.Bottom-FRectMain.Top) div FCharSize.Y;
+  //Delta:= Gaps.SizeForLineRange(LineTop, LineBottom-1);
+  //gives jumps of v-scroll at end
+
+  Result:= (FRectMain.Bottom-FRectMain.Top{-Delta}) div FCharSize.Y;
 end;
 
 function TATSynEdit.GetVisibleColumns: integer;
@@ -1341,7 +1552,7 @@ begin
   FWrapUpdateNeeded:= true;
 end;
 
-procedure TATSynEdit.SetText(AValue: atString);
+procedure TATSynEdit.SetText(const AValue: atString);
 begin
   Strings.LoadFromString(AValue);
   DoCaretSingle(0, 0);
@@ -1355,17 +1566,14 @@ begin
   if FWrapMode=AValue then Exit;
 
   NLine:= LineTop;
-
   FWrapMode:= AValue;
   FWrapUpdateNeeded:= true;
-
   if FWrapMode<>cWrapOff then
     FScrollHorz.NPos:= 0;
 
-  Invalidate;
-  AppProcessMessages;
+  Update;
   LineTop:= NLine;
-  Invalidate;
+  Update;
 end;
 
 procedure TATSynEdit.SetWrapIndented(AValue: boolean);
@@ -1426,7 +1634,19 @@ procedure TATSynEdit.UpdateScrollbarVert;
 var
   si: TScrollInfo;
 begin
-  if not FOptAllowScrollbars then Exit;
+  if not FOptAllowScrollbarVert then Exit;
+
+  FScrollbarVert.Visible:= FOptScrollbarsNew;
+  if FOptScrollbarsNew then
+  begin
+    FScrollbarLock:= true;
+    FScrollbarVert.Min:= FScrollVert.NMin;
+    FScrollbarVert.Max:= FScrollVert.NMax;
+    FScrollbarVert.PageSize:= FScrollVert.NPage;
+    FScrollbarVert.Position:= FScrollVert.NPos;
+    FScrollbarVert.Update;
+    FScrollbarLock:= false;
+  end;
 
   FillChar(si{%H-}, SizeOf(si), 0);
   si.cbSize:= SizeOf(si);
@@ -1434,6 +1654,7 @@ begin
   si.nMin:= FScrollVert.NMin;
   si.nMax:= FScrollVert.NMax;
   si.nPage:= FScrollVert.NPage;
+  if FOptScrollbarsNew then si.nPage:= si.nMax+1;
   si.nPos:= FScrollVert.NPos;
   SetScrollInfo(Handle, SB_VERT, si, True);
 end;
@@ -1442,7 +1663,19 @@ procedure TATSynEdit.UpdateScrollbarHorz;
 var
   si: TScrollInfo;
 begin
-  if not FOptAllowScrollbars then Exit;
+  if not FOptAllowScrollbarHorz then Exit;
+
+  FScrollbarHorz.Visible:= FOptScrollbarsNew and (FScrollHorz.NMax-FScrollHorz.NMin>FScrollHorz.NPage);
+  if FOptScrollbarsNew then
+  begin
+    FScrollbarLock:= true;
+    FScrollbarHorz.Min:= FScrollHorz.NMin;
+    FScrollbarHorz.Max:= FScrollHorz.NMax;
+    FScrollbarHorz.PageSize:= FScrollHorz.NPage;
+    FScrollbarHorz.Position:= FScrollHorz.NPos;
+    FScrollbarHorz.Update;
+    FScrollbarLock:= false;
+  end;
 
   FillChar(si{%H-}, SizeOf(si), 0);
   si.cbSize:= SizeOf(si);
@@ -1450,73 +1683,86 @@ begin
   si.nMin:= FScrollHorz.NMin;
   si.nMax:= FScrollHorz.NMax;
   si.nPage:= FScrollHorz.NPage;
+  if FOptScrollbarsNew then si.nPage:= si.nMax+1;
   si.nPos:= FScrollHorz.NPos;
   SetScrollInfo(Handle, SB_HORZ, si, True);
 end;
 
 function TATSynEdit.GetRectMain: TRect;
 begin
-  Result.Left:= FTextOffset.X;
+  Result.Left:= FRectGutter.Left + FTextOffset.X;
   Result.Top:= FTextOffset.Y;
   Result.Right:= ClientWidth
-    - IfThen(FMinimapVisible, FMinimapWidth)
+    - IfThen(FMinimapVisible and not FMinimapAtLeft, FMinimapWidth)
     - IfThen(FMicromapVisible, FMicromapWidth);
   Result.Bottom:= ClientHeight;
 end;
 
 function TATSynEdit.GetRectMinimap: TRect;
 begin
-  if FMinimapVisible then
-  begin
-    Result.Left:= ClientWidth-FMinimapWidth-IfThen(FMicromapVisible, FMicromapWidth);
-    Result.Top:= 0;
-    Result.Right:= Result.Left+FMinimapWidth;
-    Result.Bottom:= ClientHeight;
-  end
+  if not FMinimapVisible then exit(cRectEmpty);
+
+  if FMinimapAtLeft then
+    Result.Left:= 0
   else
-    Result:= cRectEmpty;
+    Result.Left:= ClientWidth-FMinimapWidth-IfThen(FMicromapVisible, FMicromapWidth);
+
+  Result.Right:= Result.Left+FMinimapWidth;
+  Result.Top:= 0;
+  Result.Bottom:= ClientHeight;
+end;
+
+function TATSynEdit.GetRectMinimapSel: TRect;
+begin
+  Result.Left:= FRectMinimap.Left;
+  Result.Right:= FRectMinimap.Right;
+  Result.Top:= GetMinimapSelTop;
+  Result.Bottom:= Result.Top +
+    Min(
+      (FScrollVert.NPage+1)*FCharSizeMinimap.Y,
+      GetMinimapActualHeight
+      );
 end;
 
 function TATSynEdit.GetRectMicromap: TRect;
 begin
-  if FMicromapVisible then
-  begin
-    Result.Left:= ClientWidth-FMicromapWidth;
-    Result.Top:= 0;
-    Result.Right:= ClientWidth;
-    Result.Bottom:= ClientHeight;
-  end
-  else
-    Result:= cRectEmpty;
+  if not FMicromapVisible then exit(cRectEmpty);
+
+  Result.Left:= ClientWidth-FMicromapWidth;
+  Result.Top:= 0;
+  Result.Right:= ClientWidth;
+  Result.Bottom:= ClientHeight;
 end;
 
 function TATSynEdit.GetRectGutter: TRect;
 begin
-  if FOptGutterVisible then
+  Result.Left:= IfThen(FMinimapVisible and FMinimapAtLeft, FMinimapWidth);
+  Result.Top:= IfThen(FOptRulerVisible, FOptRulerSize);
+  Result.Right:= Result.Left + FGutter.Width;
+  Result.Bottom:= ClientHeight;
+
+  if not FOptGutterVisible then
   begin
-    Result.Left:= 0;
-    Result.Top:= IfThen(FOptRulerVisible, FOptRulerSize);
-    Result.Right:= FGutter.Width;
-    Result.Bottom:= ClientHeight;
-  end
-  else
-    Result:= cRectEmpty;
+    Result.Right:= Result.Left;
+    Result.Bottom:= Result.Top;
+    exit
+  end;
+
+  Gutter.GutterLeft:= Result.Left;
+  Gutter.Update;
 end;
 
 function TATSynEdit.GetRectRuler: TRect;
 begin
-  if FOptRulerVisible then
-  begin
-    Result.Left:= 0;
-    Result.Right:= FRectMain.Right;
-    Result.Top:= 0;
-    Result.Bottom:= Result.Top+FOptRulerSize;
-  end
-  else
-    Result:= cRectEmpty;
+  if not FOptRulerVisible then exit(cRectEmpty);
+
+  Result.Left:= FRectGutter.Left;
+  Result.Right:= FRectMain.Right;
+  Result.Top:= 0;
+  Result.Bottom:= Result.Top+FOptRulerSize;
 end;
 
-procedure TATSynEdit.DoPaintTo(C: TCanvas; ALineFrom: integer);
+procedure TATSynEdit.DoPaintMainTo(C: TCanvas; ALineFrom: integer);
 begin
   if csLoading in ComponentState then Exit;
 
@@ -1540,6 +1786,10 @@ begin
 
   UpdateWrapInfo;
 
+  if not CanvasTextOutMustUseOffsets then
+    DoUpdateFontNeedsOffsets(C);
+
+  DoCalcLinks;
   DoPaintTextTo(C, FRectMain, FCharSize, FOptGutterVisible, true, FScrollHorz, FScrollVert, ALineFrom);
   DoPaintMarginsTo(C);
   DoPaintNiceScroll(C);
@@ -1558,6 +1808,12 @@ begin
     DoPaintMinimapTo(C);
   if FMicromapVisible then
     DoPaintMicromapTo(C);
+
+  if FOptBorderVisible then
+  begin
+    C.Pen.Color:= Colors.BorderLine;
+    C.Frame(0, 0, ClientWidth, ClientHeight);
+  end;
 end;
 
 function TATSynEdit.GetCharSize(C: TCanvas; ACharSpacing: TPoint): TPoint;
@@ -1589,10 +1845,10 @@ procedure TATSynEdit.DoPaintTextTo(C: TCanvas;
   var AScrollHorz, AScrollVert: TATSynScrollInfo;
   ALineFrom: integer);
 var
-  NCoordTop, NCoordSep: integer;
-  NWrapIndex, NLinesIndex: integer;
+  NCoordTop, NCoordTopGapped, NCoordSep: integer;
+  NWrapIndex, NWrapIndexDummy, NLinesIndex: integer;
   NOutputCharsSkipped, NOutputStrWidth: integer;
-  NOutputSpacesSkipped: real;
+  NOutputSpacesSkipped: integer;
   WrapItem: TATSynWrapItem;
   NColorEntire, NColorAfter: TColor;
   Str, StrOut, StrOutUncut: atString;
@@ -1602,6 +1858,7 @@ var
   Parts: TATLineParts;
   Event: TATSynEditDrawLineEvent;
   StrSize: TSize;
+  ItemGap: TATSynGapItem;
   //
   procedure DoPaintGutterBandState(ATop: integer; AColor: TColor);
   begin
@@ -1644,20 +1901,32 @@ begin
 
   if ALineFrom>=0 then
   begin
-    FWrapInfo.FindIndexesOfLineNumber(ALineFrom, NWrapIndex, NColorAfter{dummy});
+    FWrapInfo.FindIndexesOfLineNumber(ALineFrom, NWrapIndex, NWrapIndexDummy);
     AScrollVert.NPos:= NWrapIndex;
   end
   else
     NWrapIndex:= AScrollVert.NPos;
 
+  DoEventBeforeCalcHilite;
+
   repeat
     if NCoordTop>ARect.Bottom then Break;
-    if not FWrapInfo.IsIndexValid(NWrapIndex) then Break;
+    if not FWrapInfo.IsIndexValid(NWrapIndex) then
+    begin
+      if NWrapIndex>=0 then
+        if OptUnprintedVisible and OptUnprintedEof then
+          CanvasArrowHorz(C, Rect(ARect.Left, NCoordTop, ARect.Right, NCoordTop+ACharSize.Y),
+            Colors.UnprintedFont, OptUnprintedEofCharLength*ACharSize.X, false);
+      Break;
+    end;
 
     WrapItem:= FWrapInfo.Items[NWrapIndex];
     NLinesIndex:= WrapItem.NLineIndex;
     if not Strings.IsIndexValid(NLinesIndex) then Break;
-    FLineBottom:= NLinesIndex;
+
+    //don't update FLineBottom if minimap paints
+    if AMainText then
+      FLineBottom:= NLinesIndex;
 
     if IsFoldLineNeededBeforeWrapitem(NWrapIndex) then
     begin
@@ -1677,7 +1946,7 @@ begin
     StrOut:= Str;
     StrOutUncut:= StrOut;
     AScrollHorz.NMax:= Max(AScrollHorz.NMax,
-      Round(CanvasTextSpaces(StrOutUncut, FTabSize)) + cScrollKeepHorz);
+      CanvasTextWidth(StrOutUncut, FTabSize, Point(1, 1){cell size=1pixel}) + cScrollKeepHorz);
 
     CurrPoint.X:= ARect.Left;
     CurrPoint.Y:= NCoordTop;
@@ -1704,7 +1973,7 @@ begin
         SFindOutputSkipOffset(StrOut, FTabSize, AScrollHorz.NPos, NOutputCharsSkipped, NOutputSpacesSkipped);
         Delete(StrOut, 1, NOutputCharsSkipped);
         Delete(StrOut, cMaxCharsForOutput, MaxInt);
-        Inc(CurrPointText.X, Trunc(NOutputSpacesSkipped*ACharSize.X));
+        Inc(CurrPointText.X, NOutputSpacesSkipped * ACharSize.X);
       end;
 
       if WrapItem.NIndent>0 then
@@ -1744,14 +2013,15 @@ begin
       else
         Event:= nil;
 
-      if FUnprintedReplaceSpec then
-        StrOut:= SRemoveAsciiControlChars(StrOut);
+      StrOut:= SRemoveAsciiControlChars(StrOut, WideChar(OptUnprintedReplaceSpecToCode));
+      CanvasTextOutHorzSpacingUsed:= OptCharSpacingX<>0;
 
       if AMainText then
         CanvasTextOut(C,
           CurrPointText.X,
           CurrPointText.Y,
           StrOut,
+          FFontNeedsOffsets,
           FTabSize,
           ACharSize,
           AMainText,
@@ -1759,16 +2029,19 @@ begin
           FColors.UnprintedFont,
           FColors.UnprintedHexFont,
           NOutputStrWidth,
-          Trunc(NOutputSpacesSkipped), //todo:
-            //needed number of chars of all chars counted as 1.0,
-            //while NOutputSpacesSkipped is with cjk counted as 1.7
+          NOutputSpacesSkipped, //todo:
+            //needed number of chars of all chars counted as 100%,
+            //while NOutputSpacesSkipped is with cjk counted as 170%
           @Parts,
           Event,
-          FOptTextOffsetFromLine
+          FOptTextOffsetFromLine,
+          ClientWidth+ACharSize.X*2,
+          FOptShowFontLigatures and (not LineWithCaret)
           )
       else
         CanvasTextOutMinimap(C,
           StrOut,
+          ARect,
           CurrPointText,
           FCharSizeMinimap,
           FTabSize,
@@ -1806,7 +2079,7 @@ begin
 
     if WrapItem.NFinal=cWrapItemFinal then
     begin
-      //for OptShowFullSel=false paint eol bg
+      //for OptShowFullWidthForSelection=false paint eol bg
       if LineEolSelected then
       begin
         C.Brush.Color:= FColors.TextSelBG;
@@ -1832,7 +2105,7 @@ begin
     if AMainText then
       if WrapItem.NFinal=cWrapItemCollapsed then
         DoPaintFoldedMark(C,
-          Point(Strings.LinesHidden[NLinesIndex, FEditorIndex]-1, NLinesIndex),
+          Point(Strings.LinesFoldFrom[NLinesIndex, FEditorIndex]-1, NLinesIndex),
           CoordAfterText,
           GetFoldedMarkText(NLinesIndex));
 
@@ -1858,11 +2131,15 @@ begin
       if FGutter[FGutterBandNum].Visible then
       begin
         if LineWithCaret and FOptShowGutterCaretBG then
+        begin
           DoPaintGutterBandBG(C, FGutterBandNum, FColors.GutterCaretBG, NCoordTop, NCoordTop+ACharSize.Y);
+          C.Font.Color:= FColors.GutterCaretFont;
+        end
+        else
+          C.Font.Color:= FColors.GutterFont;
 
         if FWrapInfo.IsItemInitial(NWrapIndex) then
         begin
-          C.Font.Color:= FColors.GutterFont;
           if FOptNumbersFontSize<>0 then
             C.Font.Size:= FOptNumbersFontSize;
 
@@ -1933,11 +2210,64 @@ begin
     //end of painting line
     Inc(NCoordTop, ACharSize.Y);
     Inc(NWrapIndex);
+
+    //consider gap (not for minimap)
+    if AMainText and (WrapItem.NFinal=cWrapItemFinal) then
+    begin
+      ItemGap:= Gaps.Find(NLinesIndex);
+      if Assigned(ItemGap) then
+      begin
+        NCoordTopGapped:= NCoordTop + ItemGap.Size;
+        DoPaintGapTo(C, Rect(ARect.Left, NCoordTop, ARect.Right, NCoordTopGapped), ItemGap);
+        NCoordTop:= NCoordTopGapped;
+      end;
+    end;
   until false;
 
   //staples
   if AMainText then
     DoPaintStaples(C, ARect, ACharSize, AScrollHorz);
+end;
+
+function TATSynEdit.GetMinimapSelTop: integer;
+begin
+  Result:= FRectMinimap.Top + (FScrollVert.NPos-FScrollVertMinimap.NPos)*FCharSizeMinimap.Y;
+end;
+
+function TATSynEdit.GetMinimapActualHeight: integer;
+begin
+  Result:=
+    Max(2, Min(
+      FRectMinimap.Bottom-FRectMinimap.Top,
+      FWrapInfo.Count*FCharSizeMinimap.Y
+      ));
+end;
+
+function TATSynEdit.GetMinimapSelTop_PixelsToWrapIndex(APixels: integer): integer;
+var
+  Percent: double;
+const
+  PercentFix: double = 0.02;
+begin
+  {
+  1) calculate percent position of mouse
+  2) must correct this! we must scroll to 0 if almost at the top;
+    must scroll to end if almost at the end - do this by increment n%
+  }
+  Percent:= (APixels-FRectMinimap.Top) / GetMinimapActualHeight;
+
+  if Percent<0.1 then Percent:= Max(0.0, Percent-PercentFix) else
+   if Percent>0.9 then Percent:= Min(100.0, Percent+PercentFix);
+
+  Result:= Round(Percent * FWrapInfo.Count);
+end;
+
+function TATSynEdit.GetOptTextOffsetTop: integer;
+begin
+  if ModeOneLine then
+    Result:= (ClientHeight - TextCharSize.Y) div 2
+  else
+    Result:= FOptTextOffsetTop;
 end;
 
 procedure TATSynEdit.DoPaintMinimapSelTo(C: TCanvas);
@@ -1947,11 +2277,7 @@ begin
   if not FMinimapShowSelAlways then
     if not FCursorOnMinimap then Exit;
 
-  R.Left:= FRectMinimap.Left;
-  R.Right:= FRectMinimap.Right;
-  R.Top:= FRectMinimap.Top + (FScrollVert.NPos-FScrollVertMinimap.NPos)*FCharSizeMinimap.Y;
-  R.Bottom:= R.Top + (FScrollVert.NPage+1)*FCharSizeMinimap.Y;
-
+  R:= GetRectMinimapSel;
   if IntersectRect(R, R, FRectMinimap) then
   begin
     CanvasInvertRect(C, R, FColors.MinimapSelBG);
@@ -1995,6 +2321,26 @@ begin
   end;
 end;
 
+
+procedure TATSynEdit.DoPaintGapTo(C: TCanvas; const ARect: TRect; AGap: TATSynGapItem);
+var
+  RHere, RBmp: TRect;
+begin
+  if AGap.Bitmap<>nil then
+  begin
+    RBmp:= Rect(0, 0, AGap.Bitmap.Width, AGap.Bitmap.Height);
+    //RHere is rect of bitmap's size, located at center of ARect
+    RHere.Left:= GetGapBitmapPosLeft(ARect, AGap.Bitmap);
+    RHere.Top:= (ARect.Top+ARect.Bottom-RBmp.Bottom) div 2;
+    RHere.Right:= RHere.Left + RBmp.Right;
+    RHere.Bottom:= RHere.Top + RBmp.Bottom;
+    C.CopyRect(RHere, AGap.Bitmap.Canvas, RBmp);
+  end
+  else
+  if Assigned(FOnDrawGap) then
+    FOnDrawGap(Self, C, ARect, AGap);
+end;
+
 procedure TATSynEdit.DoPaintMarginLineTo(C: TCanvas; AX: integer; AColor: TColor);
 begin
   if (AX>=FRectMain.Left) and (AX<FRectMain.Right) then
@@ -2027,7 +2373,14 @@ var
   NWidth: integer;
   Str: string;
 begin
-  Str:= STabsToSpaces(AMarkText, FTabSize);
+  Str:= AMarkText;
+
+  SReplaceAll(Str, #10, '');
+    //todo: for some reason, for Python, for "if/for" blocks, text has #10 at AMarkText begin
+    //this is workaround
+  Str:= STabsToSpaces(Str, OptTabSize);
+    //expand tabs too
+
   Inc(ACoord.X, cFoldedMarkIndentOuter);
 
   //set colors:
@@ -2051,7 +2404,7 @@ begin
   NWidth:= C.TextWidth(Str) + 2*cFoldedMarkIndentInner;
 
   //paint frame
-  C.Pen.Color:= FColors.CollapseMarkFont;
+  C.Pen.Color:= FColors.CollapseMarkBorder;
   C.Brush.Style:= bsClear;
   C.Rectangle(ACoord.X, ACoord.Y, ACoord.X+NWidth, ACoord.Y+FCharSize.Y);
   C.Brush.Style:= bsSolid;
@@ -2083,12 +2436,17 @@ end;
 
 function TATSynEdit.GetLineTop: integer;
 var
-  Item: TATSynWrapItem;
+  N: integer;
 begin
   Result:= 0;
-  Item:= FWrapInfo.Items[FScrollVert.NPos];
-  if Assigned(Item) then
-    Result:= Item.NLineIndex;
+  N:= FScrollVert.NPos;
+  if FWrapInfo.IsIndexValid(N) then
+    Result:= FWrapInfo.Items[N].NLineIndex;
+end;
+
+function TATSynEdit.GetColumnLeft: integer;
+begin
+  Result:= FScrollHorz.NPos;
 end;
 
 constructor TATSynEdit.Create(AOwner: TComponent);
@@ -2099,20 +2457,46 @@ begin
 
   Caption:= '';
   ControlStyle:= ControlStyle+[csOpaque, csDoubleClicks, csTripleClicks];
+  DoubleBuffered:= IsDoubleBufferedNeeded;
   BorderStyle:= bsNone;
   TabStop:= true;
 
   Width:= 300;
-  Height:= 200;
+  Height:= 250;
+  FScalePercents:= 100;
   Font.Name:= 'Courier New';
-  Font.Size:= {$ifndef darwin} 9 {$else} 14 {$endif};
+  Font.Size:= 9;
+
+  FScrollbarVert:= TATScroll.Create(Self);
+  FScrollbarVert.Hide;
+  FScrollbarVert.Parent:= Self;
+  FScrollbarVert.Align:= alRight;
+  FScrollbarVert.Kind:= sbVertical;
+  FScrollbarVert.Cursor:= crArrow;
+  FScrollbarVert.Width:= cEditorScrollbarWidth;
+  FScrollbarVert.IndentBorder:= cEditorScrollbarBorderSize;
+  FScrollbarVert.OnChange:= @OnNewScrollbarVertChanged;
+
+  FScrollbarHorz:= TATScroll.Create(Self);
+  FScrollbarHorz.Hide;
+  FScrollbarHorz.Parent:= Self;
+  FScrollbarHorz.Align:= alBottom;
+  FScrollbarHorz.Kind:= sbHorizontal;
+  FScrollbarHorz.Cursor:= crArrow;
+  FScrollbarHorz.Height:= cEditorScrollbarWidth;
+  FScrollbarHorz.IndentCorner:= cEditorScrollbarWidth;
+  FScrollbarHorz.IndentBorder:= cEditorScrollbarBorderSize;
+  FScrollbarHorz.OnChange:= @OnNewScrollbarHorzChanged;
 
   FWantTabs:= true;
+  FWantReturns:= true;
   FCharSize:= Point(4, 4); //not nul
   FEditorIndex:= 0;
 
   FCarets:= TATCarets.Create;
   FCarets.Add(0, 0);
+  FCarets.OnCaretChanged:= @DoCaretsOnChanged;
+
   FCaretBlinkEnabled:= true;
   FCaretShown:= false;
   FCaretShapeIns:= cInitCaretShapeIns;
@@ -2122,12 +2506,25 @@ begin
   FCaretSpecPos:= false;
   FCaretStopUnfocused:= true;
 
+  FMarkers:= TATMarkers.Create;
+  FAttribs:= TATMarkers.Create;
+  FMarkedRange:= TATMarkers.Create;
+  FAdapterCache:= TATAdapterHiliteCache.Create;
+
+  {$ifdef test_markedrange}
+  DoSetMarkedRange(1, 3);
+  {$endif}
+  {$ifdef test_attribs}
+  DoDebugAddAttribs;
+  {$endif}
+
   FPaintLocked:= 0;
   FPaintStatic:= false;
   FPaintFlags:= [cPaintUpdateBitmap, cPaintUpdateScrollbars];
 
   FColors:= TATSynEditColors.Create;
   InitDefaultColors(FColors);
+  InitMouseActions(FMouseActions);
 
   FCursorText:= crIBeam;
   FCursorBm:= crHandPoint;
@@ -2159,6 +2556,7 @@ begin
 
   FFold:= TATSynRanges.Create;
   FFoldStyle:= cInitFoldStyle;
+  FFoldEnabled:= true;
 
   FWrapInfo:= TATSynWrapInfo.Create;
   FWrapInfo.OnCheckLineCollapsed:= @IsLineFoldedFull;
@@ -2177,9 +2575,8 @@ begin
   FUnprintedSpaces:= true;
   FUnprintedEnds:= true;
   FUnprintedEndsDetails:= true;
-  FUnprintedReplaceSpec:= true;
+  FUnprintedEof:= true;
 
-  FTextLocked:= 'wait...';
   FTextHint:= '';
   FTextHintFontStyle:= [fsItalic];
   FTextHintCenter:= false;
@@ -2190,6 +2587,7 @@ begin
   FOptGutterShowFoldAlways:= true;
   FOptGutterShowFoldLines:= true;
   FOptGutterShowFoldLinesAll:= false;
+  FOptGutterIcons:= cGutterIconsPlusMinus;
 
   FGutterBandBm:= 0;
   FGutterBandNum:= 1;
@@ -2219,6 +2617,7 @@ begin
   FOptNumbersIndentLeft:= 5;
   FOptNumbersIndentRight:= 5;
 
+  FOptBorderVisible:= false;
   FOptRulerVisible:= true;
   FOptRulerSize:= cSizeRulerHeight;
   FOptRulerMarkSizeSmall:= cSizeRulerMarkSmall;
@@ -2231,19 +2630,30 @@ begin
   FMinimapVisible:= cInitMinimapVisible;
   FMinimapShowSelBorder:= false;
   FMinimapShowSelAlways:= true;
+  FMinimapAtLeft:= false;
   FMicromapWidth:= cInitMicromapWidth;
   FMicromapVisible:= cInitMicromapVisible;
 
   FCharSpacingText:= Point(0, cInitSpacingText);
   FCharSizeMinimap:= Point(1, 2);
 
+  FOptScrollbarsNew:= false;
+  FOptScrollbarsNewArrowsKind:= asaArrowsNormal;
+
+  FOptShowFontLigatures:= true;
+  FOptShowURLs:= true;
+  FOptShowURLsRegex:= cUrlRegexInitial;
+
   FOptShowStapleStyle:= cLineStyleSolid;
   FOptShowStapleIndent:= -1;
   FOptShowStapleWidthPercent:= 100;
 
+  FOptMaxLinesToCountUnindent:= 100;
+  FOptTextOffsetLeft:= 0;
   FOptTextOffsetTop:= 0;
   FOptTextOffsetFromLine:= cInitTextOffsetFromLine;
-  FOptAllowScrollbars:= true;
+  FOptAllowScrollbarVert:= true;
+  FOptAllowScrollbarHorz:= true;
   FOptAllowZooming:= true;
   FOptAllowReadOnly:= true;
   FOptKeyBackspaceUnindent:= true;
@@ -2260,6 +2670,8 @@ begin
   FOptLastLineOnTop:= false;
   FOptOverwriteSel:= true;
   FOptMouseDragDrop:= true;
+  FOptMouseDragDropCopying:= true;
+  FOptMouseDragDropCopyingWithState:= ssCtrl;
   FOptMouseNiceScroll:= true;
   FOptMouseHideCursor:= false;
   FOptMouse2ClickSelectsLine:= false;
@@ -2267,12 +2679,22 @@ begin
   FOptMouse2ClickDragSelectsWords:= true;
   FOptMouseRightClickMovesCaret:= false;
   FOptMouseGutterClickSelectsLine:= true;
+  FOptMouseWheelScrollVert:= true;
+  FOptMouseWheelScrollVertSpeed:= 3;
+  FOptMouseWheelScrollHorz:= true;
+  FOptMouseWheelScrollHorzSpeed:= 10;
+  FOptMouseWheelScrollHorzWithState:= ssShift;
+  FOptMouseWheelScrollHorzWithState2:= ssHyper;
+  FOptMouseWheelZooms:= true;
+  FOptMouseWheelZoomsWithState:= ssCtrl;
+
   FOptCopyLinesIfNoSel:= true;
   FOptCutLinesIfNoSel:= false;
   FOptShowFullSel:= false;
   FOptShowFullHilite:= true;
   FOptShowCurLine:= false;
   FOptShowCurLineMinimal:= true;
+  FOptShowCurLineOnlyFocused:= false;
   FOptShowCurColumn:= false;
   FOptKeyPageUpDownSize:= cPageSizeFullMinus1;
   FOptKeyLeftRightSwapSel:= true;
@@ -2289,12 +2711,16 @@ begin
   FOptSavingTrimSpaces:= false;
   FOptShowScrollHint:= false;
   FOptCaretPreferLeftSide:= true;
+  FOptCaretPosAfterPasteColumn:= cPasteCaretColumnRight;
+  FOptMarkersSize:= 4;
+  FOptMouseEnableAll:= true;
   FOptMouseDownForPopup:= false;
   FOptMouseEnableNormalSelection:= true;
   FOptMouseEnableColumnSelection:= true;
+  FOptPasteAtEndMakesFinalEmptyLine:= true;
 
   FMouseDownPnt:= Point(-1, -1);
-  FMouseDownNumber:= -1;
+  FMouseDownGutterLineNumber:= -1;
   FMouseDownDouble:= false;
   FMouseDownRight:= false;
   FMouseDragDropping:= false;
@@ -2335,12 +2761,16 @@ begin
   FreeAndNil(FTimerScroll);
   FreeAndNil(FTimerBlink);
   FreeAndNil(FCarets);
+  FreeAndNil(FMarkedRange);
+  FreeAndNil(FMarkers);
+  FreeAndNil(FAttribs);
   FreeAndNil(FGutter);
   FreeAndNil(FMarginList);
   FreeAndNil(FWrapInfo);
   FreeAndNil(FStringsInt);
   FreeAndNil(FBitmap);
   FreeAndNil(FColors);
+  FreeAndNil(FAdapterCache);
   inherited;
 end;
 
@@ -2362,6 +2792,22 @@ begin
   LCLIntf.SetFocus(Handle);
 end;
 
+function TATSynEdit.ClientWidth: integer;
+begin
+  Result:= inherited ClientWidth;
+  if FScrollbarVert.Visible then
+    Dec(Result, cEditorScrollbarWidth);
+  if Result<1 then Result:= 1;
+end;
+
+function TATSynEdit.ClientHeight: integer;
+begin
+  Result:= inherited ClientHeight;
+  if FScrollbarHorz.Visible then
+    Dec(Result, cEditorScrollbarWidth);
+  if Result<1 then Result:= 1;
+end;
+
 procedure TATSynEdit.LoadFromFile(const AFilename: string);
 begin
   DoPaintModeStatic;
@@ -2377,12 +2823,14 @@ begin
   DoClearScrollInfo(FScrollVert);
 
   BeginUpdate;
-    //show "wait" text
-    Strings.Clear;
-    Update(true);
-    AppProcessMessages;
-
   try
+    //show "wait" text
+    //Paint;
+    //Invalidate;
+    //{$ifdef allow_proc_msg}
+    //Application.ProcessMessages;
+    //{$endif}
+
     Strings.LoadFromFile(AFilename);
   finally
     EndUpdate;
@@ -2408,9 +2856,13 @@ begin
   if FOptSavingForceFinalEol then
     Change1:= Strings.ActionEnsureFinalEol;
   if FOptSavingTrimSpaces then
-    Change2:= Strings.ActionTrimTrailSpaces;
+    Change2:= Strings.ActionTrimSpaces(cTrimRight);
+
   if Change1 or Change2 then
+  begin
     Update(true);
+    DoEventChange;
+  end;
 
   Strings.SaveToFile(AFilename);
   DoEventState; //modified
@@ -2485,12 +2937,13 @@ begin
     OptGutterVisible:= false;
     OptRulerVisible:= false;
     OptMinimapVisible:= false;
-    OptMicromapVisible:= false;
+    //OptMicromapVisible:= false;
     OptCaretVirtual:= false;
     OptCaretManyAllowed:= false;
     OptUnprintedVisible:= false;
     OptWrapMode:= cWrapOff;
-    OptAllowScrollbars:= false;
+    OptAllowScrollbarVert:= false;
+    OptAllowScrollbarHorz:= false;
     OptAllowZooming:= false;
     OptAllowReadOnly:= false;
     OptMouseNiceScroll:= false;
@@ -2498,6 +2951,14 @@ begin
     OptMarginRight:= 1000;
     OptUndoLimit:= 200;
   end;
+end;
+
+procedure TATSynEdit.SetOptScrollbarsNewArrowsKind(AValue: TATScrollArrowsKind);
+begin
+  if FOptScrollbarsNewArrowsKind=AValue then Exit;
+  FOptScrollbarsNewArrowsKind:= AValue;
+  FScrollbarVert.KindArrows:= ATSynEdit_ScrollBar.TATScrollArrowsKind(AValue);
+  FScrollbarHorz.KindArrows:= FScrollbarVert.KindArrows;
 end;
 
 procedure TATSynEdit.SetReadOnly(AValue: boolean);
@@ -2510,11 +2971,18 @@ procedure TATSynEdit.SetLineTop(AValue: integer);
 var
   NFrom, NTo, i: integer;
 begin
+  //first let's call Paint; it makes sure that WrapInfo is filled with data;
+  //then we can read WrapInfo and calc scroll pos;
+  //this is required for restoring LineTop for n tabs, on opening CudaText
+  if not HandleAllocated then exit;
+  Paint;
+
   //find exact match
   FWrapInfo.FindIndexesOfLineNumber(AValue, NFrom, NTo);
   if NFrom>=0 then
   begin
     FScrollVert.NPos:= NFrom;
+    Update;
     Exit
   end;
 
@@ -2524,8 +2992,15 @@ begin
       if NLineIndex>=AValue then
       begin
         FScrollVert.NPos:= i;
+        Update;
         Exit
       end;
+end;
+
+procedure TATSynEdit.SetColumnLeft(AValue: integer);
+begin
+  FScrollHorz.NPos:= AValue;
+  Update;
 end;
 
 procedure TATSynEdit.SetLinesFromTop(AValue: integer);
@@ -2541,11 +3016,11 @@ end;
 
 function TATSynEdit.GetTextOffset: TPoint;
 begin
-  Result.X:= 0;
+  Result.X:= OptTextOffsetLeft;
   if FOptGutterVisible then
     Inc(Result.X, FGutter.Width);
 
-  Result.Y:= FOptTextOffsetTop;
+  Result.Y:= OptTextOffsetTop;
   if FOptRulerVisible then
     Inc(Result.Y, FOptRulerSize);
 end;
@@ -2580,53 +3055,61 @@ begin
   end;
 end;
 
-function TATSynEdit.DoPaint(AFlags: TATSynPaintFlags; ALineFrom: integer): boolean;
-var
-  ARect: TRect;
+procedure TATSynEdit.DoPaintAllTo(C: TCanvas; AFlags: TATSynPaintFlags; ALineFrom: integer);
 begin
-  Result:= false;
-  if not Assigned(FBitmap) then Exit;
+  DoPaintMainTo(C, ALineFrom);
 
-  if cPaintUpdateBitmap in AFlags then
+  if cPaintUpdateCaretsCoords in AFlags then
   begin
-    DoPaintTo(FBitmap.Canvas, ALineFrom);
-
-    if cPaintUpdateCaretsCoords in AFlags then
-    begin
-      UpdateCaretsCoords;
-      if FOptShowCurColumn and (Carets.Count>0) then
-        DoPaintMarginLineTo(FBitmap.Canvas, Carets[0].CoordX, FColors.MarginCaret);
-    end;
-
-    FCaretShown:= false;
-    DoPaintCarets(FBitmap.Canvas, false);
+    UpdateCaretsCoords;
+    //paint margin
+    if FOptShowCurColumn and (Carets.Count>0) then
+      DoPaintMarginLineTo(C, Carets[0].CoordX, FColors.MarginCaret);
   end;
 
-  ARect:= Canvas.ClipRect;
-  Canvas.CopyRect(ARect, FBitmap.Canvas, ARect);
+  //paint markers after calc carets
+  DoPaintMarkersTo(C);
+
+  FCaretShown:= false;
+end;
+
+function TATSynEdit.DoPaint(AFlags: TATSynPaintFlags; ALineFrom: integer): boolean;
+begin
+  Result:= false;
+
+  if DoubleBuffered then
+  begin
+    if Assigned(FBitmap) then
+      if cPaintUpdateBitmap in AFlags then
+      begin
+        DoPaintAllTo(FBitmap.Canvas, AFlags, ALineFrom);
+      end;
+  end
+  else
+    DoPaintAllTo(Canvas, AFlags, ALineFrom);
 
   if cPaintUpdateScrollbars in AFlags then
     Result:= UpdateScrollbars;
 end;
 
 procedure TATSynEdit.DoPaintLockedWarning(C: TCanvas);
-var
-  Str: string;
 begin
   C.Brush.Color:= Colors.LockedBG;
   C.FillRect(ClientRect);
   C.Font.Assign(Self.Font);
-  Str:= FTextLocked;
-  C.TextOut(10, 10, Str);
+  C.TextOut(10, 10, cTextEditorLocked);
 end;
 
 
 procedure TATSynEdit.Paint;
 begin
+  if not HandleAllocated then exit;
   PaintEx(-1);
 end;
 
-procedure TATSynEdit.PaintEx(ALine: integer);
+procedure TATSynEdit.PaintEx(ALineNumber: integer);
+var
+  R: TRect;
 begin
   if FPaintLocked>0 then
   begin
@@ -2634,11 +3117,39 @@ begin
     Exit
   end;
 
-  //if scrollbars shown, paint again
-  if DoPaint(FPaintFlags, ALine) then
-    DoPaint(FPaintFlags, ALine);
+  if DoubleBuffered then
+    if not Assigned(FBitmap) then exit;
 
+  //if scrollbars shown, paint again
+  if DoPaint(FPaintFlags, ALineNumber) then
+    DoPaint(FPaintFlags, ALineNumber);
   Exclude(FPaintFlags, cPaintUpdateBitmap);
+
+  if cPaintUpdateCarets in FPaintFlags then
+  begin
+    Exclude(FPaintFlags, cPaintUpdateCarets);
+    if DoubleBuffered then
+    //buf mode: timer tick don't give painting of whole bitmap
+    //(cPaintUpdateBitmap off)
+    begin
+      DoPaintCarets(FBitmap.Canvas, true);
+    end
+    else
+    //non-buf mode: timer tick clears whole canvas first.
+    //we already painted bitmap above,
+    //and now we invert carets or dont invert (use FCaretAllowNextBlink)
+    begin
+      if FCaretAllowNextBlink then
+        DoPaintCarets(Canvas, true);
+    end;
+  end;
+
+  if DoubleBuffered then
+  begin
+    //single place where we flush bitmap to canvas
+    R:= Canvas.ClipRect;
+    Canvas.CopyRect(R, FBitmap.Canvas, R);
+  end;
 end;
 
 procedure TATSynEdit.DoOnResize;
@@ -2647,6 +3158,7 @@ var
 begin
   inherited;
 
+  if DoubleBuffered then
   if Assigned(FBitmap) then
   begin
     SizeX:= (Width div cResizeBitmapStep + 1)*cResizeBitmapStep;
@@ -2665,9 +3177,9 @@ begin
   PaintEx(LineTop);
 end;
 
-//needed to remove flickering on resize and mouse-over
 procedure TATSynEdit.WMEraseBkgnd(var Msg: TLMEraseBkgnd);
 begin
+  //needed to remove flickering on resize and mouse-over
   Msg.Result:= 1;
 end;
 
@@ -2690,6 +3202,27 @@ begin
   FHintWnd.Invalidate; //for Win
 end;
 
+procedure TATSynEdit.DoHintShowForBookmark(ALine: integer);
+var
+  S: string;
+  P: TPoint;
+  R: TRect;
+begin
+  if not Strings.IsIndexValid(ALine) then exit;
+  S:= Strings.LinesHint[ALine];
+  if S='' then
+    begin DoHintHide; exit end;
+
+  R:= FHintWnd.CalcHintRect(500, S, nil);
+
+  P:= Mouse.CursorPos;
+  OffsetRect(R, P.X+cHintBookmarkDx, P.Y+cHintBookmarkDy);
+
+  FHintWnd.ActivateHint(R, S);
+  FHintWnd.Invalidate; //for Win
+end;
+
+
 procedure TATSynEdit.DoHintHide;
 begin
   if Assigned(FHintWnd) then
@@ -2698,25 +3231,47 @@ end;
 
 function TATSynEdit.UpdateScrollInfoFromMessage(const Msg: TLMScroll; var Info: TATSynScrollInfo): boolean;
 begin
+  //debug
+  //application.MainForm.Caption:= format('min %d, max %d, pagesize %d, pos %d, pos-last %d',
+  //                               [info.nmin, info.nmax, info.npage, info.npos, info.NPosLast]);
+
+  if (Info.NMax-Info.NMin)<Info.NPage then
+  begin
+    DoClearScrollInfo(Info);
+    Exit(true);
+  end;
+
   case Msg.ScrollCode of
     SB_TOP:        Info.NPos:= Info.NMin;
     SB_BOTTOM:     Info.NPos:= Info.NPosLast;
 
-    SB_LINEUP:     Info.NPos:= Max(Info.NPos-1, Info.NMin);
-    SB_LINEDOWN:   Info.NPos:= Min(Info.NPos+1, Info.NPosLast);
+    SB_LINEUP:     Info.NPos:= Info.NPos-1;
+    SB_LINEDOWN:   Info.NPos:= Info.NPos+1;
 
-    SB_PAGEUP:     Info.NPos:= Max(Info.NPos-Info.NPage, Info.NMin);
-    SB_PAGEDOWN:   Info.NPos:= Min(Info.NPos+Info.NPage, Info.NPosLast);
+    SB_PAGEUP:     Info.NPos:= Info.NPos-Info.NPage;
+    SB_PAGEDOWN:   Info.NPos:= Info.NPos+Info.NPage;
 
-    SB_THUMBPOSITION: Info.NPos:= Msg.Pos;
+    SB_THUMBPOSITION:
+      begin
+        //must ignore message with Msg.Msg set: LM_VSCROLL, LM_HSCROLL;
+        //we get it on macOS during window resize, not expected! moves v-scroll pos to 0.
+        if Msg.Msg=0 then
+          Info.NPos:= Msg.Pos;
+      end;
+
     SB_THUMBTRACK:
       begin
         Info.NPos:= Msg.Pos;
         if @Info=@FScrollVert then DoHintShow;
       end;
+
     SB_ENDSCROLL:
       DoHintHide;
   end;
+
+  //correct value (if -1)
+  Info.NPos:= Min(Info.NPos, Info.NPosLast);
+  Info.NPos:= Max(Info.NPos, Info.NMin);
 
   Result:= Msg.ScrollCode<>SB_THUMBTRACK;
 end;
@@ -2727,6 +3282,65 @@ begin
   UpdateScrollInfoFromMessage(Msg, FScrollVert);
   Invalidate;
 end;
+
+{ Simple Windows IME support, only tested with Korean }
+{$ifdef Windows}
+procedure TATSynEdit.WMIME_STARTCOMPOSITION(var Msg: TMessage);
+begin
+  Msg.Result:=-1;
+end;
+
+procedure TATSynEdit.WMIME_COMPOSITION(var Msg: TMessage);
+var
+  IMC:HIMC;
+  imeCode, len:Integer;
+  p:PWideChar;
+  res:TATCommandResults;
+begin
+  if not ModeReadOnly then
+  begin
+    { work with GCS_COMPSTR and GCS_RESULTSTR }
+    if Msg.lParam and GCS_COMPSTR <> 0 then
+       imeCode := GCS_COMPSTR
+       else if Msg.lParam and GCS_RESULTSTR <> 0 then
+            imeCode := GCS_RESULTSTR
+            else
+                imeCode := 0;
+    { check compositon state }
+    if imeCode<>0 then
+    begin
+      IMC := ImmGetContext(Handle);
+      try
+         { Get Result string length }
+         len := ImmGetCompositionStringW(IMC,imeCode,nil,0);
+         GetMem(p,len+2);
+         try
+            { get compositon string }
+            ImmGetCompositionStringW(IMC,imeCode,p,len);
+            len := len shr 1;
+            p[len]:=#0;
+            { Insert text and
+              select text if it is not GCS_RESULTSTR }
+            res:=DoCommand_TextInsertAtCarets(p, False,
+                                 (imeCode=GCS_RESULTSTR) and FOverwrite,
+                                 (imeCode<>GCS_RESULTSTR) and (Len>0));
+            DoCommandResults(res);
+         finally
+           FreeMem(p);
+         end;
+      finally
+        ImmReleaseContext(Handle,IMC);
+      end;
+    end;
+  end;
+  Msg.Result:=-1;
+end;
+
+procedure TATSynEdit.WMIME_ENDCOMPOSITION(var Msg: TMessage);
+begin
+  Msg.Result:=-1;
+end;
+{$endif}
 
 procedure TATSynEdit.WMHScroll(var Msg: TLMHScroll);
 begin
@@ -2739,17 +3353,21 @@ end;
 procedure TATSynEdit.MouseDown(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
 var
   PCaret: TPoint;
-  EolPos: boolean;
+  PosDetails: TATPosDetails;
   Index: integer;
+  ActionId: TATMouseActionId;
 begin
+  if not OptMouseEnableAll then exit;
   inherited;
   SetFocus;
+  DoCaretForceShow;
 
-  PCaret:= ClientPosToCaretPos(Point(X, Y), EolPos);
+  PCaret:= ClientPosToCaretPos(Point(X, Y), PosDetails);
   FCaretSpecPos:= false;
-  FMouseDownNumber:= -1;
+  FMouseDownGutterLineNumber:= -1;
   FMouseDragDropping:= false;
-  FMouseDownRight:= Shift=[ssRight];
+  ActionId:= GetMouseActionId(FMouseActions, Shift);
+  FMouseDownRight:= ActionId=cMouseActionClickRight;
 
   if MouseNiceScroll then
   begin
@@ -2758,19 +3376,25 @@ begin
   end;
 
   if FMinimapVisible and PtInRect(FRectMinimap, Point(X, Y)) then
-    if Shift=[ssLeft] then
+  begin
+    if PtInRect(GetRectMinimapSel, Point(X, Y)) then
+      FMouseDragMinimap:= true;
+    if ActionId=cMouseActionClickSimple then
     begin
       DoMinimapClick(Y);
       Exit
     end;
+  end;
 
   if PtInRect(FRectMain, Point(X, Y)) then
   begin
     FMouseDownPnt:= PCaret;
 
     if Shift=[ssMiddle] then
-    begin
       if DoHandleClickEvent(FOnClickMiddle) then Exit;
+
+    if ActionId=cMouseActionNiceScrolling then
+    begin
       if FOptMouseNiceScroll then
       begin
         FMouseNiceScrollPos:= Point(X, Y);
@@ -2779,44 +3403,54 @@ begin
       Exit
     end;
 
-    if Shift=[ssLeft] then
+    if ActionId=cMouseActionClickSimple then
     begin
       FSelRect:= cRectEmpty;
       Strings.SetGroupMark;
       DoCaretSingleAsIs;
 
+      if Assigned(PosDetails.OnGapItem) then
+      begin
+        if Assigned(FOnClickGap) then
+          FOnClickGap(Self, PosDetails.OnGapItem, PosDetails.OnGapPos);
+      end;
+
       if FOptMouseDragDrop and (GetCaretSelectionIndex(FMouseDownPnt)>=0) and not ModeReadOnly then
       begin
+        //DragMode must be dmManual, drag started by code
         FMouseDragDropping:= true;
-        UpdateCursor;
+        BeginDrag(true);
       end
       else
       begin
+        if Assigned(FOnClickMoveCaret) then
+          FOnClickMoveCaret(Self, Point(Carets[0].PosX, Carets[0].PosY), FMouseDownPnt);
+
         DoCaretSingle(FMouseDownPnt.X, FMouseDownPnt.Y);
         DoSelect_None;
       end;
     end;
 
-    if Shift=[ssLeft, ssShift] then
+    if ActionId=cMouseActionClickAndSelBlock then
     begin
       FSelRect:= cRectEmpty;
       DoCaretSingleAsIs;
       Carets[0].SelectToPoint(FMouseDownPnt.X, FMouseDownPnt.Y);
     end;
 
-    if Shift=[ssLeft, ssXControl] then
+    if ActionId=cMouseActionMakeCaret then
     begin
       FSelRect:= cRectEmpty;
       DoCaretAddToPoint(FMouseDownPnt.X, FMouseDownPnt.Y);
     end;
 
-    if Shift=[ssLeft, ssXControl, ssShift] then
+    if ActionId=cMouseActionMakeCaretsColumn then
     begin
       FSelRect:= cRectEmpty;
       DoCaretsColumnToPoint(FMouseDownPnt.X, FMouseDownPnt.Y);
     end;
 
-    if Shift=[ssRight] then
+    if ActionId=cMouseActionClickRight then
     begin
       if FOptMouseRightClickMovesCaret then
         if GetCaretSelectionIndex(FMouseDownPnt)<0 then
@@ -2828,13 +3462,13 @@ begin
     end;
   end;
 
-  if Shift=[ssRight] then
+  if ActionId=cMouseActionClickRight then
     if FOptMouseDownForPopup then
       DoHandleRightClick(X, Y);
 
   if FOptGutterVisible and PtInRect(FRectGutter, Point(X, Y)) then
   begin
-    if Shift=[ssLeft] then
+    if ActionId=cMouseActionClickSimple then
     begin
       Index:= FGutter.IndexAt(X);
       if Index=FGutterBandNum then
@@ -2842,7 +3476,7 @@ begin
         if FOptMouseGutterClickSelectsLine then
         begin
           FSelRect:= cRectEmpty;
-          FMouseDownNumber:= PCaret.Y;
+          FMouseDownGutterLineNumber:= PCaret.Y;
           DoSelect_Line(PCaret);
         end;
       end
@@ -2858,7 +3492,7 @@ begin
   end;
 
   if FMicromapVisible and PtInRect(FRectMicromap, Point(X, Y)) then
-    if Shift=[ssLeft] then
+    if ActionId=cMouseActionClickSimple then
     begin
       DoEventClickMicromap(X-FRectMicromap.Left, Y-FRectMicromap.Top);
       Exit
@@ -2870,19 +3504,32 @@ begin
 end;
 
 procedure TATSynEdit.MouseUp(Button: TMouseButton; Shift: TShiftState; X, Y: Integer);
+var
+  bCopySelection: boolean;
 begin
+  if not OptMouseEnableAll then exit;
   inherited;
 
+  if PtInRect(ClientRect, Point(X, Y)) then
   if FMouseDragDropping then
   begin
-    DoDropText;
-    Update;
+    Strings.BeginUndoGroup;
+    try
+      bCopySelection:=
+        FOptMouseDragDropCopying and
+        (FOptMouseDragDropCopyingWithState in Shift);
+      DoDropText(not bCopySelection);
+    finally
+      Strings.EndUndoGroup;
+      Update;
+    end;
   end;
 
   FMouseDownPnt:= Point(-1, -1);
-  FMouseDownNumber:= -1;
+  FMouseDownGutterLineNumber:= -1;
   FMouseDownDouble:= false;
   FMouseDragDropping:= false;
+  FMouseDragMinimap:= false;
   FTimerScroll.Enabled:= false;
 
   //popup menu
@@ -2892,6 +3539,12 @@ begin
     if not FOptMouseDownForPopup then
       DoHandleRightClick(X, Y);
   end;
+
+  if Carets.Count=1 then
+    with Carets[0] do
+      if EndY>=0 then
+        if Assigned(FOnClickEndSelect) then
+          FOnClickEndSelect(Self, Point(EndX, EndY), Point(PosX, PosY));
 end;
 
 
@@ -2947,9 +3600,12 @@ begin
   RectBm.Top:= FRectMain.Top;
   RectBm.Bottom:= FRectMain.Bottom;
 
-  if FMouseDragDropping then
-    Cursor:= crDrag
-  else
+  //if FMouseDragDropping then
+  //  Cursor:= crDrag
+  //else
+  //if FMouseDragMinimap then
+  //  Cursor:= crSizeNS
+  //else
   if PtInRect(FRectMain, P) then
     Cursor:= FCursorText
   else
@@ -2962,14 +3618,21 @@ end;
 procedure TATSynEdit.MouseMove(Shift: TShiftState; X, Y: Integer);
 var
   P: TPoint;
-  RectNums: TRect;
+  RectNums, RectBookmk: TRect;
+  bOnMain, bOnMinimap, bOnMicromap, bOnGutter: boolean;
+  Details: TATPosDetails;
   nIndex: integer;
-  bOnMinimap, bOnGutter, bEolPos: boolean;
 begin
+  if not OptMouseEnableAll then exit;
   inherited;
 
   P:= Point(X, Y);
   UpdateCursor;
+
+  bOnMain:= PtInRect(FRectMain, P);
+  bOnMinimap:= false;
+  bOnMicromap:= false;
+  bOnGutter:= false;
 
   //detect cursor on minimap
   if FMinimapVisible then
@@ -2979,6 +3642,12 @@ begin
       if bOnMinimap<>FCursorOnMinimap then
         Invalidate;
     FCursorOnMinimap:= bOnMinimap;
+  end;
+
+  //detect cursor on micromap
+  if FMicromapVisible then
+  begin
+    bOnMicromap:= PtInRect(FRectMicromap, P);
   end;
 
   //detect cursor on gutter
@@ -2991,16 +3660,44 @@ begin
     FCursorOnGutter:= bOnGutter;
   end;
 
-  //numbers
-  RectNums.Left:= FGutter[FGutterBandNum].Left;
-  RectNums.Right:= FGutter[FGutterBandNum].Right;
-  RectNums.Top:= FRectMain.Top;
-  RectNums.Bottom:= FRectMain.Bottom;
+  RectNums:= Rect(0, 0, 0, 0);
+  RectBookmk:= Rect(0, 0, 0, 0);
+  if FOptGutterVisible then
+  begin
+    if FGutter[FGutterBandNum].Visible then
+    begin
+      RectNums.Left:= FGutter[FGutterBandNum].Left;
+      RectNums.Right:= FGutter[FGutterBandNum].Right;
+      RectNums.Top:= FRectMain.Top;
+      RectNums.Bottom:= FRectMain.Bottom;
+    end;
+
+    if FGutter[FGutterBandBm].Visible then
+    begin
+      RectBookmk.Left:= FGutter[FGutterBandBm].Left;
+      RectBookmk.Right:= FGutter[FGutterBandBm].Right;
+      RectBookmk.Top:= FRectMain.Top;
+      RectBookmk.Bottom:= FRectMain.Bottom;
+    end;
+  end;
+
+  //show/hide bookmark hint
+  if PtInRect(RectBookmk, P) then
+  begin
+    P:= ClientPosToCaretPos(Point(X, Y), Details);
+    DoHintShowForBookmark(P.Y);
+  end
+  else
+    DoHintHide;
 
   //start scroll timer
   FTimerScroll.Enabled:=
+    (not ModeOneLine) and
     (ssLeft in Shift) and
-    (not PtInRect(ClientRect, P) or FCursorOnGutter);
+    (not bOnMain) and
+    (not bOnMinimap) and
+    (not bOnMicromap);
+
   FMouseAutoScroll:= cDirNone;
   if P.Y<FRectMain.Top then FMouseAutoScroll:= cDirUp else
   if P.Y>=FRectMain.Bottom then FMouseAutoScroll:= cDirDown else
@@ -3012,11 +3709,11 @@ begin
   begin
     if Shift=[ssLeft] then
     begin
-      P:= ClientPosToCaretPos(P, bEolPos);
+      P:= ClientPosToCaretPos(P, Details);
       if (P.Y>=0) and (P.X>=0) then
-        if FMouseDownNumber>=0 then
+        if FMouseDownGutterLineNumber>=0 then
         begin
-          DoSelect_LineRange(FMouseDownNumber, P);
+          DoSelect_LineRange(FMouseDownGutterLineNumber, P);
           DoCaretsSort;
           DoEventCarets;
           Update;
@@ -3032,7 +3729,7 @@ begin
       if ssLeft in Shift then
         if Carets.Count>0 then
         begin
-          P:= ClientPosToCaretPos(P, bEolPos);
+          P:= ClientPosToCaretPos(P, Details);
           if P.Y>=0 then
           begin
             //drag w/out button pressed: single selection
@@ -3072,34 +3769,91 @@ begin
 
   //mouse dragged on minimap
   if PtInRect(FRectMinimap, P) then
-  begin
-    if Shift=[ssLeft] then
+    if FMouseDragMinimap then
     begin
-      DoMinimapClick(Y);
+      if Shift=[ssLeft] then
+        DoMinimapDrag(Y);
+      Exit
     end;
-    Exit
-  end;
 end;
 
-function TATSynEdit.DoMouseWheelDown(Shift: TShiftState; MousePos: TPoint): boolean;
+procedure TATSynEdit.MouseLeave;
 begin
-  Result:= DoMouseWheelAction(Shift, false);
+  if not OptMouseEnableAll then exit;
+  inherited;
+  DoHintHide;
 end;
 
-function TATSynEdit.DoMouseWheelUp(Shift: TShiftState; MousePos: TPoint): boolean;
+function TATSynEdit.DoMouseWheel(Shift: TShiftState; WheelDelta: integer;
+  MousePos: TPoint): boolean;
 begin
-  Result:= DoMouseWheelAction(Shift, true);
+  if not OptMouseEnableAll then exit(false);
+  Result:= DoMouseWheelAction(Shift, WheelDelta>0);
 end;
+
+type
+  TATMouseWheelMode = (
+    aWheelModeNormal,
+    aWheelModeHoriz,
+    aWheelModeZoom
+    );
 
 function TATSynEdit.DoMouseWheelAction(Shift: TShiftState; AUp: boolean): boolean;
+var
+  Mode: TATMouseWheelMode;
+  NSpeedX, NSpeedY: integer;
 begin
-  if Shift=[ssCtrl] then
-  begin
-    DoSizeChange(AUp);
-    Result:= true;
-  end
+  Result:= false;
+  if not OptMouseEnableAll then exit;
+
+  if (Shift=[FOptMouseWheelZoomsWithState]) then
+    Mode:= aWheelModeZoom
   else
-    Result:= false;
+  if (Shift=[FOptMouseWheelScrollHorzWithState]) or
+     (Shift=[FOptMouseWheelScrollHorzWithState2]) then
+    Mode:= aWheelModeHoriz
+  else
+  if (Shift=[]) then
+    Mode:= aWheelModeNormal
+  else
+    exit;
+
+  NSpeedX:= FOptMouseWheelScrollHorzSpeed;
+  NSpeedY:= FOptMouseWheelScrollVertSpeed;
+  if AUp then NSpeedX:= -NSpeedX;
+  if AUp then NSpeedY:= -NSpeedY;
+
+  case Mode of
+    aWheelModeNormal:
+      begin
+        if (not ModeOneLine) and FOptMouseWheelScrollVert then
+        begin
+          //w/o this handler wheel works only with OS scrollbars, need with new scrollbars too
+          DoScrollByDelta(0, NSpeedY);
+          Update;
+          Result:= true;
+        end;
+      end;
+
+    aWheelModeHoriz:
+      begin
+        if (not ModeOneLine) and FOptMouseWheelScrollHorz then
+        begin
+          DoScrollByDelta(NSpeedX, 0);
+          Update;
+          Result:= true;
+        end;
+      end;
+
+    aWheelModeZoom:
+      begin
+        if FOptMouseWheelZooms then
+        begin
+          DoSizeChange(AUp);
+          Result:= true;
+        end;
+      end;
+  end;
 end;
 
 function TATSynEdit.DoHandleClickEvent(AEvent: TATSynEditClickEvent): boolean;
@@ -3111,6 +3865,7 @@ end;
 
 procedure TATSynEdit.DblClick;
 begin
+  if not OptMouseEnableAll then exit;
   inherited;
 
   if DoHandleClickEvent(FOnClickDbl) then Exit;
@@ -3122,10 +3877,13 @@ begin
     FMouseDownDouble:= true;
     DoSelect_Word_ByClick;
   end;
+
+  DoEventCarets;
 end;
 
 procedure TATSynEdit.TripleClick;
 begin
+  if not OptMouseEnableAll then exit;
   inherited;
 
   if DoHandleClickEvent(FOnClickTriple) then Exit;
@@ -3138,12 +3896,12 @@ end;
 procedure TATSynEdit.DoSelect_Word_ByClick;
 var
   P: TPoint;
-  EolPos: boolean;
+  Details: TATPosDetails;
 begin
   P:= ScreenToClient(Mouse.CursorPos);
   if PtInRect(FRectMain, P) then
   begin
-    P:= ClientPosToCaretPos(P, EolPos);
+    P:= ClientPosToCaretPos(P, Details);
     if P.Y<0 then Exit;
     DoSelect_Word(P);
     Update;
@@ -3166,12 +3924,12 @@ end;
 procedure TATSynEdit.DoSelect_Line_ByClick;
 var
   P: TPoint;
-  EolPos: boolean;
+  Details: TATPosDetails;
 begin
   P:= ScreenToClient(Mouse.CursorPos);
   if PtInRect(FRectMain, P) then
   begin
-    P:= ClientPosToCaretPos(P, EolPos);
+    P:= ClientPosToCaretPos(P, Details);
     if P.Y<0 then Exit;
     DoSelect_Line(P);
     Update;
@@ -3185,16 +3943,25 @@ begin
   inherited;
 end;
 
+procedure TATSynEdit.InvalidateHilitingCache;
+begin
+  FAdapterCache.Clear;
+end;
+
 procedure TATSynEdit.TimerBlinkTick(Sender: TObject);
 begin
-  DoPaintCarets(FBitmap.Canvas, true);
+  Include(FPaintFlags, cPaintUpdateCarets);
+  if not DoubleBuffered then
+    FCaretAllowNextBlink:= not FCaretAllowNextBlink;
+
+  inherited Invalidate;
 end;
 
 procedure TATSynEdit.TimerScrollTick(Sender: TObject);
 var
   nIndex: integer;
   PClient, PCaret: TPoint;
-  EolPos: boolean;
+  Details: TATPosDetails;
 begin
   PClient:= ScreenToClient(Mouse.CursorPos);
   PClient.X:= Max(FRectMain.Left, PClient.X);
@@ -3210,18 +3977,26 @@ begin
     else Exit;
   end;
 
-  PCaret:= ClientPosToCaretPos(PClient, EolPos);
+  PCaret:= ClientPosToCaretPos(PClient, Details);
+
   if (PCaret.X>=0) and (PCaret.Y>=0) then
-    if FMouseDownNumber>=0 then
+  begin
+    if FMouseDownGutterLineNumber>=0 then
     begin
-      DoSelect_LineRange(FMouseDownNumber, PCaret);
+      DoSelect_LineRange(FMouseDownGutterLineNumber, PCaret);
     end
     else
+    if IsSelRectEmpty then
     begin
       nIndex:= Carets.IndexOfPosXY(FMouseDownPnt.X, FMouseDownPnt.Y, true);
       if nIndex>=0 then
         Carets[nIndex].SelectToPoint(PCaret.X, PCaret.Y);
+    end
+    else
+    begin
+      DoSelect_ColumnBlock(FMouseDownPnt, PCaret);
     end;
+  end;
 
   DoCaretsSort;
   DoEventCarets;
@@ -3281,9 +4056,8 @@ var
   Shape: TATSynCaretShape;
 begin
   if IsCaretBlocked then
-  begin
     if not FCaretShown then Exit;
-  end;
+
   FCaretShown:= not FCaretShown;
 
   if ModeReadOnly then
@@ -3343,7 +4117,8 @@ begin
         CanvasInvertRect(C, Rect(R.Left+1, R.Top+1, R.Right-1, R.Bottom-1), FColors.Caret);
 
       if AWithInvalidate then
-        InvalidateRect(Handle, @R, false);
+        if not (csCustomPaint in ControlState) then //disable during Paint
+          InvalidateRect(Handle, @R, false);
     end;
   end;
 end;
@@ -3444,28 +4219,25 @@ begin
 end;
 
 
-function TATSynEdit.DoEventCommand(ACommand: integer): boolean;
+function TATSynEdit.DoEventCommand(ACommand: integer; const AText: string): boolean;
 begin
   Result:= false;
   if Assigned(FOnCommand) then
-    FOnCommand(Self, ACommand, Result);
+    FOnCommand(Self, ACommand, AText, Result);
 end;
+
+procedure TATSynEdit.DoEventCommandAfter(ACommand: integer; const AText: string);
+begin
+  if Assigned(FOnCommandAfter) then
+    FOnCommandAfter(Self, ACommand, AText);
+end;
+
 
 function TATSynEdit.GetCaretBlinkTime: integer;
 begin
   Result:= FTimerBlink.Interval;
 end;
 
-function TATSynEdit.GetWrapInfoIndex(AMousePos: TPoint): integer;
-var
-  NPixels: integer;
-begin
-  Result:= -1;
-  NPixels:= AMousePos.Y - FRectMain.Top;
-  Result:= FScrollVert.NPos + NPixels div FCharSize.Y;
-  if not FWrapInfo.IsIndexValid(Result) then
-    Result:= -1;
-end;
 
 procedure TATSynEdit.DoEventCarets;
 begin
@@ -3478,8 +4250,8 @@ end;
 
 procedure TATSynEdit.DoEventScroll;
 begin
-  //if Assigned(FAdapterHilite) then
-  //  FAdapterHilite.OnEditorScroll(Self);
+  if Assigned(FAdapterHilite) then
+    FAdapterHilite.OnEditorScroll(Self);
 
   if Assigned(FOnScroll) then
     FOnScroll(Self);
@@ -3488,7 +4260,10 @@ end;
 procedure TATSynEdit.DoEventChange;
 begin
   if Assigned(FAdapterHilite) then
+  begin
+    InvalidateHilitingCache;
     FAdapterHilite.OnEditorChange(Self);
+  end;
 
   if Assigned(FOnChange) then
     FOnChange(Self);
@@ -3516,6 +4291,59 @@ procedure TATSynEdit.DoEventDrawBookmarkIcon(C: TCanvas; ALineNumber: integer; c
 begin
   if Assigned(FOnDrawBookmarkIcon) then
     FOnDrawBookmarkIcon(Self, C, ALineNumber, ARect);
+end;
+
+procedure TATSynEdit.DoEventBeforeCalcHilite;
+begin
+  if Assigned(FAdapterHilite) then
+    FAdapterHilite.OnEditorBeforeCalcHilite(Self);
+
+  if Assigned(FOnBeforeCalcHilite) then
+    FOnBeforeCalcHilite(Self);
+end;
+
+
+const
+  _CharCodeM: WideChar = #$4d; //half-width M
+  _CharCodeFullM: WideChar = #$ff2d; //full-width M
+
+{$ifdef windows}
+procedure TATSynEdit.OnCanvasFontChanged(Sender: TObject);
+var
+  sizeSmall, sizeFull: single;
+  a: ABCFLOAT;
+begin
+  if not Assigned(Parent) then exit;
+  //half width
+  if GetCharABCWidthsFloatW(Canvas.Handle, Ord(_CharCodeM), Ord(_CharCodeM), a) then
+    sizeSmall:= Max(1.0, a.abcfA+a.abcfB+a.abcfC)
+  else
+    sizeSmall:= 1.0;
+  //full width
+  if GetCharABCWidthsFloatW(Canvas.Handle, Ord(_CharCodeFullM), Ord(_CharCodeFullM), a) then
+    sizeFull:= a.abcfA+a.abcfB+a.abcfC
+  else
+    sizeFull:= 1.0;
+  ATStringProc.cCharScaleFullwidth_Default:= Trunc(sizeFull * 100 / sizeSmall);
+end;
+{$else}
+procedure TATSynEdit.OnCanvasFontChanged(Sender: TObject);
+begin
+  ATStringProc.cCharScaleFullwidth_Default:=
+    Canvas.TextWidth(Utf8Encode(_CharCodeFullM)) * 100 div
+    Canvas.TextWidth(Utf8Encode(_CharCodeM));
+end;
+{$endif}
+
+procedure TATSynEdit.DoSendShowHideToInterface;
+begin
+  inherited DoSendShowHideToInterface;
+
+  {
+  //breaks painting in non-doublebuffered mode
+  Canvas.Font.OnChange:= @OnCanvasFontChanged;
+  OnCanvasFontChanged(Canvas.Font);
+  }
 end;
 
 procedure TATSynEdit.DoScrollByDelta(Dx, Dy: integer);
@@ -3548,19 +4376,43 @@ begin
       if Assigned(FKeymap) then
         ShortCut:= FKeymap.GetShortcutFromCommand(Tag);
 
+      //separator items: hide if read-only, nicer menu
+      if Caption='-' then
+        Visible:= not ModeReadOnly;
+
       case Tag of
-        cCommand_ClipboardCut: Enabled:= not ModeReadOnly;
-        cCommand_ClipboardPaste: Enabled:= not ModeReadOnly and Clipboard.HasFormat(CF_Text);
-        cCommand_TextDeleteSelection: Enabled:= not ModeReadOnly and Carets.IsSelection;
-        cCommand_Undo: Enabled:= not ModeReadOnly and (UndoCount>0);
-        cCommand_Redo: Enabled:= not ModeReadOnly and (RedoCount>0);
+        cCommand_ClipboardCut:
+          begin
+            Enabled:= not ModeReadOnly;
+            Visible:= not ModeReadOnly;
+          end;
+        cCommand_ClipboardPaste:
+          begin
+            Enabled:= not ModeReadOnly and Clipboard.HasFormat(CF_Text);
+            Visible:= not ModeReadOnly;
+          end;
+        cCommand_TextDeleteSelection:
+          begin
+            Enabled:= not ModeReadOnly and Carets.IsSelection;
+            Visible:= not ModeReadOnly;
+          end;
+        cCommand_Undo:
+          begin
+            Enabled:= not ModeReadOnly and (UndoCount>0);
+            Visible:= not ModeReadOnly;
+          end;
+        cCommand_Redo:
+          begin
+            Enabled:= not ModeReadOnly and (RedoCount>0);
+            Visible:= not ModeReadOnly;
+          end;
       end;
     end;
 end;
 
 procedure TATSynEdit.DoInitPopupMenu;
   //
-  procedure Add(const SName: string; Cmd: integer);
+  function Add(const SName: string; Cmd: integer): TMenuItem;
   var
     MI: TMenuItem;
   begin
@@ -3568,41 +4420,44 @@ procedure TATSynEdit.DoInitPopupMenu;
     MI.Caption:= SName;
     MI.Tag:= Cmd;
     MI.OnClick:= @MenuClick;
+    Result:= MI;
     FMenuStd.Items.Add(MI);
   end;
   //
 begin
   FMenuStd.OnPopup:= @MenuPopup;
 
-  Add('Undo', cCommand_Undo);
-  Add('Redo', cCommand_Redo);
+  MenuitemTextUndo:= Add('Undo', cCommand_Undo);
+  MenuitemTextRedo:= Add('Redo', cCommand_Redo);
   Add('-', 0);
-  Add('Cut', cCommand_ClipboardCut);
-  Add('Copy', cCommand_ClipboardCopy);
-  Add('Paste', cCommand_ClipboardPaste);
-  Add('Delete', cCommand_TextDeleteSelection);
+  MenuitemTextCut:= Add('Cut', cCommand_ClipboardCut);
+  MenuitemTextCopy:= Add('Copy', cCommand_ClipboardCopy);
+  MenuitemTextPaste:= Add('Paste', cCommand_ClipboardPaste);
+  MenuitemTextDelete:= Add('Delete', cCommand_TextDeleteSelection);
   Add('-', 0);
-  Add('Select all', cCommand_SelectAll);
+  MenuitemTextSelAll:= Add('Select all', cCommand_SelectAll);
 end;
 
 //drop selection of 1st caret into mouse-pos
-procedure TATSynEdit.DoDropText;
+procedure TATSynEdit.DoDropText(AndDeleteSelection: boolean);
 var
   P, PosAfter, Shift: TPoint;
   X1, Y1, X2, Y2: integer;
-  bSel, bEolPos: boolean;
+  bSel: boolean;
   Str: atString;
   Relation: TATPosRelation;
+  Details: TATPosDetails;
 begin
   if Carets.Count<>1 then Exit; //allow only 1 caret
   Carets[0].GetRange(X1, Y1, X2, Y2, bSel);
   if not bSel then Exit;
 
   DoSelect_None;
+  DoEventCarets;
 
   //calc insert-pos
   P:= ScreenToClient(Mouse.CursorPos);
-  P:= ClientPosToCaretPos(P, bEolPos);
+  P:= ClientPosToCaretPos(P, Details);
   if P.Y<0 then
     begin Beep; Exit end;
 
@@ -3618,38 +4473,29 @@ begin
   //insert before selection?
   if Relation=cRelateBefore then
   begin
-    Strings.TextDeleteRange(X1, Y1, X2, Y2, Shift, PosAfter);
+    if AndDeleteSelection then
+      Strings.TextDeleteRange(X1, Y1, X2, Y2, Shift, PosAfter);
     Strings.TextInsert(P.X, P.Y, Str, false, Shift, PosAfter);
 
     //select moved text
-    DoCaretSingle(0, 0);
-    with Carets[0] do
-    begin
-      PosX:= PosAfter.X;
-      PosY:= PosAfter.Y;
-      EndX:= P.X;
-      EndY:= P.Y;
-    end;
+    DoCaretSingle(PosAfter.X, PosAfter.Y, P.X, P.Y);
   end
   else
   begin
     Strings.TextInsert(P.X, P.Y, Str, false, Shift, PosAfter);
 
     //select moved text
-    DoCaretSingle(0, 0);
-    with Carets[0] do
-    begin
-      PosX:= PosAfter.X;
-      PosY:= PosAfter.Y;
-      EndX:= P.X;
-      EndY:= P.Y;
-    end;
+    DoCaretSingle(PosAfter.X, PosAfter.Y, P.X, P.Y);
 
-    Strings.TextDeleteRange(X1, Y1, X2, Y2, Shift, PosAfter);
-    DoCaretsShift(X1, Y1, Shift.X, Shift.Y);
+    if AndDeleteSelection then
+    begin
+      Strings.TextDeleteRange(X1, Y1, X2, Y2, Shift, PosAfter);
+      DoCaretsShift(X1, Y1, Shift.X, Shift.Y, PosAfter);
+    end;
   end;
 
   Update(true);
+  DoEventChange;
 end;
 
 function TATSynEdit.GetAutoIndentString(APosX, APosY: integer): atString;
@@ -3657,8 +4503,9 @@ var
   Str: atString;
   NChars, NSpaces: integer;
 begin
-  if not FOptAutoIndent then
-    begin Result:= ''; Exit end;
+  Result:= '';
+  if not Strings.IsIndexValid(APosY) then Exit;
+  if not FOptAutoIndent then Exit;
 
   Str:= Strings.Lines[APosY];
   NChars:= SGetIndentChars(Str); //count of chars in indent
@@ -3684,6 +4531,13 @@ end;
 function TATSynEdit.GetModified: boolean;
 begin
   Result:= Strings.Modified;
+end;
+
+procedure TATSynEdit.SetModified(AValue: boolean);
+begin
+  Strings.Modified:= AValue;
+  if AValue then
+    DoEventChange;
 end;
 
 function TATSynEdit.GetOneLine: boolean;
@@ -3716,7 +4570,19 @@ end;
 function TATSynEdit.DoGetTextString: atString;
 begin
   //TATEdit overrides it
-  Result:= Strings.TextString;
+  Result:= Strings.TextString_Unicode;
+end;
+
+procedure TATSynEdit.DoEnter;
+begin
+  inherited;
+  if FOptShowCurLineOnlyFocused then Update;
+end;
+
+procedure TATSynEdit.DoExit;
+begin
+  inherited;
+  if FOptShowCurLineOnlyFocused then Update;
 end;
 
 procedure TATSynEdit.DoMinimapClick(APosY: integer);
@@ -3730,6 +4596,15 @@ begin
     FScrollVert.NPos:= Min(NItem, FScrollVert.NMax);
     Update;
   end;
+end;
+
+procedure TATSynEdit.DoMinimapDrag(APosY: integer);
+var
+  NIndex: integer;
+begin
+  NIndex:= GetMinimapSelTop_PixelsToWrapIndex(APosY);
+  FScrollVert.NPos:= Max(0, Min(NIndex, FScrollVert.NMax));
+  Update;
 end;
 
 function TATSynEdit.GetUndoLimit: integer;
@@ -3767,9 +4642,6 @@ begin
 
   NTop:= LineTop;
   Font.Size:= Font.Size+BoolToPlusMinusOne(AInc);
-  Update;
-  AppProcessMessages;
-
   LineTop:= NTop;
   Update;
 end;
@@ -3783,6 +4655,8 @@ end;
 procedure TATSynEdit.EndUpdate;
 begin
   Dec(FPaintLocked);
+  if FPaintLocked<0 then
+    FPaintLocked:= 0;
   if FPaintLocked=0 then
     Invalidate;
 end;
@@ -3834,7 +4708,7 @@ begin
   if Strings.Count>0 then
   begin
     Result.Y:= Strings.Count-1;
-    Result.X:= Length(Strings.Lines[Result.Y]);
+    Result.X:= Strings.LinesLen[Result.Y];
     if Strings.LinesEnds[Result.Y]<>cEndNone then
       Inc(Result.X);
   end;
@@ -3932,12 +4806,8 @@ begin
         if not IsPlus then
           DrawDown;
 
-        CanvasPaintPlusMinus(C,
-          FColors.GutterPlusBorder,
-          FColors.GutterPlusBG,
-          Point(CoordXM, CoordYM),
-          FOptGutterPlusSize,
-          IsPlus);
+        DoPaintGutterPlusMinus(C,
+          CoordXM, CoordYM, IsPlus);
       end;
     cFoldbarEnd:
       begin
@@ -3954,7 +4824,7 @@ begin
         C.Line(
           CoordXM,
           ACoordY2,
-          CoordXM + FOptGutterPlusSize,
+          CoordXM + DoScale(FOptGutterPlusSize),
           ACoordY2
           );
       end;
@@ -4000,13 +4870,19 @@ begin
 end;
 
 
-procedure TATSynEdit.WMGetDlgCode(var Msg: TLMNoParams);
+procedure TATSynEdit.CMWantSpecialKey(var Message: TCMWantSpecialKey);
 begin
-  inherited;
-  Msg.Result:= DLGC_WANTARROWS or DLGC_WANTCHARS or DLGC_WANTALLKEYS;
-  if FWantTabs and (GetKeyState(VK_CONTROL) >= 0) then
-    Msg.Result:= Msg.Result or DLGC_WANTTAB;
+  case Message.CharCode of
+    VK_RETURN: Message.Result:= Ord(WantReturns);
+    VK_TAB: Message.Result:= Ord(WantTabs);
+    VK_LEFT,
+    VK_RIGHT,
+    VK_UP,
+    VK_DOWN: Message.Result:= 1;
+    else inherited;
+  end;
 end;
+
 
 procedure TATSynEdit.DoPaintStaple(C: TCanvas; const R: TRect; AColor: TColor);
 begin
@@ -4092,12 +4968,313 @@ begin
     Result:= Colors.TextDisabledFont;
 end;
 
+function TATSynEdit.GetGaps: TATSynGaps;
+begin
+  Result:= Strings.Gaps;
+end;
+
+procedure TATSynEdit.DoPaintMarkersTo(C: TCanvas);
+var
+  M: TATMarkerItem;
+  i: integer;
+begin
+  for i:= 0 to Markers.Count-1 do
+  begin
+    M:= Markers[i];
+    if M.CoordX<0 then Continue;
+    if M.CoordY<0 then Continue;
+    if not PtInRect(FRectMain, Point(M.CoordX, M.CoordY)) then Continue;
+
+    C.Brush.Color:= Colors.Markers;
+    C.Pen.Color:= Colors.Markers;
+    C.Polygon([
+      Point(M.CoordX, M.CoordY+FCharSize.Y-FOptMarkersSize-1),
+      Point(M.CoordX-FOptMarkersSize, M.CoordY+FCharSize.Y-1),
+      Point(M.CoordX+FOptMarkersSize, M.CoordY+FCharSize.Y-1) ]);
+  end;
+end;
+
+procedure TATSynEdit.DoPaintGutterPlusMinus(C: TCanvas; AX, AY: integer;
+  APlus: boolean);
+begin
+  case OptGutterIcons of
+    cGutterIconsPlusMinus:
+      begin
+        CanvasPaintPlusMinus(C,
+          Colors.GutterPlusBorder,
+          Colors.GutterPlusBG,
+          Point(AX, AY),
+          DoScale(FOptGutterPlusSize),
+          APlus);
+      end;
+    cGutterIconsTriangles:
+      begin
+        if APlus then
+          CanvasPaintTriangleRight(C,
+            Colors.GutterPlusBorder,
+            Point(AX, AY),
+            DoScale(FOptGutterPlusSize div 2))
+        else
+          CanvasPaintTriangleDown(C,
+            Colors.GutterPlusBorder,
+            Point(AX, AY),
+            DoScale(FOptGutterPlusSize div 2))
+      end;
+  end;
+end;
+
+
+procedure TATSynEdit.DoDebugAddAttribs;
+var
+  p1, p2, p3: TATLinePartClass;
+begin
+  p1:= TATLinePartClass.Create;
+  p2:= TATLinePartClass.Create;
+  p3:= TATLinePartClass.Create;
+
+  p1.Data.ColorBG:= clgreen;
+  p1.Data.ColorFont:= clwhite;
+  p1.data.BorderDown:= cLineStyleDotted;
+  Attribs.Add(1,1, 0,0, 4, p1);
+
+  p2.Data.ColorBG:= clYellow;
+  p2.Data.ColorFont:= clBlue;
+  p2.data.BorderDown:= cLineStyleSolid;
+  Attribs.Add(2,2, 0,0, 4, p2);
+
+  p3.Data.ColorBG:= clRed;
+  p3.Data.ColorFont:= clYellow;
+  Attribs.Add(3,3, 0,0, 4, p3);
+end;
+
+procedure TATSynEdit.DoSetMarkedLines(ALine1, ALine2: integer);
+begin
+  FMarkedRange.Clear;
+  if (ALine1>=0) and (ALine2>=ALine1) then
+  begin
+    FMarkedRange.Add(0, ALine1);
+    FMarkedRange.Add(0, ALine2);
+  end;
+end;
+
+procedure TATSynEdit.DoGetMarkedLines(out ALine1, ALine2: integer);
+begin
+  ALine1:= -1;
+  ALine2:= -1;
+  if FMarkedRange.Count=2 then
+  begin
+    ALine1:= FMarkedRange.Items[0].PosY;
+    ALine2:= FMarkedRange.Items[1].PosY;
+  end;
+end;
+
+procedure TATSynEdit.DoUpdateFontNeedsOffsets(C: TCanvas);
+const
+  cTest = 'WWWww';
+var
+  N1, N2: integer;
+  PrevStyle: TFontStyles;
+begin
+  PrevStyle:= C.Font.Style;
+  C.Font.Style:= [];
+  N1:= C.TextWidth('n');
+  N2:= C.TextWidth(cTest);
+  FFontNeedsOffsets.ForNormal:= N2<>N1*Length(cTest);
+
+  C.Font.Style:= [fsBold];
+  N2:= C.TextWidth(cTest);
+  FFontNeedsOffsets.ForBold:= N2<>N1*Length(cTest);
+
+  C.Font.Style:= [fsItalic];
+  N2:= C.TextWidth(cTest);
+  FFontNeedsOffsets.ForItalic:= N2<>N1*Length(cTest);
+
+  C.Font.Style:= [fsBold, fsItalic];
+  N2:= C.TextWidth(cTest);
+  FFontNeedsOffsets.ForBoldItalic:= N2<>N1*Length(cTest);
+
+  C.Font.Style:= PrevStyle;
+  {
+  application.MainForm.caption:= (format('norm %d, b %d, i %d, bi %d', [
+    Ord(FFontNeedsOffsets.ForNormal),
+    Ord(FFontNeedsOffsets.ForBold),
+    Ord(FFontNeedsOffsets.ForItalic),
+    Ord(FFontNeedsOffsets.ForBoldItalic)
+    ]));
+    }
+end;
+
+procedure TATSynEdit.DoCalcLinks;
+var
+  ReObj: TRegExpr;
+  AtrObj: TATLinePartClass;
+  SLine: atString;
+  MatchPos, MatchLen, NLine, i: integer;
+begin
+  Attribs.DeleteWithTag(cUrlMarkerTag);
+  if not OptShowURLs then exit;
+
+  ReObj:= TRegExpr.Create;
+  try
+    ReObj.ModifierS:= false;
+    ReObj.ModifierM:= true;
+    ReObj.ModifierI:= true;
+    ReObj.Expression:= FOptShowURLsRegex;
+
+    NLine:= LineTop;
+    for i:= NLine to NLine+GetVisibleLines do
+    begin
+      if not Strings.IsIndexValid(i) then Break;
+      SLine:= Strings.Lines[i];
+      ReObj.InputString:= SLine;
+
+      MatchPos:= 0;
+      MatchLen:= 0;
+
+      while ReObj.ExecPos(MatchPos+MatchLen+1) do
+      begin
+        MatchPos:= ReObj.MatchPos[0];
+        MatchLen:= ReObj.MatchLen[0];
+
+        AtrObj:= TATLinePartClass.Create;
+        AtrObj.Data.ColorFont:= Colors.Links;
+        AtrObj.Data.ColorBG:= clNone;
+        AtrObj.Data.ColorBorder:= Colors.Links;
+        AtrObj.Data.BorderDown:= cLineStyleSolid;
+        Attribs.Add(MatchPos-1, i, cUrlMarkerTag, MatchLen, 0, AtrObj);
+      end;
+    end;
+  finally
+    FreeAndNil(ReObj);
+  end;
+end;
+
+
+function TATSynEdit.DoGetLinkAtPos(AX, AY: integer): atString;
+var
+  Atr: TATMarkerItem;
+begin
+  Result:= '';
+  if not Strings.IsIndexValid(AY) then exit;
+  Atr:= Attribs.FindMarkerAtPos(AX, AY);
+  if Atr=nil then exit;
+  if Atr.Tag<>cUrlMarkerTag then exit;
+  if Atr.LenY>0 then exit;
+
+  Result:= Strings.Lines[AY];
+  Result:= Copy(Result, Atr.PosX+1, Atr.LenX);
+end;
+
+
+procedure TATSynEdit.DragOver(Source: TObject; X, Y: Integer;
+  State: TDragState; var Accept: Boolean);
+begin
+  Accept:=
+    FOptMouseDragDrop and
+    (not ModeReadOnly) and
+    (not ModeOneLine) and
+    (Source is TATSynEdit) and
+    ((Source as TATSynEdit).TextSelected<>'');
+end;
+
+procedure TATSynEdit.DragDrop(Source: TObject; X, Y: Integer);
+var
+  SText: atString;
+  Pnt: TPoint;
+  Details: TATPosDetails;
+begin
+  if not (Source is TATSynEdit) then exit;
+  if (Source=Self) then exit;
+  SText:= (Source as TATSynedit).TextSelected;
+  if SText='' then exit;
+
+  Pnt:= ClientPosToCaretPos(Point(X, Y), Details);
+  if Strings.IsIndexValid(Pnt.Y) then
+  begin
+    DoCaretSingle(Pnt.X, Pnt.Y);
+    DoCommand(cCommand_TextInsert, SText);
+    if OptMouseDragDropFocusesTargetEditor then
+      SetFocus;
+
+    //Ctrl not pressed: delete block from src
+    if not (GetKeyState(VK_CONTROL)<0) then
+      (Source as TATSynedit).DoCommand(cCommand_TextDeleteSelection);
+  end;
+end;
+
+procedure TATSynEdit.OnNewScrollbarVertChanged(Sender: TObject);
+var
+  Msg: TLMVScroll;
+begin
+  if FScrollbarLock then exit;
+  FillChar(Msg, SizeOf(Msg), 0);
+  Msg.ScrollCode:= SB_THUMBPOSITION;
+  Msg.Pos:= FScrollbarVert.Position;
+  WMVScroll(Msg);
+
+  //show scroll hint
+  DoHintShow;
+end;
+
+procedure TATSynEdit.OnNewScrollbarHorzChanged(Sender: TObject);
+var
+  Msg: TLMHScroll;
+begin
+  if FScrollbarLock then exit;
+  FillChar(Msg, SizeOf(Msg), 0);
+  Msg.ScrollCode:= SB_THUMBPOSITION;
+  Msg.Pos:= FScrollbarHorz.Position;
+  WMHScroll(Msg);
+end;
+
+procedure TATSynEdit.DoCaretsOnChanged(Sender: TObject);
+begin
+  if Strings.ModifiedRecent then
+    if Assigned(FCarets) and (FCarets.Count>0) then
+    begin
+      Strings.ModifiedRecent:= false;
+      Strings.DoSaveLastEditPos;
+    end;
+end;
+
+function TATSynEdit.DoScale(N: integer): integer;
+begin
+  Result:= MulDiv(N, FScalePercents, 100);
+end;
+
+procedure TATSynEdit.AutoAdjustLayout(AMode: TLayoutAdjustmentPolicy;
+  const AFromPPI, AToPPI, AOldFormWidth, ANewFormWidth: Integer);
+begin
+  inherited;
+
+  FScalePercents:= MulDiv(100, AToPPI, AFromPPI);
+
+  FGutter[FGutterBandBm].Size:= DoScale(cGutterSizeBm);
+  FGutter[FGutterBandNum].Size:= DoScale(cGutterSizeNum);
+  FGutter[FGutterBandState].Size:= DoScale(cGutterSizeState);
+  FGutter[FGutterBandFold].Size:= DoScale(cGutterSizeFold);
+  FGutter[FGutterBandSep].Size:= DoScale(cGutterSizeSep);
+  FGutter[FGutterBandEmpty].Size:= DoScale(cGutterSizeEmpty);
+  FGutter.Update;
+
+  FScrollbarVert.Width:= cEditorScrollbarWidth;
+  FScrollbarVert.IndentBorder:= cEditorScrollbarBorderSize;
+  FScrollbarVert.IndentArrow:= 3;
+  FScrollbarHorz.Height:= cEditorScrollbarWidth;
+  FScrollbarHorz.IndentBorder:= cEditorScrollbarBorderSize;
+  FScrollbarHorz.IndentArrow:= 3;
+
+  FScrollbarVert.AutoAdjustLayout(AMode, AFromPPI, AToPPI, 1, 1);
+  FScrollbarHorz.AutoAdjustLayout(AMode, AFromPPI, AToPPI, 1, 1);
+end;
+
 
 {$I atsynedit_carets.inc}
 {$I atsynedit_hilite.inc}
 {$I atsynedit_sel.inc}
 {$I atsynedit_fold.inc}
 {$I atsynedit_debug.inc}
+
 {$R res/nicescroll.res}
 {$R res/foldbar.res}
 

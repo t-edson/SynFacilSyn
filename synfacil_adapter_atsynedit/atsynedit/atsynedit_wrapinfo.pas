@@ -1,6 +1,11 @@
+{
+Copyright (C) Alexey Torgashin, uvviewsoft.com
+License: MPL 2.0 or LGPL
+}
 unit ATSynEdit_WrapInfo;
 
 {$mode objfpc}{$H+}
+{$Z1}
 
 interface
 
@@ -8,18 +13,24 @@ uses
   Classes, SysUtils;
 
 type
+  TATSynWrapFinal = (
+    cWrapItemFinal,
+    cWrapItemCollapsed,
+    cWrapItemMiddle
+    );
+
+type
   { TATSynWrapItem }
 
-  TATSynWrapFinal = (cWrapItemFinal, cWrapItemCollapsed, cWrapItemMiddle);
-  TATSynWrapItem = class
+  TATSynWrapItem = packed class
   public
     NLineIndex,
     NCharIndex,
     NLength: integer;
-    NIndent: integer;
+    NIndent: word;
     NFinal: TATSynWrapFinal;
     constructor Create(ALineIndex, ACharIndex, ALength: integer;
-      AIndent: integer; AFinal: TATSynWrapFinal); virtual;
+      AIndent: word; AFinal: TATSynWrapFinal);
     procedure Assign(Item: TATSynWrapItem);
   end;
 
@@ -39,13 +50,14 @@ type
     destructor Destroy; override;
     procedure Clear;
     function Count: integer;
-    function IsIndexValid(N: integer): boolean;
+    function IsIndexValid(N: integer): boolean; inline;
     function IsItemInitial(N: integer): boolean;
     property Items[N: integer]: TATSynWrapItem read GetItem; default;
     procedure Add(AItem: TATSynWrapItem);
     procedure Delete(N: integer);
     procedure Insert(N: integer; AItem: TATSynWrapItem);
     procedure FindIndexesOfLineNumber(ALineNum: integer; out AFrom, ATo: integer);
+    function FindIndexOfCaretPos(APos: TPoint): integer;
     procedure SetCapacity(N: integer);
     procedure ReplaceItems(AFrom, ATo: integer; AItems: TList);
     property OnCheckLineCollapsed: TATCheckLineCollapsedEvent read FOnCheckCollapsed write FOnCheckCollapsed;
@@ -60,7 +72,7 @@ uses
 { TATSynWrapItem }
 
 constructor TATSynWrapItem.Create(ALineIndex, ACharIndex, ALength: integer;
-  AIndent: integer; AFinal: TATSynWrapFinal);
+  AIndent: word; AFinal: TATSynWrapFinal);
 begin
   NLineIndex:= ALineIndex;
   NCharIndex:= ACharIndex;
@@ -82,10 +94,7 @@ end;
 
 function TATSynWrapInfo.GetItem(N: integer): TATSynWrapItem;
 begin
-  if IsIndexValid(N) then
-    Result:= TATSynWrapItem(FList[N])
-  else
-    Result:= nil;
+  Result:= TATSynWrapItem(FList[N]);
 end;
 
 constructor TATSynWrapInfo.Create;
@@ -105,9 +114,7 @@ var
   i: integer;
 begin
   for i:= FList.Count-1 downto 0 do
-  begin
     TObject(FList[i]).Free;
-  end;
   FList.Clear;
 end;
 
@@ -116,22 +123,16 @@ begin
   Result:= FList.Count;
 end;
 
-function TATSynWrapInfo.IsIndexValid(N: integer): boolean;
+function TATSynWrapInfo.IsIndexValid(N: integer): boolean; inline;
 begin
   Result:= (N>=0) and (N<FList.Count);
 end;
 
 function TATSynWrapInfo.IsItemInitial(N: integer): boolean;
 begin
-  if IsIndexValid(N) then
-  begin
-    if N=0 then
-      Result:= true
-    else
-      Result:= Items[N].NLineIndex<>Items[N-1].NLineIndex;
-  end
-  else
-    Result:= true;
+  Result:= true;
+  if (N>0) and (N<FList.Count) then //cant use IsIndexValid, N>0
+    Result:= Items[N].NLineIndex<>Items[N-1].NLineIndex;
 end;
 
 procedure TATSynWrapInfo.Add(AItem: TATSynWrapItem);
@@ -141,8 +142,7 @@ end;
 
 procedure TATSynWrapInfo.Delete(N: integer);
 begin
-  if IsIndexValid(N) then
-    FList.Delete(N);
+  FList.Delete(N);
 end;
 
 procedure TATSynWrapInfo.Insert(N: integer; AItem: TATSynWrapItem);
@@ -185,6 +185,22 @@ begin
   ATo:= m;
   while (AFrom>0) and (Items[AFrom-1].NLineIndex=ALineNum) do Dec(AFrom);
   while (ATo<Count-1) and (Items[ATo+1].NLineIndex=ALineNum) do Inc(ATo);
+end;
+
+function TATSynWrapInfo.FindIndexOfCaretPos(APos: TPoint): integer;
+var
+  Item: TATSynWrapItem;
+  NFrom, NTo, i: integer;
+begin
+  Result:= -1;
+  FindIndexesOfLineNumber(APos.Y, NFrom, NTo);
+  if NFrom<0 then Exit;
+  for i:= NFrom to NTo do
+  begin
+    Result:= i;
+    Item:= Items[i];
+    if Item.NCharIndex+Item.NLength > APos.X then Break;
+  end;
 end;
 
 procedure TATSynWrapInfo.SetCapacity(N: integer);

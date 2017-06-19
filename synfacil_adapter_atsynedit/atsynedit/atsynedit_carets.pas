@@ -1,3 +1,7 @@
+{
+Copyright (C) Alexey Torgashin, uvviewsoft.com
+License: MPL 2.0 or LGPL
+}
 unit ATSynEdit_Carets;
 
 {$mode objfpc}{$H+}
@@ -11,7 +15,7 @@ uses
 type
   TATPosRelation = (cRelateBefore, cRelateInside, cRelateAfter);
 
-procedure SwapInt(var n1, n2: integer);
+procedure SwapInt(var n1, n2: integer); inline;
 function IsPosSorted(X1, Y1, X2, Y2: integer; AllowEq: boolean): boolean;
 function IsPosInRange(X, Y, X1, Y1, X2, Y2: integer): TATPosRelation;
 
@@ -46,20 +50,22 @@ type
     FList: TList;
     FManyAllowed: boolean;
     FOneLine: boolean;
+    FOnCaretChanged: TNotifyEvent;
     function GetItem(N: integer): TATCaretItem;
     procedure DeleteDups;
     function IsJoinNeeded(N1, N2: integer;
       out OutPosX, OutPosY, OutEndX, OutEndY: integer): boolean;
+    function GetAsArray: TATPointArray;
+    procedure SetAsArray(const Res: TATPointArray);
   public
     constructor Create; virtual;
     destructor Destroy; override;
     procedure Clear;
     procedure Delete(N: integer);
     function Count: integer;
-    function IsIndexValid(N: integer): boolean;
+    function IsIndexValid(N: integer): boolean; inline;
     property Items[N: integer]: TATCaretItem read GetItem; default;
-    procedure Add(APosX, APosY: integer);
-    procedure Add(XFrom, YFrom, XTo, YTo: integer);
+    procedure Add(APosX, APosY: integer; AEndX: integer=-1; AEndY: integer=-1);
     procedure Sort;
     procedure Assign(Obj: TATCarets);
     function IndexOfPosXY(APosX, APosY: integer; AUseEndXY: boolean= false): integer;
@@ -72,10 +78,11 @@ type
     function DebugText: string;
     property ManyAllowed: boolean read FManyAllowed write FManyAllowed;
     property OneLine: boolean read FOneLine write FOneLine;
-    function SaveToArray: TATPointArray;
-    procedure LoadFromArray(const L: TATPointArray);
+    property AsArray: TATPointArray read GetAsArray write SetAsArray;
+    property OnCaretChanged: TNotifyEvent read FOnCaretChanged write FOnCaretChanged;
     procedure UpdateColumnCoord(ASaveColumn: boolean);
     procedure UpdateIncorrectPositions(AMaxLine: integer);
+    procedure DoChanged;
   end;
 
 
@@ -118,7 +125,7 @@ begin
     Result:= cRelateAfter;
 end;
 
-procedure SwapInt(var n1, n2: integer);
+procedure SwapInt(var n1, n2: integer); inline;
 var
   n: integer;
 begin
@@ -209,7 +216,8 @@ var
   i: integer;
 begin
   for i:= FList.Count-1 downto 0 do
-    Delete(i);
+    TObject(FList[i]).Free;
+  FList.Clear;
 end;
 
 procedure TATCarets.Delete(N: integer);
@@ -218,6 +226,7 @@ begin
   begin
     TObject(FList[N]).Free;
     FList.Delete(N);
+    DoChanged;
   end;
 end;
 
@@ -226,27 +235,30 @@ begin
   Result:= FList.Count;
 end;
 
-function TATCarets.IsIndexValid(N: integer): boolean;
+function TATCarets.IsIndexValid(N: integer): boolean; inline;
 begin
   Result:= (N>=0) and (N<FList.Count);
 end;
 
-procedure TATCarets.Add(APosX, APosY: integer);
+procedure TATCarets.Add(APosX, APosY: integer; AEndX: integer=-1; AEndY: integer=-1);
 var
   Item: TATCaretItem;
 begin
-  if (not FManyAllowed) and (Count>=1) then Exit;
-
-  if FOneLine then APosY:= 0;
+  if (not ManyAllowed) and (Count>=1) then Exit;
+  if OneLine then
+  begin
+    APosY:= 0;
+    if AEndY>0 then AEndY:= 0;
+  end;
 
   Item:= TATCaretItem.Create;
   Item.PosX:= APosX;
   Item.PosY:= APosY;
-  Item.EndX:= -1;
-  Item.EndY:= -1;
-  Item.CoordX:= -1;
-  Item.CoordY:= -1;
+  Item.EndX:= AEndX;
+  Item.EndY:= AEndY;
+
   FList.Add(Item);
+  DoChanged;
 end;
 
 function _ListCaretsCompare(Item1, Item2: Pointer): Integer;
@@ -289,6 +301,8 @@ begin
       Item2.EndY:= OutEndY;
     end;
   end;
+
+  DoChanged;
 end;
 
 
@@ -298,16 +312,12 @@ var
 begin
   Clear;
   for i:= 0 to Obj.Count-1 do
-  begin
-    Add(0, 0);
-    with Items[Count-1] do
-    begin
-      PosX:= Obj[i].PosX;
-      PosY:= Obj[i].PosY;
-      EndX:= Obj[i].EndX;
-      EndY:= Obj[i].EndY;
-    end;
-  end;
+    Add(
+      Obj[i].PosX,
+      Obj[i].PosY,
+      Obj[i].EndX,
+      Obj[i].EndY);
+  DoChanged;
 end;
 
 function TATCarets.IndexOfPosXY(APosX, APosY: integer; AUseEndXY: boolean = false): integer;
@@ -493,6 +503,12 @@ begin
   Result:= true; //ranges overlap
 end;
 
+procedure TATCarets.DoChanged;
+begin
+  if Assigned(FOnCaretChanged) then
+    FOnCaretChanged(Self);
+end;
+
 function TATCarets.DebugText: string;
 var
   i: integer;
@@ -505,7 +521,7 @@ begin
         ])+sLineBreak;
 end;
 
-function TATCarets.SaveToArray: TATPointArray;
+function TATCarets.GetAsArray: TATPointArray;
 var
   Item: TATCaretItem;
   i: integer;
@@ -521,34 +537,19 @@ begin
   end;
 end;
 
-procedure TATCarets.LoadFromArray(const L: TATPointArray);
+procedure TATCarets.SetAsArray(const Res: TATPointArray);
 var
   i: integer;
-  Item: TATCaretItem;
 begin
   Clear;
-  for i:= 0 to Length(L) div 2 - 1 do
-  begin
-    Add(0, 0);
-    Item:= Items[Count-1];
-    Item.PosX:= L[i*2].X;
-    Item.PosY:= L[i*2].Y;
-    Item.EndX:= L[i*2+1].X;
-    Item.EndY:= L[i*2+1].Y;
-  end;
-end;
-
-procedure TATCarets.Add(XFrom, YFrom, XTo, YTo: integer);
-begin
-  if (XFrom=XTo) and (YFrom=YTo) then Exit;
-  Add(0, 0);
-  with Items[Count-1] do
-  begin
-    PosX:= XTo;
-    PosY:= YTo;
-    EndX:= XFrom;
-    EndY:= YFrom;
-  end;
+  for i:= 0 to Length(Res) div 2 - 1 do
+    Add(
+      Res[i*2].X,
+      Res[i*2].Y,
+      Res[i*2+1].X,
+      Res[i*2+1].Y
+      );
+  DoChanged;
 end;
 
 procedure TATCarets.UpdateColumnCoord(ASaveColumn: boolean);
@@ -571,16 +572,24 @@ end;
 
 procedure TATCarets.UpdateIncorrectPositions(AMaxLine: integer);
 var
-  i: integer;
   Caret: TATCaretItem;
+  chg: boolean;
+  i: integer;
 begin
+  chg:= false;
   for i:= 0 to Count-1 do
   begin
     Caret:= Items[i];
-    if Caret.PosY>AMaxLine then Caret.PosY:= AMaxLine;
-    if Caret.EndY>AMaxLine then Caret.EndY:= AMaxLine;
+    if Caret.PosY>AMaxLine then
+      begin Caret.PosY:= AMaxLine; chg:= true; end;
+    if Caret.EndY>AMaxLine then
+      begin Caret.EndY:= AMaxLine; chg:= true; end;
   end;
+
+  if chg then
+    DoChanged;
 end;
+
 
 end.
 

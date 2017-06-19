@@ -45,7 +45,7 @@ begin
   ed.Align:= alClient;
   ed.OptUnprintedVisible:= false;
   ed.OptRulerVisible:= false;
-  ed.AdapterHilite:= adapter;
+  ed.AdapterForHilite := adapter;
   ed.Strings.OnLog:=@adapter.StringsLog;
   ed.OnScroll:=@adapter.edScroll;
   ed.LoadFromFile(ExtractFilePath(Application.ExeName)+'unit1.pas');

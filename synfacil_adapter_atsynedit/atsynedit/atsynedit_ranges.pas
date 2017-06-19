@@ -1,3 +1,7 @@
+{
+Copyright (C) Alexey Torgashin, uvviewsoft.com
+License: MPL 2.0 or LGPL
+}
 unit ATSynEdit_Ranges;
 
 {$mode objfpc}{$H+}
@@ -22,20 +26,25 @@ type
     FStaple: boolean;
     FHint: string;
   public
-    property X: integer read FX;
-    property Y: integer read FY;
-    property Y2: integer read FY2;
+    property X: integer read FX write FX;
+    property Y: integer read FY write FY;
+    property Y2: integer read FY2 write FY2;
     property Folded: boolean read FFolded write FFolded;
-    property Staple: boolean read FStaple;
+    property Staple: boolean read FStaple write FStaple;
     property Hint: string read FHint write FHint;
     constructor Create(AX, AY, AY2: integer; AStaple: boolean; const AHint: string); virtual;
-    function IsSimple: boolean;
-    function IsLineInside(ALine: integer): boolean;
+    function IsSimple: boolean; inline;
+    function IsLineInside(ALine: integer): boolean; inline;
     function MessageText: string;
   end;
 
 type
-  TATRangeHasLines = (cRngIgnore, cRngHasAllLines, cRngHasAnyOfLines);
+  TATRangeHasLines = (
+    cRngIgnore,
+    cRngHasAllLines,
+    cRngHasAnyOfLines,
+    cRngExceptThisRange
+    );
 
 type
   { TATSynRanges }
@@ -63,6 +72,7 @@ type
       AInRange: TATSynRange; AOnlyFolded, ATopLevelOnly: boolean;
       ALineMode: TATRangeHasLines): TATIntArray;
     function FindRangeWithPlusAtLine(ALine: integer): TATSynRange;
+    function FindIndexOfRange(R: TATSynRange): integer;
     function MessageText(Cnt: integer): string;
   end;
 
@@ -86,7 +96,8 @@ constructor TATSynRange.Create(AX, AY, AY2: integer; AStaple: boolean;
 begin
   if (AX<=0) then raise Exception.Create('Incorrect range with x<=0: '+MessageText);
   if (AY<0) then raise Exception.Create('Incorrect range with y<0: '+MessageText);
-  if (AY>AY2) then raise Exception.Create('Incorrect range with y>y2: '+MessageText);
+  //if (AY>AY2) then raise Exception.Create('Incorrect range with y>y2: '+MessageText);
+  if (AY>AY2) then AY2:= AY; //hide this error, it happens in Rexx lexer
 
   FX:= AX;
   FY:= AY;
@@ -213,7 +224,8 @@ begin
             cRngIgnore: Ok:= true;
             cRngHasAllLines: Ok:= (R.Y<=ALineFrom) and (R.Y2>=ALineTo);
             cRngHasAnyOfLines: Ok:= (R.Y<=ALineTo) and (R.Y2>=ALineFrom);
-            else raise Exception.Create('unknown linemode');
+            cRngExceptThisRange: Ok:= R<>AInRange;
+            else raise Exception.Create('unknown LineMode');
           end;
           if not Ok then Continue;
 
@@ -223,7 +235,7 @@ begin
             Ok:= not IsRangesSame(AInRange, R) and IsRangeInsideOther(R, AInRange);
 
           if Ok then
-            L.Add(pointer(i));
+            L.Add(Pointer(PtrInt(i)));
         end;
     end;
 
@@ -235,7 +247,7 @@ begin
 
       for i:= L.Count-1 downto 1 do
         for j:= 0 to i-1 do
-          if IsRangeInsideOther(Items[integer(L[i])], Items[integer(L[j])]) then
+          if IsRangeInsideOther(Items[PtrInt(L[i])], Items[PtrInt(L[j])]) then
           begin
             L.Delete(i);
             Break
@@ -250,7 +262,7 @@ begin
 
     SetLength(Result, L.Count);
     for i:= 0 to L.Count-1 do
-      Result[i]:= integer(L[i]);
+      Result[i]:= PtrInt(L[i]);
   finally
     FreeAndNil(L);
   end;
@@ -273,6 +285,11 @@ begin
   end;
 end;
 
+function TATSynRanges.FindIndexOfRange(R: TATSynRange): integer;
+begin
+  Result:= FList.IndexOf(Pointer(R));
+end;
+
 function TATSynRanges.MessageText(Cnt: integer): string;
 var
   i: integer;
@@ -289,7 +306,7 @@ begin
   Result:= '';
   if L.Count=0 then exit;
   for i:= 0 to L.Count-1 do
-    Result:= Result+items[integer(L[i])].MessageText+#13;
+    Result:= Result+Items[PtrInt(L[i])].MessageText+#13;
 end;
 
 end.

@@ -5,7 +5,7 @@ var
   i, NIndent, NWrapped: integer;
   Caret: TATCaretItem;
   Pnt: TPoint;
-  EolPos: boolean;
+  Details: TATPosDetails;
 begin
   for i:= 0 to FCarets.Count-1 do
   begin
@@ -17,7 +17,7 @@ begin
     begin
       Pnt.X:= 0;
       Pnt.Y:= Caret.CoordY;
-      Pnt:= ClientPosToCaretPos(Pnt, EolPos);
+      Pnt:= ClientPosToCaretPos(Pnt, Details);
       NWrapped:= Pnt.X;
     end;
 
@@ -42,7 +42,7 @@ var
   Str: atString;
   Pnt: TPoint;
   i, NLen, NWrapped: integer;
-  EolPos: boolean;
+  Details: TATPosDetails;
 begin
   for i:= 0 to FCarets.Count-1 do
   begin
@@ -55,7 +55,7 @@ begin
     begin
       Pnt.X:= ClientWidth;
       Pnt.Y:= Caret.CoordY;
-      Pnt:= ClientPosToCaretPos(Pnt, EolPos);
+      Pnt:= ClientPosToCaretPos(Pnt, Details);
       if Pnt.X<Length(Str) then
         NWrapped:= Pnt.X-1;
         //-1 here: need to jump not to last chr but to last-1 chr
@@ -100,7 +100,7 @@ begin
     if (Caret.PosY>0) and not FCaretVirtual then
     begin
       Dec(Caret.PosY);
-      Caret.PosX:= Length(Strings.Lines[Caret.PosY]);
+      Caret.PosX:= Strings.LinesLen[Caret.PosY];
     end;
   end;
 end;
@@ -122,7 +122,7 @@ begin
   for i:= 0 to FCarets.Count-1 do
   begin
     Caret:= FCarets[i];
-    if (Caret.PosX<Length(Strings.Lines[Caret.PosY])) or FCaretVirtual then
+    if (Caret.PosX<Strings.LinesLen[Caret.PosY]) or FCaretVirtual then
       Inc(Caret.PosX)
     else
     if (Caret.PosY<Strings.Count-1) then
@@ -185,8 +185,11 @@ function TATSynEdit.DoCommand_KeyUpDown_Wrapped(ADown: boolean; ALines: integer)
 var
   Caret: TATCaretItem;
   Pnt: TPoint;
+  Details: TATPosDetails;
   i: integer;
-  EolPos: boolean;
+const
+  cGapActions: array[boolean] of TATGapCoordAction =
+    (cGapCoordIgnore, cGapCoordMoveDown);
 begin
   for i:= 0 to FCarets.Count-1 do
   begin
@@ -204,10 +207,10 @@ begin
       Pnt.X:= Caret.CoordColumn;
 
     Pnt.Y:= Caret.CoordY + ALines*FCharSize.Y*BoolToPlusMinusOne(ADown);
-    Pnt:= ClientPosToCaretPos(Pnt, EolPos);
+    Pnt:= ClientPosToCaretPos(Pnt, Details, cGapActions[ADown]);
     if Pnt.Y<0 then Continue;
 
-    if EolPos and (Pnt.X>0) then
+    if Details.EndOfWrappedLine and (Pnt.X>0) then
       Dec(Pnt.X); //-1 so up/down won't jump to eol pos (caret may paint on next line)
 
     Caret.PosX:= Pnt.X;
@@ -221,18 +224,26 @@ begin
 end;
 
 function TATSynEdit.DoCommand_TextBackspace: TATCommandResults;
+var
+  bColBlock: boolean;
 begin
-  Result:= DoCommand_TextDeleteLeft(1, FOptKeyBackspaceUnindent);
+  bColBlock:= not IsSelRectEmpty;
+  if bColBlock then
+    if FSelRect.Left=FSelRect.Right then
+    begin
+      DoSelect_None;
+      bColBlock:= false;
+    end;
+
+  if bColBlock then
+    Result:= DoCommand_TextDeleteSelection
+  else
+    Result:= DoCommand_TextDeleteLeft(1, FOptKeyBackspaceUnindent);
 end;
 
 function TATSynEdit.DoCommand_GotoTextBegin: TATCommandResults;
-var
-  Item: TATSynWrapItem;
 begin
-  Item:= FWrapInfo[0];
-  if Assigned(Item) then
-    DoCaretSingle(0, Item.NLineIndex);
-
+  DoCaretSingle(0, 0, false);
   FScrollHorz.NPos:= 0;
   FScrollVert.NPos:= 0;
 
@@ -241,13 +252,15 @@ end;
 
 function TATSynEdit.DoCommand_GotoTextEnd: TATCommandResults;
 var
-  Item: TATSynWrapItem;
+  NLine: integer;
 begin
-  Item:= FWrapInfo[FWrapInfo.Count-1];
-  if Assigned(Item) then
-    DoCaretSingle(Item.NLength, Item.NLineIndex);
+  if FWrapInfo.Count>0 then
+  begin
+    NLine:= FWrapInfo[FWrapInfo.Count-1].NLineIndex;
+    DoCaretSingle(Strings.LinesLen[NLine], NLine, false);
+  end;
 
-  Result:= [cResultCaretBottom];
+  Result:= [cResultCaretTop];
 end;
 
 function TATSynEdit.DoCommand_ScrollVert(ALines: integer): TATCommandResults;
@@ -275,7 +288,7 @@ begin
       if Caret.PosY>0 then
       begin
         Dec(Caret.PosY);
-        Caret.PosX:= Length(Strings.Lines[Caret.PosY]);
+        Caret.PosX:= Strings.LinesLen[Caret.PosY];
       end;
     end
     else
