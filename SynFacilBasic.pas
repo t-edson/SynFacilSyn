@@ -247,7 +247,7 @@ type
 function ExtractRegExp(var exp: string; var str: string; var listChars: string): tFaRegExpType;
 function ExtractRegExpN(var exp: string; out RegexTyp: tFaRegExpType ): string;
 function ReplaceEscape(str: string): string;
-
+function ColorFromStr(cad: string): TColor;
 implementation
 const
     //Mensajes de error generales
@@ -614,6 +614,58 @@ begin
   RegexTyp := ExtractRegExp(exp, str, listChars);
   tam := length(exp0) - length(exp);  //ve diferencia de tamaño
   Result := copy(exp0, 1, tam)
+end;
+function ColorFromStr(cad: string): TColor;
+//Convierte una cadena a Color
+  function EsHexa(txt: string; out num: integer): boolean;
+  //Convierte un texto en un número entero. Si es numérico devuelve TRUE
+  var i: integer;
+  begin
+    Result := true;  //valor por defecto
+    num := 0; //valor por defecto
+    for i:=1 to length(txt) do begin
+      if not (txt[i] in ['0'..'9','a'..'f','A'..'F']) then exit(false);  //no era
+    end;
+    //todos los dígitos son numéricos
+    num := StrToInt('$'+txt);
+  end;
+var
+  r, g, b: integer;
+begin
+  if (cad<>'') and (cad[1] = '#') and (length(cad)=7) then begin
+    //es código de color. Lo lee de la mejor forma
+    EsHexa(copy(cad,2,2),r);
+    EsHexa(copy(cad,4,2),g);
+    EsHexa(copy(cad,6,2),b);
+    Result:=RGB(r,g,b);
+  end else begin  //constantes de color
+    case UpCase(cad) of
+    'WHITE'      : Result :=rgb($FF,$FF,$FF);
+    'SILVER'     : Result :=rgb($C0,$C0,$C0);
+    'GRAY'       : Result :=rgb($80,$80,$80);
+    'BLACK'      : Result :=rgb($00,$00,$00);
+    'RED'        : Result :=rgb($FF,$00,$00);
+    'MAROON'     : Result :=rgb($80,$00,$00);
+    'YELLOW'     : Result :=rgb($FF,$FF,$00);
+    'OLIVE'      : Result :=rgb($80,$80,$00);
+    'LIME'       : Result :=rgb($00,$FF,$00);
+    'GREEN'      : Result :=rgb($00,$80,$00);
+    'AQUA'       : Result :=rgb($00,$FF,$FF);
+    'TEAL'       : Result :=rgb($00,$80,$80);
+    'BLUE'       : Result :=rgb($00,$00,$FF);
+    'NAVY'       : Result :=rgb($00,$00,$80);
+    'FUCHSIA'    : Result :=rgb($FF,$00,$FF);
+    'PURPLE'     : Result :=rgb($80,$00,$80);
+
+    'MAGENTA'    : Result :=rgb($FF,$00,$FF);
+    'CYAN'       : Result :=rgb($00,$FF,$FF);
+    'BLUE VIOLET': Result :=rgb($8A,$2B,$E2);
+    'GOLD'       : Result :=rgb($FF,$D7,$00);
+    'BROWN'      : Result :=rgb($A5,$2A,$2A);
+    'CORAL'      : Result :=rgb($FF,$7F,$50);
+    'VIOLET'     : Result :=rgb($EE,$82,$EE);
+    end;
+  end;
 end;
 
 { tFaTokContent }
@@ -1014,10 +1066,10 @@ end;
 //procesamiento de XML
 function TSynFacilSynBase.ReadXMLParam(n: TDOMNode; nomb:string): TFaXMLatrib;
 //Explora un nodo para ver si existe un atributo, y leerlo. Ignora la caja.
-var i: integer;
-    cad: string;
-    atri: TDOMNode;
-    r,g,b: integer;
+var
+  i: integer;
+  cad: string;
+  atri: TDOMNode;
   function EsEntero(txt: string; out num: integer): boolean;
   //convierte un texto en un número entero. Si es numérico devuelve TRUE
   var i: integer;
@@ -1029,18 +1081,6 @@ var i: integer;
     end;
     //todos los dígitos son numéricos
     num := StrToInt(txt);
-  end;
-  function EsHexa(txt: string; out num: integer): boolean;
-  //Convierte un texto en un número entero. Si es numérico devuelve TRUE
-  var i: integer;
-  begin
-    Result := true;  //valor por defecto
-    num := 0; //valor por defecto
-    for i:=1 to length(txt) do begin
-      if not (txt[i] in ['0'..'9','a'..'f','A'..'F']) then exit(false);  //no era
-    end;
-    //todos los dígitos son numéricos
-    num := StrToInt('$'+txt);
   end;
 begin
   Result.hay := false; //Se asume que no existe
@@ -1057,41 +1097,8 @@ begin
       //lee número
       if (cad<>'') and (cad[1] in ['0'..'9']) then  //puede ser número
         EsEntero(cad,Result.n); //convierte
-      //lee color
-      if (cad<>'') and (cad[1] = '#') and (length(cad)=7) then begin
-        //es código de color. Lo lee de la mejor forma
-        EsHexa(copy(cad,2,2),r);
-        EsHexa(copy(cad,4,2),g);
-        EsHexa(copy(cad,6,2),b);
-        Result.col:=RGB(r,g,b);
-      end else begin  //constantes de color
-        case UpCase(cad) of
-        'WHITE'      : Result.col:=rgb($FF,$FF,$FF);
-        'SILVER'     : Result.col:=rgb($C0,$C0,$C0);
-        'GRAY'       : Result.col:=rgb($80,$80,$80);
-        'BLACK'      : Result.col:=rgb($00,$00,$00);
-        'RED'        : Result.col:=rgb($FF,$00,$00);
-        'MAROON'     : Result.col:=rgb($80,$00,$00);
-        'YELLOW'     : Result.col:=rgb($FF,$FF,$00);
-        'OLIVE'      : Result.col:=rgb($80,$80,$00);
-        'LIME'       : Result.col:=rgb($00,$FF,$00);
-        'GREEN'      : Result.col:=rgb($00,$80,$00);
-        'AQUA'       : Result.col:=rgb($00,$FF,$FF);
-        'TEAL'       : Result.col:=rgb($00,$80,$80);
-        'BLUE'       : Result.col:=rgb($00,$00,$FF);
-        'NAVY'       : Result.col:=rgb($00,$00,$80);
-        'FUCHSIA'    : Result.col:=rgb($FF,$00,$FF);
-        'PURPLE'     : Result.col:=rgb($80,$00,$80);
-
-        'MAGENTA'    : Result.col:=rgb($FF,$00,$FF);
-        'CYAN'       : Result.col:=rgb($00,$FF,$FF);
-        'BLUE VIOLET': Result.col:=rgb($8A,$2B,$E2);
-        'GOLD'       : Result.col:=rgb($FF,$D7,$00);
-        'BROWN'      : Result.col:=rgb($A5,$2A,$2A);
-        'CORAL'      : Result.col:=rgb($FF,$7F,$50);
-        'VIOLET'     : Result.col:=rgb($EE,$82,$EE);
-        end;
-      end;
+      //Lee color
+      Result.col := ColorFromStr(cad);
     end;
   end;
 end;

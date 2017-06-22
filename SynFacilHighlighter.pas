@@ -1736,7 +1736,7 @@ procedure TSynFacilSyn.metUniLin1;
 begin
   fTokenID := fAtriTable[charIni];   //lee atributo
   Inc(posFin);  {no hay peligro en incrementar porque siempre se llama "metUniLin1" con
-                 el carcater actual <> #0}
+                 el caracter actual <> #0}
   while posFin <> tamLin do begin
     if fLine[posFin] = charIni then begin //busca fin de cadena
       Inc(posFin);
