@@ -2,6 +2,8 @@
 ====
 Se incluye la posibilidad de anidar secciones dentro de otras secciones, pero solo para
 un nivel.
+Se crea la función pública ColorFromStr() en SynFacilBasic, para acceder a los colores 
+predefinidos en SynFacilSyn.
 
 
 1.18
