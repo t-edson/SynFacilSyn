@@ -1,4 +1,4 @@
-{                               TSynFacilSyn 1.16
+{                               TSynFacilSyn
 Unidad principal de SynfacilSyn.
 
 Queda pendiente incluir el procesamiento de los paréntesis en las expresiones regulares,
@@ -939,8 +939,14 @@ begin
          if nombre = 'TOKEN' then begin   //Es definición formal de token
            tAtrib    := ReadXMLParam(nodo,'Attribute');
            tipTok := GetAttribIDByName(tAtrib.val);
+           if tipTok = -1 then begin
+             raise ESynFacilSyn.Create(Format(ERR_UNKNOWN_ATTRIB, [tAtrib.val]));
+           end;
          end else begin   //Es definición simplificada
-           tipTok := GetAttribIDByName(nombre)
+           tipTok := GetAttribIDByName(nombre);
+           if tipTok = -1 then begin
+             raise ESynFacilSyn.Create(Format(ERR_UNKNOWN_ATTRIB, [nombre]));
+           end;
          end;
          //Lee los otros parámetros
          tStart    := ReadXMLParam(nodo,'Start');
