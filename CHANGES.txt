@@ -4,6 +4,8 @@ Se incluye la posibilidad de anidar secciones dentro de otras secciones, pero so
 un nivel.
 Se crea la función pública ColorFromStr() en SynFacilBasic, para acceder a los colores 
 predefinidos en SynFacilSyn.
+Se incluye una rutina de protección adicional en TSynFacilSyn.LoadFromStream() para cuando
+se indica un atributo no existente en la definición de tokens.
 
 
 1.18
