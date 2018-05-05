@@ -244,7 +244,7 @@ type
     constructor Create(AOwner: TComponent); override;
   end;
 
-function ExtractRegExp(var exp: string; var str: string; var listChars: string): tFaRegExpType;
+function ExtractRegExp(var exp: string; out str: string; out listChars: string): tFaRegExpType;
 function ExtractRegExpN(var exp: string; out RegexTyp: tFaRegExpType ): string;
 function ReplaceEscape(str: string): string;
 function ColorFromStr(cad: string): TColor;
@@ -404,7 +404,7 @@ begin
   end;
   Result := f;
 end;
-function ExtractRegExp(var exp: string; var str: string; var listChars: string): tFaRegExpType;
+function ExtractRegExp(var exp: string; out str: string; out listChars: string): tFaRegExpType;
 {Extrae parte de una expresión regular y devuelve el tipo. Esta función se basa en
 que toda expresión regular se puede reducir a literales de cadenas o listas (con o
 sin cuantificador).

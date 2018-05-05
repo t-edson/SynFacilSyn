@@ -6,6 +6,7 @@ Se crea la función pública ColorFromStr() en SynFacilBasic, para acceder a los c
 predefinidos en SynFacilSyn.
 Se incluye una rutina de protección adicional en TSynFacilSyn.LoadFromStream() para cuando
 se indica un atributo no existente en la definición de tokens.
+Se cambian algunos parámetros como OUT, para evitar mensajes de advertencias.
 
 
 1.18
