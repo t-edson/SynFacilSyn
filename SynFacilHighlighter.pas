@@ -1318,14 +1318,14 @@ end;
 procedure TSynFacilSyn.StartBlock(ABlockType: Pointer; IncreaseLevel: Boolean); inline;
 //Procedimiento general para abrir un bloque en el resaltador
 begin
-//  StartCodeFoldBlock(ABlockType, IncreaseLevel);
-  CodeFoldRange.Add(ABlockType, IncreaseLevel);
+  StartCodeFoldBlock(ABlockType, IncreaseLevel);
+//  CodeFoldRange.Add(ABlockType, IncreaseLevel);
 end;
 procedure TSynFacilSyn.EndBlock(DecreaseLevel: Boolean); inline;
 //Procedimiento general para cerrar un bloque en el resaltador
 begin
-//  EndCodeFoldBlock(DecreaseLevel);
-  CodeFoldRange.Pop(DecreaseLevel);
+  EndCodeFoldBlock(DecreaseLevel);
+//  CodeFoldRange.Pop(DecreaseLevel);
 end;
 procedure TSynFacilSyn.StartBlockAndFirstSec(const blk, firstSec: TfaSynBlock);
 {Abre un bloque TfaSynBlock, verifica si tiene una primera sección para abrir.}
@@ -1334,10 +1334,10 @@ begin
   Cancel := false;
   if blk.OnBeforeOpen<>nil then blk.OnBeforeOpen(blk, Cancel);
   if Cancel then exit;
-  CodeFoldRange.Add(blk, blk.showFold);
+  StartBlock(blk, blk.showFold);
   //verifica si hay primera sección para abrir
   if firstSec <> nil then
-    CodeFoldRange.Add(firstSec, firstSec.showFold);
+    StartBlock(firstSec, firstSec.showFold);
 end;
 procedure TSynFacilSyn.StartBlockFa(const blk: TfaSynBlock);
 {Abre un bloque TfaSynBlock.}
@@ -1346,7 +1346,7 @@ begin
   Cancel := false;
   if blk.OnBeforeOpen<>nil then blk.OnBeforeOpen(blk, Cancel);
   if Cancel then exit;
-  CodeFoldRange.Add(blk, blk.showFold);
+  StartBlock(blk, blk.showFold);
 end;
 procedure TSynFacilSyn.EndBlockFa(const blk: TfaSynBlock);
 {Cierra un bloque TfaSynBlock. El parámetro blk, no debería ser necesario, puesto que
@@ -1356,7 +1356,7 @@ begin
   Cancel := false;
   if blk.OnBeforeClose<>nil then blk.OnBeforeClose(blk, Cancel);
   if Cancel then exit;
-  CodeFoldRange.Pop(blk.showFold);
+  EndBlock(blk.showFold);
 end;
 function TSynFacilSyn.TopBlock: TFaSynBlock;
 //Función genérica para devolver el último bloque abierto. Si no hay ningún bloque

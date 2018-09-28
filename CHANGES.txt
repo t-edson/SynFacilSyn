@@ -7,7 +7,8 @@ predefinidos en SynFacilSyn.
 Se incluye una rutina de protección adicional en TSynFacilSyn.LoadFromStream() para cuando
 se indica un atributo no existente en la definición de tokens.
 Se cambian algunos parámetros como OUT, para evitar mensajes de advertencias.
-
+Se cambia la instrucciones de inicio y fin de plegado. Antes se usaba CodeFoldRange.Add() y 
+CodeFoldRange.Pop(). Ahora se usa StartCodeFoldBlock() y EndCodeFoldBlock().
 
 1.18
 ====
