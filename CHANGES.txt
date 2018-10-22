@@ -1,3 +1,8 @@
+1.21
+====
+Se incluye acceso al parámetro "TokPos", dentro de las definiciones avanzadas de los tokens
+por contenido. También se mejora el manejo del atributo, en este tipo de tokens.
+
 1.20
 ====
 Se incluye la posibilidad de anidar secciones dentro de otras secciones, pero solo para

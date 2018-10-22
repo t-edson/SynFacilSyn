@@ -20,6 +20,7 @@ type
   //Tipo de expresión regular soportada. Las exp. regulares soportadas son
   //simples. Solo incluyen literales de cadena o listas.
   tFaRegExpType = (
+    tregTokPos,   //Posición de token
     tregString,   //Literal de cadena: "casa"
     tregChars,    //Lista de caracteres: [A-Z]
     tregChars01,  //Lista de caracteres: [A-Z]?
@@ -39,6 +40,7 @@ type
   tFaTokContentInst = record
     Chars    : array[#0..#255] of ByteBool; //caracteres
     Text     : string;             //cadena válida
+    tokPos   : integer;  //Cuando se usa posición del token
     expTyp   : tFaRegExpType;      //tipo de expresión
     aMatch   : integer;  //atributo asignado en caso TRUE
     aFail    : integer;  //atributo asignado en caso TRUE
@@ -51,6 +53,7 @@ type
 
     posFin     : integer;  //para guardar posición
   end;
+  tFaTokContentInstPtr = ^tFaTokContentInst;
 
   ESynFacilSyn = class(Exception);   //excepción del resaltador
 
@@ -478,6 +481,14 @@ var
 begin
   if exp= '' then
     raise ESynFacilSyn.Create(ERR_EMPTY_EXPRES);
+  //Verifica la forma TokPos=1
+  if UpCase(copy(exp,1,7)) = 'TOKPOS=' then begin
+    //Caso especial de la forma TokPos=n
+    str := copy(exp,8,2);  //Aquí se devuelve "n"
+    exp := '';    //ya no quedan caracteres
+    Result := tregTokPos;
+    exit;
+  end;
   //Reemplaza secuencias conocidas que equivalen a listas.
   if copy(exp,1,2) = '\d' then begin
     exp := '[0-9]' + copyEx(exp,3);
@@ -834,23 +845,26 @@ begin
   tregChars1_:  //Es de tipo lista de caracteres [...]+
     begin
       n := AddItem(t, ifTrue, ifFalse)-1;  //agrega
-      if atMatch=-1 then Instrucs[n].aMatch :=TokTyp  //toma atributo de la clase
-      else Instrucs[n].aMatch:= atMatch;
-      if atFail=-1 then Instrucs[n].aFail := TokTyp   //toma atributo de la clase
-      else Instrucs[n].aFail:= atFail;
+      Instrucs[n].aMatch:= atMatch;
+      Instrucs[n].aFail := atFail;
       //Configura caracteres de contenido
       for c := #0 to #255 do Instrucs[n].Chars[c] := False;
       for c in list do Instrucs[n].Chars[c] := True;
     end;
   tregString: begin      //Es de tipo texto literal
       n := AddItem(t, ifTrue, ifFalse)-1;  //agrega
-      if atMatch=-1 then Instrucs[n].aMatch :=TokTyp  //toma atributo de la clase
-      else Instrucs[n].aMatch:= atMatch;
-      if atFail=-1 then Instrucs[n].aFail := TokTyp   //toma atributo de la clase
-      else Instrucs[n].aFail:= atFail;
+      Instrucs[n].aMatch:= atMatch;
+      Instrucs[n].aFail := atFail;
       //configura cadena
       if CaseSensitive then Instrucs[n].Text := str
       else Instrucs[n].Text := UpCase(str);  //ignora caja
+    end;
+  tregTokPos: begin
+      n := AddItem(t, ifTrue, ifFalse)-1;  //agrega
+      Instrucs[n].aMatch:= atMatch;
+      Instrucs[n].aFail := atFail;
+      //configura cadena
+      Instrucs[n].tokPos:= StrToInt(str);  //Orden de token
     end;
   else
     raise ESynFacilSyn.Create(ERR_UNSUPPOR_EXP_ + expr);
@@ -1141,58 +1155,96 @@ var
   posFin0: Integer;
   nf  : Integer;
   tam1: Integer;
+  inst: tFaTokContentInstPtr;
 begin
   fTokenID := tc.TokTyp;   //No debería ser necesario ya que se asignará después.
   inc(posFin);  //para pasar al siguiente caracter
   n := 0;
   while n<tc.nInstruc do begin
-    tc.Instrucs[n].posFin := posFin;  //guarda posición al iniciar
-    case tc.Instrucs[n].expTyp of
+    inst := @tc.Instrucs[n];  //Para acceso rápido
+    inst^.posFin := posFin;  //guarda posición al iniciar
+    case inst^.expTyp of
+    tregTokPos: begin   //TokPos=?
+        //Se verifica posición de token
+      //verifica la coincidencia
+      if inst^.tokPos = posTok then begin //cumple
+        if inst^.aMatch<>-1 then fTokenID := inst^.aMatch;  //pone atributo
+        case inst^.actionMatch of
+        aomNext:;   //no hace nada, pasa al siguiente elemento
+        aomExit: break;    //simplemente sale
+        aomExitpar: begin  //sale con parámetro
+          nf := inst^.destOnMatch;   //lee posición final
+          posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
+          break;
+        end;
+        aomMovePar: begin  //se mueve a una posición
+          n := inst^.destOnMatch;   //ubica posición
+          continue;
+        end;
+        end;
+      end else begin      //no cumple
+        if inst^.aFail<>-1 then fTokenID := inst^.aFail;  //pone atributo
+        case inst^.actionFail of
+        aomNext:;   //no hace nada, pasa al siguiente elemento
+        aomExit: break;    //simplemente sale
+        aomExitpar: begin  //sale con parámetro
+          nf := inst^.destOnFail;   //lee posición final
+          posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
+          break;
+        end;
+        aomMovePar: begin  //se mueve a una posición
+          n := inst^.destOnFail;   //ubica posición
+          continue;
+        end;
+        end;
+      end;
+    end;
+
     tregString: begin  //texo literal
         //Rutina de comparación de cadenas
         posFin0 := posFin;  //para poder restaurar
         i := 1;
-        tam1 := length(tc.Instrucs[n].Text)+1;  //tamaño +1
+        tam1 := length(inst^.Text)+1;  //tamaño +1
         if CaseSensitive then begin  //sensible a caja
-          while (i<tam1) and (tc.Instrucs[n].Text[i] = fLine[posFin]) do begin
+          while (i<tam1) and (inst^.Text[i] = fLine[posFin]) do begin
             inc(posFin);
             inc(i);
           end;
         end else begin  //Ignora mayúcula/minúscula
-          while (i<tam1) and (tc.Instrucs[n].Text[i] = TabMayusc[fLine[posFin]]) do begin
+          while (i<tam1) and (inst^.Text[i] = TabMayusc[fLine[posFin]]) do begin
             inc(posFin);
             inc(i);
           end;
         end;
         //verifica la coincidencia
         if i = tam1 then begin //cumple
-          fTokenID := tc.Instrucs[n].aMatch;  //pone atributo
-          case tc.Instrucs[n].actionMatch of
+          if inst^.aMatch<>-1 then fTokenID := inst^.aMatch;  //pone atributo
+          case inst^.actionMatch of
           aomNext:;   //no hace nada, pasa al siguiente elemento
           aomExit: break;    //simplemente sale
           aomExitpar: begin  //sale con parámetro
-            nf := tc.Instrucs[n].destOnMatch;   //lee posición final
+            nf := inst^.destOnMatch;   //lee posición final
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
           aomMovePar: begin  //se mueve a una posición
-            n := tc.Instrucs[n].destOnMatch;   //ubica posición
+            n := inst^.destOnMatch;   //ubica posición
             continue;
           end;
           end;
         end else begin      //no cumple
-          fTokenID := tc.Instrucs[n].aFail;  //pone atributo
+          if inst^.aFail<>-1 then fTokenID := inst^.aFail;  //pone atributo
           posFin := posFin0;   //restaura posición
-          case tc.Instrucs[n].actionFail of
+          case inst^.actionFail of
           aomNext:;   //no hace nada, pasa al siguiente elemento
           aomExit: break;    //simplemente sale
           aomExitpar: begin  //sale con parámetro
-            nf := tc.Instrucs[n].destOnFail;   //lee posición final
+            nf := inst^.destOnFail;   //lee posición final
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
           aomMovePar: begin  //se mueve a una posición
-            n := tc.Instrucs[n].destOnFail;   //ubica posición
+            n := inst^.destOnFail;   //ubica posición
             continue;
           end;
           end;
@@ -1200,37 +1252,37 @@ begin
       end;
     tregChars: begin   //conjunto de caracteres: [ ... ]
         //debe existir solo una vez
-        if tc.Instrucs[n].Chars[fLine[posFin]] then begin
+        if inst^.Chars[fLine[posFin]] then begin
           //cumple el caracter
-          fTokenID := tc.Instrucs[n].aMatch;  //pone atributo
+          if inst^.aMatch<>-1 then fTokenID := inst^.aMatch;  //pone atributo
           inc(posFin);  //pasa a la siguiente instrucción
           //Cumple el caracter
-          case tc.Instrucs[n].actionMatch of
+          case inst^.actionMatch of
           aomNext:;   //no hace nada, pasa al siguiente elemento
           aomExit: break;    //simplemente sale
           aomExitpar: begin  //sale con parámetro
-            nf := tc.Instrucs[n].destOnMatch;   //lee posición final
+            nf := inst^.destOnMatch;   //lee posición final
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
           aomMovePar: begin  //se mueve a una posición
-            n := tc.Instrucs[n].destOnMatch;   //ubica posición
+            n := inst^.destOnMatch;   //ubica posición
             continue;
           end;
           end;
         end else begin
           //no se encuentra ningún caracter de la lista
-          fTokenID := tc.Instrucs[n].aFail;  //pone atributo
-          case tc.Instrucs[n].actionFail of
+          if inst^.aFail<>-1 then fTokenID := inst^.aFail;  //pone atributo
+          case inst^.actionFail of
           aomNext:;   //no hace nada, pasa al siguiente elemento
           aomExit: break;    //simplemente sale
           aomExitpar: begin  //sale con parámetro
-            nf := tc.Instrucs[n].destOnFail;   //lee posición final
+            nf := inst^.destOnFail;   //lee posición final
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
           aomMovePar: begin  //se mueve a una posición
-            n := tc.Instrucs[n].destOnFail;   //ubica posición
+            n := inst^.destOnFail;   //ubica posición
             continue;
           end;
           end;
@@ -1238,67 +1290,67 @@ begin
     end;
     tregChars01: begin   //conjunto de caracteres: [ ... ]?
         //debe existir cero o una vez
-        if tc.Instrucs[n].Chars[fLine[posFin]] then begin
+        if inst^.Chars[fLine[posFin]] then begin
           inc(posFin);  //pasa a la siguiente instrucción
         end;
         //siempre cumplirá este tipo, no hay nada que verificar
-        fTokenID := tc.Instrucs[n].aMatch;  //pone atributo
-        case tc.Instrucs[n].actionMatch of
+        if inst^.aMatch<>-1 then fTokenID := inst^.aMatch;  //pone atributo
+        case inst^.actionMatch of
         aomNext:;   //no hace nada, pasa al siguiente elemento
         aomExit: break;    //simplemente sale
         aomExitpar: begin  //sale con parámetro
-          nf := tc.Instrucs[n].destOnMatch;   //lee posición final
+          nf := inst^.destOnMatch;   //lee posición final
           posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
           break;
         end;
         aomMovePar: begin  //se mueve a una posición
-          n := tc.Instrucs[n].destOnMatch;   //ubica posición
+          n := inst^.destOnMatch;   //ubica posición
           continue;
         end;
         end;
     end;
     tregChars0_: begin   //conjunto de caracteres: [ ... ]*
         //debe exitir 0 o más veces
-        while tc.Instrucs[n].Chars[fLine[posFin]] do begin
+        while inst^.Chars[fLine[posFin]] do begin
           inc(posFin);
         end;
         //siempre cumplirá este tipo, no hay nada que verificar
-        fTokenID := tc.Instrucs[n].aMatch;  //pone atributo
+        if inst^.aMatch<>-1 then fTokenID := inst^.aMatch;  //pone atributo
         //¿No debería haber código aquí también?
       end;
     tregChars1_: begin   //conjunto de caracteres: [ ... ]+
         //debe existir una o más veces
         posFin0 := posFin;  //para poder comparar
-        while tc.Instrucs[n].Chars[fLine[posFin]] do begin
+        while inst^.Chars[fLine[posFin]] do begin
           inc(posFin);
         end;
         if posFin>posFin0 then begin   //Cumple el caracter
-          fTokenID := tc.Instrucs[n].aMatch;  //pone atributo
-          case tc.Instrucs[n].actionMatch of
+          if inst^.aMatch<>-1 then fTokenID := inst^.aMatch;  //pone atributo
+          case inst^.actionMatch of
           aomNext:;   //no hace nada, pasa al siguiente elemento
           aomExit: break;    //simplemente sale
           aomExitpar: begin  //sale con parámetro
-            nf := tc.Instrucs[n].destOnMatch;   //lee posición final
+            nf := inst^.destOnMatch;   //lee posición final
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
           aomMovePar: begin  //se mueve a una posición
-            n := tc.Instrucs[n].destOnMatch;   //ubica posición
+            n := inst^.destOnMatch;   //ubica posición
             continue;
           end;
           end;
         end else begin   //No cumple
-          fTokenID := tc.Instrucs[n].aFail;  //pone atributo
-          case tc.Instrucs[n].actionFail of
+          if inst^.aFail<>-1 then fTokenID := inst^.aFail;  //pone atributo
+          case inst^.actionFail of
           aomNext:;   //no hace nada, pasa al siguiente elemento
           aomExit: break;    //simplemente sale
           aomExitpar: begin  //sale con parámetro
-            nf := tc.Instrucs[n].destOnFail;   //lee posición final
+            nf := inst^.destOnFail;   //lee posición final
             posFin := tc.Instrucs[nf].posFin;  //Debe moverse antes de salir
             break;
           end;
           aomMovePar: begin  //se mueve a una posición
-            n := tc.Instrucs[n].destOnFail;   //ubica posición
+            n := inst^.destOnFail;   //ubica posición
             continue;
           end;
           end;

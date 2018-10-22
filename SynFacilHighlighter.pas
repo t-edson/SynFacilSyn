@@ -1318,12 +1318,21 @@ end;
 procedure TSynFacilSyn.StartBlock(ABlockType: Pointer; IncreaseLevel: Boolean); inline;
 //Procedimiento general para abrir un bloque en el resaltador
 begin
+//  if IsCollectingNodeInfo then // llutti
+//  begin // llutti
+//    CollectNodeInfo(False, ABlockType, IncreaseLevel); // llutti
+//  end; // llutti
   StartCodeFoldBlock(ABlockType, IncreaseLevel);
 //  CodeFoldRange.Add(ABlockType, IncreaseLevel);
 end;
 procedure TSynFacilSyn.EndBlock(DecreaseLevel: Boolean); inline;
 //Procedimiento general para cerrar un bloque en el resaltador
 begin
+//  BlockType := TopCodeFoldBlockType; // llutti
+//  if IsCollectingNodeInfo then // llutti
+//  begin // llutti
+//    CollectNodeInfo(True, BlockType, DecreaseLevel); // llutti
+//  end; // llutti
   EndCodeFoldBlock(DecreaseLevel);
 //  CodeFoldRange.Pop(DecreaseLevel);
 end;
