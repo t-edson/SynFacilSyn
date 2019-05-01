@@ -31,7 +31,7 @@ type
     procedure SetStartRangeForLine(ed: TATSynEdit; lin: integer);
   public
     procedure SetSyntax(const AFilename: string);
-    procedure StringsLog(Sender: TObject; ALine, ALen: integer);
+    procedure StringsLog(Sender: TObject; ALine: integer);
     procedure edScroll(Sender: TObject);
     procedure OnEditorCalcHilite(Sender: TObject;
       var AParts: TATLineParts;
@@ -93,7 +93,7 @@ begin
   inherited;
 end;
 
-procedure TSynFacilAdapter.StringsLog(Sender: TObject; ALine, ALen: integer);
+procedure TSynFacilAdapter.StringsLog(Sender: TObject; ALine: integer);
 begin
   if (Aline>=0) and (Aline<firstModified) then firstModified := ALine;
 //  DebugLn('OnLog: ALine=' + IntToStr(ALine) + ' ALen=' + IntToSTr(Alen));
