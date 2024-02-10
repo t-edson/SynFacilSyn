@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<language name="RSTB.CONFIG" ext="conf" colorBlock="Block">
+<symbols/>
+  <attribute name="Keyword" foreCol="#4040A0" bold="TRUE" backCol="#404040"/>
+  <attribute name="DESC"    foreCol="#A04040" bold="TRUE" backCol="#404040"/>
+  <attribute name="GLOBAL"  foreCol="#404040" bold="TRUE" backCol="#404040"/>
+  <attribute name="CONF"    foreCol="#4040A0" bold="TRUE" backCol="#404040"/>
+  <attribute name="DB"      foreCol="#408040" bold="TRUE" backCol="#404040"/>
+  <attribute name="TYPE"    foreCol="#804080" bold="TRUE" backCol="#404040"/>
+
+  <identifiers charsStart= "A..Za..z_." content = "A..Za..z0..9_.-:">
+    <token attribute="GLOBAL">
+     MAGIC: BEGIN END.RSTB.PGSQL.CONFIG.V01 END
+    </token>
+
+    <token attribute="CONF">
+     PG.CONFIG: END.DEFAULT
+    </token>
+
+    <token attribute="DB">
+    PG.DATABASE: END.DB SERVER: PORT: DATABASE:
+    USER: DBI.PG: SERVICE: SSL.MODE: AUTO.COMMIT:
+    RAISE.ERROR: PRINT.ERROR: PASSWORD:
+    </token>
+
+    <token attribute="TYPE">
+      ALLOW TRUE FALSE LOCALHOST
+    </token>
+  </identifiers>
+
+  <token charsStart="0..9" content = '0..9.' attribute='NUMBER'/>
+  <string start="'" end="'"/>
+  <string start="&quot;" end="&quot;"/>
+  <comment start="#"/>
+
+  <block name="RUN.VAR" start=":{" end="}" backCol="#A4C4B4" />
+
+  <block name="RUN.DEF" start="${" end="}" backCol="#C4B4A4" />
+
+  <block name="MAGIC" start="MAGIC:" backCol="#EEEEEE">
+
+    <block name="CONF"  start="PG.CONFIG:" end="END.DEFAULT"
+              backCol="#DDEEFF">
+
+       <block name="DESC"   start="DESCRIPTION:" end="END.DESCRIPTION"
+              backCol="#FFEEDD" />
+
+
+      <block name="DB"   start="PG.DATABASE:" end="END.DB"
+             backCol="#DDFFEE">
+
+      </block>
+    </block>
+  </block>
+
+</language>

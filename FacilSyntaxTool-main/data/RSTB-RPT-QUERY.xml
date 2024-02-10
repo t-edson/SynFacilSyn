@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<language name="RSTB.CONFIG" ext="conf" colorBlock="Block">
+<symbols/>
+  <attribute name="Keyword" foreCol="#4040A0" bold="TRUE" backCol="#404040"/>
+  <attribute name="DESC"    foreCol="#A04040" bold="TRUE" backCol="#404040"/>
+  <attribute name="GLOBAL"  foreCol="#404040" bold="TRUE" backCol="#404040"/>
+  <attribute name="PARAM"   foreCol="#4040A0" bold="TRUE" backCol="#404040"/>
+  <attribute name="CALL"    foreCol="#408040" bold="TRUE" backCol="#404040"/>
+  <attribute name="TYPE"    foreCol="#804080" bold="TRUE" backCol="#404040"/>
+
+  <identifiers charsStart= "A..Za..z_." content = "A..Za..z0..9_.-:">
+    <token attribute="GLOBAL">
+     MAGIC: BEGIN END.RSTB.RPT.QUERY.CONFIG.V1.0 END
+    </token>
+
+    <token attribute="DESC">
+     DESCRIPTION: END.DESCRIPTION
+    </token>
+
+    <token attribute="PARAM">
+    PARAMETER: END.PARAMETER
+    OUTPUT.TYPE: OUTPUT.FORMAT: OUTPUT.FILE: TEMPLATE:
+    FILTER.DATE.FROM: FILTER.DATE.TO: FILTER.TEXT:
+    </token>
+
+    <token attribute="TYPE">
+      TOKEN STR INT REAL DATE TIME DATE.TIME ANY NONE
+    </token>
+
+    <token attribute="CALL">
+     CALL: END.CALL
+     TOOL: OPTION:
+    </token>
+  </identifiers>
+
+  <token charsStart="0..9" content = '0..9.' attribute='NUMBER'/>
+  <string start="'" end="'"/>
+  <comment start="#"/>
+
+    <block name="RUN.VAR" start=":{" end="}" backCol="#A4C4B4" />
+
+    <block name="RUN.DEF" start="${" end="}" backCol="#C4B4A4" />
+
+   <block name="MAGIC" start="MAGIC:" end="END.RSTB.RPT.QUERY.CONFIG.V1.0"
+           backCol="#DDDDDD">
+
+
+
+    <block name="DESC"   start="DESCRIPTION:" end="END.DESCRIPTION"
+         backCol="#FFEEDD" />
+
+    <block name="PARAM"  start="PARAMETER:" end="END.PARAMETER"
+              backCol="#DDEEFF" />
+
+    <block name="CALL"   start="CALL:" end="END.CALL"
+         backCol="#DDFFEE">
+
+       <block name="RUN.PARAM" start="@" end="PARAMETER"
+            backCol="#A4B4C4" />
+
+    </block>
+  </block>
+</language>

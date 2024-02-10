@@ -1,0 +1,98 @@
+<?xml version="1.0"?>
+<language name="RSTB.CONFIG" ext="conf" colorBlock="Block">
+
+  <symbols>
+  <!-- THIS NEVER WORKS operator> + - * /   </operator -->
+
+  </symbols>
+  <attribute name="GLOBAL"    forecol="#404040" bold="TRUE" backcol="#EEEEEE"/>
+  <attribute name="COMMENT"   forecol="#404004"/>
+  <attribute name="COMMON"    forecol="#A04040" bold="TRUE"/>
+  <attribute name="ALIASES"   forecol="#4040A0" bold="TRUE"/>
+  <attribute name="TRANSLATE" foreCol="#408040" bold="TRUE"/>
+  <attribute name="TYPE"      forecol="#004000" bold="TRUE"/>
+  <attribute name="DB.QUERY"  forecol="#804040" bold="TRUE"/>
+  <attribute name="NUMBER"    forecol="#040080" bold="TRUE"/>
+  <attribute name="CONFIG"    forecol="#000080" bold="TRUE"/>
+  <attribute name="TRANSFORM" forecol="#040480" bold="TRUE"/>
+
+
+  <identifiers charsStart= "A..Za..z_." content = "A..Za..z0..9_.-:">
+    <token attribute="GLOBAL">
+     MAGIC: BEGIN END RSTB.DATA.TOOL.V01 END.RSTB.DATA.TOOL.V01
+    </token>
+
+    <token attribute="CONFIG">DB.IMPORT.CONFIG: END.DEFAULT</token>
+
+    <token attribute="COMMON">
+       OUTPUT: RESPONSE: RSTB.USER: RSTB.PASSWORD: RSTB.PRIVILEGE:
+       TEXT.READER: SQL.WRITER: DB.CONFIG:
+    </token>
+
+    <token attribute="COMMON">
+        ALIASES: END.ALIASES ALIAS:
+        NULL.ALIAS:  END.NULL.ALIAS
+    </token>
+
+    <token attribute="TRANSFORM">
+       IMPORT.TRANSFORMER: END.TRANSFORMER
+       DB.TABLE:
+       DB.WRITE: END.DB.WRITE
+       DB.PKEY:
+       DB.UNIQUE: END.DB.UNIQUE
+       IMPORT.FILE: HEADER: SEPARATOR:
+    </token>
+
+    <token attribute="DB.QUERY">
+      DB.QUERY: END.QUERY
+      AS SELECT FROM LEFT RIGHT CROSS JOIN WHERE AND NOT IS NULL LIKE OR
+      IN GROUP BY ORDER LIMIT NUMERIC TIMESTAMP TIMEZONE WITH
+      FLOAT8 VARCHAR CHAR UNION
+    </token>
+
+
+    <token attribute="TYPE"> TOKEN STR INT REAL DATE DT TIME TM
+     ON OFF TRUE FALSE BOOL NONE ANY</token>
+
+    <token attribute="TRANSLATE"> TRANSLATE: END.TRANSLATE
+      COL: CONST: SQL.SET:</token>
+  </identifiers>
+
+  <token CharsStart="-+0..9" Content = '-+0..9.E' Attribute="NUMBER"/>
+
+  <String Start="'" End="'"/>
+  <comment Start="#" />
+
+  <block name="RUNR"   start=":{" End="}" backcol="#C4A4B4" />
+  <block name="RUND"   start="${" End="}" backcol="#B4A4C4" />
+
+  <block name="GLOBAL" start="MAGIC:"
+         end="END.RSTB.DATA.TOOL.V01"
+         backcol="#EEEEEE">
+
+      <block name="CONFIG"  start="DB.IMPORT.CONFIG:"
+             end="END.DEFAULT" backCol="#DDDDDD">
+
+         <block name="ALIASES"    start="ALIASES:"
+                end="END.ALIASES" backcol="#FFEEDD" />
+
+         <block name="NULL.ALIAS"    start="NULL.ALIAS:"
+                end="END.NULL.ALIAS" backcol="#FFEEDD" />
+
+         <block name="TRANSFORM"
+                start="IMPORT.TRANSFORMER:"
+                end="END.TRANSFORMER"
+                backcol="#DDEEFF">
+
+            <block name="TRLS"   start="TRANSLATE:"
+                   end="END.TRANSLATE" backcol="#DDFFEE"/>
+
+         </block>
+
+         <block name="QUERY"  start="DB.QUERY:"
+                end="END.DB.QUERY" backCol="#FFEEEE">
+         </block>
+
+      </block>
+  </block>
+</language>

@@ -1,0 +1,67 @@
+<?xml version="1.0"?>
+<language name="RSTB.CONFIG" ext="conf" colorBlock="Block">
+<symbols>
+</symbols>
+  <attribute name="GLOBAL"    forecol="#404040" bold="TRUE" backcol="#EEEEEE"/>
+  <attribute name="COMMENT"   forecol="#404004"/>
+  <attribute name="DESC"      forecol="#A04040" bold="TRUE"/>
+  <attribute name="WORKBOOK"  forecol="#4040A0" bold="TRUE"/>
+  <attribute name="TRANSLATE" foreCol="#408040" bold="TRUE"/>
+  <attribute name="TYPE"      forecol="#004000" bold="TRUE"/>
+  <attribute name="DB.QUERY"  forecol="#804040" bold="TRUE"/>
+  <attribute name="NUMBER"    forecol="#800080" bold="TRUE"/>
+  <attribute name="EXPORT"    forecol="#000080" bold="TRUE"/>
+
+  <identifiers charsStart= "A..Za..z_." content = "A..Za..z0..9_.-:">
+    <token attribute="GLOBAL">
+     MAGIC: BEGIN END.RSTB.DATA.EXPORT.CONFIG.V1.0 END
+    </token>
+
+    <token attribute="EXPORT"> DATA.EXPORT: END.DEFAULT</token>
+    <token attribute="DESC"> DESCRIPTION: END.DESCRIPTION </token>
+    <token attribute="WORKBOOK"> WORKBOOK: END.BOOK SHEET: </token>
+
+    <token attribute="DB.QUERY">
+    DB.QUERY: END.QUERY
+    AS SELECT FROM LEFT RIGHT CROSS JOIN WHERE AND NOT IS NULL LIKE OR
+    IN GROUP BY ORDER LIMIT NUMERIC TIMESTAMP TIMEZONE WITH
+    FLOAT8 VARCHAR CHAR UNION
+    </token>
+
+
+    <token attribute="TYPE"> TOKEN STR INT REAL DATE BOOL </token>
+
+    <token attribute="TRANSLATE"> TRANSLATE: END.TRANSLATE COLUMN: CONST: </token>
+  </identifiers>
+
+  <token CharsStart="-+0..9" Content = '-+0..9.E' Attribute="NUMBER"/>
+
+  <String Start="'" End="'"/>
+  <comment Start="#" />
+
+  <block name="RUNR"   start=":{" End="}" backcol="#C4A4B4" />
+  <block name="RUND"   start="${" End="}" backcol="#B4A4C4" />
+  <block name="RUNP"   start="@" End="PARAMETER" backcol="#A4B4C4" />
+  <block name="GLOBAL" start="MAGIC:"
+         end="END.RSTB.DATA.EXPORT.CONFIG.V1.0"
+         backcol="#EEEEEE">
+
+      <block name="DATA.EXPORT"  start="DATA.EXPORT:"
+             end="END.DEFAULT" backCol="#DDDDDD">
+
+         <block name="DESC"   start="DESCRIPTION:"
+                end="END.DESCRIPTION" backcol="#FFEEDD" />
+
+         <block name="WBOOK"  start="WORKBOOK:" end="END.BOOK"
+                backcol="#DDEEFF" />
+
+         <block name="TRLS"   start="TRANSLATE:"
+                end="END.TRANSLATE" backcol="#DDFFEE"/>
+
+         <block name="QUERY"  start="DB.QUERY:"
+                end="END.QUERY" backCol="#FFEEEE">
+         </block>
+
+      </block>
+  </block>
+</language>

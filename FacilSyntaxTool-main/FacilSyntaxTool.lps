@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectSession>
+    <PathDelim Value="\"/>
+    <Version Value="12"/>
+    <BuildModes Active="Debug"/>
+    <Units Count="5">
+      <Unit0>
+        <Filename Value="FacilSyntaxTool.lpr"/>
+        <IsPartOfProject Value="True"/>
+        <UsageCount Value="20"/>
+      </Unit0>
+      <Unit1>
+        <Filename Value="UMainForm.pas"/>
+        <IsPartOfProject Value="True"/>
+        <ComponentName Value="FrmMain"/>
+        <HasResources Value="True"/>
+        <ResourceBaseClass Value="Form"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="19"/>
+        <CursorPos Y="15"/>
+        <UsageCount Value="20"/>
+        <Loaded Value="True"/>
+        <LoadedDesigner Value="True"/>
+      </Unit1>
+      <Unit2>
+        <Filename Value="usintax.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="uSintax"/>
+        <UsageCount Value="20"/>
+      </Unit2>
+      <Unit3>
+        <Filename Value="usintaxsf.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="uSintaxSF"/>
+        <UsageCount Value="20"/>
+      </Unit3>
+      <Unit4>
+        <Filename Value="synhighlighterfacil.pas"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="SynHighlighterFacil"/>
+        <UsageCount Value="20"/>
+      </Unit4>
+    </Units>
+    <JumpHistory HistoryIndex="-1"/>
+    <RunParams>
+      <FormatVersion Value="2"/>
+      <Modes ActiveMode="default"/>
+    </RunParams>
+  </ProjectSession>
+</CONFIG>
