@@ -1521,7 +1521,7 @@ begin
   //También lo puede buscar en Attrib[]
   for i:=0 to AttrCount-1 do begin
     if Upcase(Attribute[i].Name) = txt then begin
-        Result := Attribute[i];  //devuelve índice
+        Result := Attribute[i] as TSynHighlighterAttributes;  //devuelve índice
         exit;
     end;
   end;
