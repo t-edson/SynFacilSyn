@@ -1520,7 +1520,7 @@ begin
   txt := UpCase(txt);   //ignora la caja
   //También lo puede buscar en Attrib[]
   for i:=0 to AttrCount-1 do begin
-    if Upcase(Attribute[i].Name) = txt then begin
+    if Upcase(Attribute[i].Caption^) = txt then begin
         Result := Attribute[i] as TSynHighlighterAttributes;  //devuelve índice
         exit;
     end;
@@ -1537,7 +1537,7 @@ begin
   txt := UpCase(txt);   //ignora la caja
   //Se tiene que buscar en Attrib[], proque allí están con los índices cprrectos
   for i:=0 to AttrCount-1 do begin
-    if Upcase(Attrib[i].Name) = txt then begin
+    if Upcase(Attrib[i].Caption^) = txt then begin
         Result := i;  //devuelve índice
         exit;
     end;
