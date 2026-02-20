@@ -1607,18 +1607,18 @@ begin
      if tFrameCol.hay then Atrib.FrameColor:=tFrameCol.col;
      if tFrameEdg.hay then begin
        case UpCase(tFrameEdg.val) of
-       'AROUND':Atrib.FrameEdges:=sfeAround;
-       'BOTTOM':Atrib.FrameEdges:=sfeBottom;
-       'LEFT':  Atrib.FrameEdges:=sfeLeft;
-       'NONE':  Atrib.FrameEdges:=sfeNone;
+       'AROUND':Atrib.FrameEdges:=TSynFrameEdges.sfeAround;
+       'BOTTOM':Atrib.FrameEdges:=TSynFrameEdges.sfeBottom;
+       'LEFT':  Atrib.FrameEdges:=TSynFrameEdges.sfeLeft;
+       'NONE':  Atrib.FrameEdges:=TSynFrameEdges.sfeNone;
        end;
      end;
      if tFrameSty.hay then begin
        case UpCase(tFrameSty.val) of
-       'SOLID': Atrib.FrameStyle:=slsSolid;
-       'DASHED':Atrib.FrameStyle:=slsDashed;
-       'DOTTED':Atrib.FrameStyle:=slsDotted;
-       'WAVED': Atrib.FrameStyle:=slsWaved;
+       'SOLID': Atrib.FrameStyle:=TSynLineStyle.slsSolid;
+       'DASHED':Atrib.FrameStyle:=TSynLineStyle.slsDashed;
+       'DOTTED':Atrib.FrameStyle:=TSynLineStyle.slsDotted;
+       'WAVED': Atrib.FrameStyle:=TSynLineStyle.slsWaved;
        end;
      end;
      if tStyBold.hay then begin  //negrita
