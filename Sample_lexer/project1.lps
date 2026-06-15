@@ -2,7 +2,7 @@
 <CONFIG>
   <ProjectSession>
     <PathDelim Value="\"/>
-    <Version Value="11"/>
+    <Version Value="12"/>
     <BuildModes Active="Default"/>
     <Units Count="16">
       <Unit0>
@@ -61,7 +61,7 @@
         <Filename Value="XpresBas.pas"/>
         <TopLine Value="191"/>
         <CursorPos X="19" Y="216"/>
-        <FoldState Value=" T3m704019'"/>
+        <FoldState Value=" T3m704019&apos;"/>
         <UsageCount Value="7"/>
       </Unit6>
       <Unit7>
@@ -256,7 +256,7 @@
     </JumpHistory>
     <RunParams>
       <FormatVersion Value="2"/>
-      <Modes Count="0" ActiveMode="default"/>
+      <Modes ActiveMode="default"/>
     </RunParams>
   </ProjectSession>
 </CONFIG>

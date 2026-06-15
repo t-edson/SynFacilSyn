@@ -2,7 +2,7 @@
 <CONFIG>
   <ProjectSession>
     <PathDelim Value="\"/>
-    <Version Value="9"/>
+    <Version Value="12"/>
     <BuildModes Active="Default"/>
     <Units Count="16">
       <Unit0>
@@ -66,8 +66,8 @@
         <Filename Value="..\SynFacilHighlighter.pas"/>
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="2371"/>
-        <CursorPos X="10" Y="2397"/>
+        <TopLine Value="2372"/>
+        <CursorPos X="11" Y="2380"/>
         <UsageCount Value="29"/>
         <Bookmarks Count="2">
           <Item0 Y="268" ID="2"/>
@@ -244,12 +244,16 @@
         <Caret Line="2398" Column="12" TopLine="2367"/>
       </Position29>
     </JumpHistory>
+    <RunParams>
+      <FormatVersion Value="2"/>
+      <Modes ActiveMode="default"/>
+    </RunParams>
   </ProjectSession>
   <Debugging>
-    <Watches Count="1">
-      <Item1>
+    <Watches>
+      <Item>
         <Expression Value="fProcTable"/>
-      </Item1>
+      </Item>
     </Watches>
   </Debugging>
 </CONFIG>
