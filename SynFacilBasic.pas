@@ -1520,8 +1520,8 @@ begin
   txt := UpCase(txt);   //ignora la caja
   //También lo puede buscar en Attrib[]
   for i:=0 to AttrCount-1 do begin
-    if Upcase(Attribute[i].Name) = txt then begin
-        Result := Attribute[i];  //devuelve índice
+    if Upcase(Attribute[i].Caption^) = txt then begin
+        Result := Attribute[i] as TSynHighlighterAttributes;  //devuelve índice
         exit;
     end;
   end;
@@ -1537,7 +1537,7 @@ begin
   txt := UpCase(txt);   //ignora la caja
   //Se tiene que buscar en Attrib[], proque allí están con los índices cprrectos
   for i:=0 to AttrCount-1 do begin
-    if Upcase(Attrib[i].Name) = txt then begin
+    if Upcase(Attrib[i].Caption^) = txt then begin
         Result := i;  //devuelve índice
         exit;
     end;
@@ -1607,18 +1607,18 @@ begin
      if tFrameCol.hay then Atrib.FrameColor:=tFrameCol.col;
      if tFrameEdg.hay then begin
        case UpCase(tFrameEdg.val) of
-       'AROUND':Atrib.FrameEdges:=sfeAround;
-       'BOTTOM':Atrib.FrameEdges:=sfeBottom;
-       'LEFT':  Atrib.FrameEdges:=sfeLeft;
-       'NONE':  Atrib.FrameEdges:=sfeNone;
+       'AROUND':Atrib.FrameEdges:=TSynFrameEdges.sfeAround;
+       'BOTTOM':Atrib.FrameEdges:=TSynFrameEdges.sfeBottom;
+       'LEFT':  Atrib.FrameEdges:=TSynFrameEdges.sfeLeft;
+       'NONE':  Atrib.FrameEdges:=TSynFrameEdges.sfeNone;
        end;
      end;
      if tFrameSty.hay then begin
        case UpCase(tFrameSty.val) of
-       'SOLID': Atrib.FrameStyle:=slsSolid;
-       'DASHED':Atrib.FrameStyle:=slsDashed;
-       'DOTTED':Atrib.FrameStyle:=slsDotted;
-       'WAVED': Atrib.FrameStyle:=slsWaved;
+       'SOLID': Atrib.FrameStyle:=TSynLineStyle.slsSolid;
+       'DASHED':Atrib.FrameStyle:=TSynLineStyle.slsDashed;
+       'DOTTED':Atrib.FrameStyle:=TSynLineStyle.slsDotted;
+       'WAVED': Atrib.FrameStyle:=TSynLineStyle.slsWaved;
        end;
      end;
      if tStyBold.hay then begin  //negrita
