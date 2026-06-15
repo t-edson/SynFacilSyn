@@ -238,7 +238,7 @@ type
       ): integer;
     function NewTokType(TypeName: string): integer;
     procedure CreateAttributes;  //limpia todos loa atributos
-    function GetAttribByName(txt: string): TSynHighlighterAttributes;
+    function GetAttribByName(txt: string): TLazSynCustomTextAttributes;
     function GetAttribIDByName(txt: string): integer;
     function IsAttributeName(txt: string): boolean;
     protected
@@ -1511,7 +1511,8 @@ begin
   tkComment.Style := [fsItalic];
   tkComment.Foreground := clGray;
 end;
-function TSynFacilSynBase.GetAttribByName(txt: string): TSynHighlighterAttributes;
+function TSynFacilSynBase.GetAttribByName(txt: string
+  ): TLazSynCustomTextAttributes;
 {Devuelve la referencia de un atributo, recibiendo su nombre. Si no lo encuentra
 devuelve NIL.}
 var
@@ -1571,8 +1572,8 @@ var
   tStyUnder: TFaXMLatrib;
   tStyStrike: TFaXMLatrib;
   tStyle: TFaXMLatrib;
-  tipTok: TSynHighlighterAttributes;
-  Atrib: TSynHighlighterAttributes;
+  tipTok: TLazSynCustomTextAttributes;
+  Atrib: TLazSynCustomTextAttributes;
   tokId: integer;
 begin
   if UpCase(nodo.NodeName) <> 'ATTRIBUTE' then exit(false);
