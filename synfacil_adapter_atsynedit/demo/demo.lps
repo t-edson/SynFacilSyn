@@ -17,7 +17,9 @@
         <HasResources Value="True"/>
         <ResourceBaseClass Value="Form"/>
         <UnitName Value="Unit1"/>
-        <CursorPos X="24" Y="15"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="18"/>
+        <CursorPos Y="35"/>
         <UsageCount Value="49"/>
         <Loaded Value="True"/>
         <LoadedDesigner Value="True"/>
@@ -67,10 +69,9 @@
       </Unit7>
       <Unit8>
         <Filename Value="..\synfacil_adapter_atsynedit.pas"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="69"/>
-        <CursorPos X="61" Y="96"/>
+        <TopLine Value="141"/>
+        <CursorPos X="36" Y="137"/>
         <ExtraEditorCount Value="1"/>
         <ExtraEditor1>
           <EditorIndex Value="-1"/>
